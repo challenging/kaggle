@@ -30,10 +30,8 @@ class KaggleCheckpoint(ModelCheckpoint):
             else:
                 if self.monitor_op(current, self.best):
                     if self.verbose > 0:
-                        print('Epoch %05d: %s improved from %0.5f to %0.5f,'
-                              ' saving model to %s'
-                              % (epoch, self.monitor, self.best,
-                                 current, filepath))
+                        print('Epoch %05d: %s improved from %0.8f to %0.8f, saving model to %s' % (epoch+1, self.monitor, self.best, current, filepath))
+
                     self.best = current
                     self.model.save_weights(filepath, overwrite=True)
 

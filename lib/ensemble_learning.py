@@ -6,9 +6,10 @@ import pickle
 import numpy as np
 import pandas as pd
 
-# For Shadow Learning
+# For Shallow Learning
 from sklearn.cross_validation import StratifiedKFold
 from sklearn.metrics import log_loss
+from sklearn.utils import shuffle
 
 from learning import LearningFactory, Learning, LearningQueue, LearningLogLoss
 from utils import log, INFO
@@ -27,9 +28,8 @@ def store_layer_output(models, dataset, filepath, targets=[]):
 
     pd.DataFrame(results_of_layer).to_csv(filepath, index=False)
 
-def layer_one_model(model_folder, train_x, train_y, test_x, test_id, models, layer2_model_name, n_folds=10, number_of_thread=1, filepath_queue=None, filepath_nfold=None):
-    skf = list(StratifiedKFold(train_y, n_folds))
-
+def layer_one_model(model_folder, train_x, train_y, test_x, test_id, models, layer2_model_name,
+                    n_folds=10, number_of_thread=1, filepath_queue=None, filepath_nfold=None):
     layer_two_training_dataset = np.zeros((train_x.shape[0], len(models)))
     layer_two_testing_dataset = np.zeros((test_x.shape[0], len(models), n_folds))
 
@@ -62,11 +62,15 @@ def layer_one_model(model_folder, train_x, train_y, test_x, test_id, models, lay
 
         log("Read skf from {}".format(filepath_nfold), INFO)
     else:
-        skf = list(StratifiedKFold(train_y, n_folds))
-        with open(filepath_nfold, "wb") as OUTPUT:
-            pickle.dump(skf, OUTPUT)
+        if n_folds < 2:
+            train_idx = shuffle([idx for idx in range(0, len(train_x))], random_state=1201)
+            skf = [(train_idx, train_idx)]
+        else:
+            skf = list(StratifiedKFold(train_y, n_folds))
+            with open(filepath_nfold, "wb") as OUTPUT:
+                pickle.dump(skf, OUTPUT)
 
-        log("Save skf in {}".format(filepath_nfold), INFO)
+        log("Save skf({:2d} folds) in {}".format(n_folds, filepath_nfold), INFO)
 
     for nfold, (train, test) in enumerate(skf):
         for model_idx, model_name in enumerate(models):

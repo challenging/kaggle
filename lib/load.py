@@ -7,7 +7,7 @@ import pickle
 import numpy
 import pandas as pd
 
-from utils import log, INFO
+from utils import log, INFO, WARN
 from sklearn import decomposition
 
 def data_load(filepath_train="../input/train.csv", filepath_test="../input/test.csv", drop_fields=[], filepath_cache=None):
@@ -39,7 +39,7 @@ def data_load(filepath_train="../input/train.csv", filepath_test="../input/test.
     return train_x, train_y, test_x, test_id
 
 def pca(x, number_of_feature=None):
-    pca = decomposition.PCA(n_components=number_of_feature if number_of_feature else len(x[0]))
+    pca = decomposition.PCA(n_components=number_of_feature)
     pca.fit(x)
 
     return pca
@@ -65,27 +65,43 @@ def data_transform_1(train, test):
 
     return train, test
 
-def data_transform_2(train, test, filepath=None):
-    number_train = train.shape[0]
+def data_transform_2(filepath_training, filepath_testing):
+    train = pd.read_csv(filepath_training)
+    test = pd.read_csv(filepath_testing)
+
+    num_train = train.shape[0]
+
+    y_train = train['target']
+    train = train.drop(['target'],axis=1)
+    id_test = test['ID']
+
+    def fill_nan_null(val):
+        ret_fill_nan_null = 0.0
+        if val == True:
+            ret_fill_nan_null = 1.0
+
+        return ret_fill_nan_null
 
     df_all = pd.concat((train, test), axis=0, ignore_index=True)
     df_all['null_count'] = df_all.isnull().sum(axis=1).tolist()
-    df_all = df_all.fillna(-1)
-
-    df_all_temp = pd.DataFrame()
+    df_all_temp = df_all['ID']
+    df_all = df_all.drop(['ID'],axis=1)
     df_data_types = df_all.dtypes[:] #{'object':0,'int64':0,'float64':0,'datetime64':0}
     d_col_drops = []
 
     for i in range(len(df_data_types)):
-        if str(df_data_types[i])=='object':
+        df_all[str(df_data_types.index[i])+'_nan_'] = df_all[str(df_data_types.index[i])].map(lambda x:fill_nan_null(pd.isnull(x)))
+    df_all = df_all.fillna(-9999)
+
+    for i in range(len(df_data_types)):
+        if str(df_data_types[i]) == 'object':
             df_u = pd.unique(df_all[str(df_data_types.index[i])].ravel())
 
-            d={}
+            d = {}
             j = 1000
             for s in df_u:
-                d[str(s)]=j
+                d[str(s)] = j
                 j += 5
-
             df_all[str(df_data_types.index[i])+'_vect_'] = df_all[str(df_data_types.index[i])].map(lambda x:d[str(x)])
             d_col_drops.append(str(df_data_types.index[i]))
 
@@ -93,17 +109,15 @@ def data_transform_2(train, test, filepath=None):
                 dummies = pd.get_dummies(df_all[str(df_data_types.index[i])]).rename(columns=lambda x: str(df_data_types.index[i]) + '_' + str(x))
                 df_all_temp = pd.concat([df_all_temp, dummies], axis=1)
 
+    df_all_temp = df_all_temp.drop(['ID'],axis=1)
     df_all = pd.concat([df_all, df_all_temp], axis=1)
 
-    train = df_all.iloc[:number_train]
-    test = df_all.iloc[number_train:]
+    train = df_all.iloc[:num_train]
+    test = df_all.iloc[num_train:]
     train = train.drop(d_col_drops,axis=1)
     test = test.drop(d_col_drops,axis=1)
 
-    if filepath:
-        pd.DataFrame(train).to_csv(filepath, index=False)
-
-    return train, test
+    return train, test, y_train, id_test
 
 def data_balance(x, y, criteria, ratio):
     print "Balance data by ratio={}".format(ratio)
@@ -134,9 +148,17 @@ def save_cache(obj, filepath):
         pickle.dump(obj, OUTPUT)
 
 def load_cache(filepath):
+    log("Try to load {}".format(filepath))
+
     obj = None
-    with open(filepath, "rb") as INPUT:
-        obj = pickle.load(INPUT)
+    try:
+        with open(filepath, "rb") as INPUT:
+            obj = pickle.load(INPUT)
+    except ValueError as e:
+        log("Error when loading pickle file so removing it", WARN)
+
+        os.remove(filepath)
+        sys.exit(100)
 
     return obj
 

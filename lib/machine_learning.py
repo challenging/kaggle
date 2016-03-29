@@ -1,84 +1,66 @@
 #!/usr/bin/env python
 
-import time
+import os
+import sys
 
-import numpy as np
+from utils import log, INFO
+from sklearn.cluster import KMeans
 
-from sklearn.ensemble import ExtraTreesClassifier
-from sklearn import ensemble
-from sklearn.metrics import log_loss, make_scorer
-from sklearn.grid_search import GridSearchCV
-from sklearn.cross_validation import train_test_split
+class KaggleKMeans(object):
+    def __init__(self, n_clusters, n_init=10):
+        self.model = KMeans(n_clusters=n_clusters, n_init=n_init, init="random", random_state=1201)
 
-import xgboost as xgb
+    def fit(self, train_x):
+        self.model.fit(train_x)
 
-import random
-random.seed(1201)
+    def get_centroid(self):
+        return self.model.cluster_centers_
 
-def extra_tree_classifier(train_x, train_y):
-    print('Training...')
-    clf = ExtraTreesClassifier(n_estimators=850,max_features= 60,criterion= 'entropy',min_samples_split= 4,
-                               max_depth= 40, min_samples_leaf= 2, n_jobs = -1)
-    clf.fit(train_x, train_y)
+    def get_labels(self):
+        return self.model.labels_
 
-    return clf
+    def stats(self, train_y):
+        pass
 
-def flog_loss(ground_truth, predictions):
-    flog_loss_ = log_loss(ground_truth, predictions) #, eps=1e-15, normalize=True, sample_weight=None)
-    return flog_loss_
+if __name__ == "__main__":
+    BASEPATH = "."
+    n_clusters = 200
 
-def ensemble_probability(train_x, train_y, test, ne=25, lr=1e-2):
-    LL  = make_scorer(flog_loss, greater_is_better=False)
+    import time
 
-    g = {'ne':ne, 'md':40, 'mf':60, 'rs': 1201}
-    etc = ensemble.ExtraTreesClassifier(n_estimators=g['ne'], max_depth=g['md'], max_features=g['mf'], random_state=g['rs'],
-                                        criterion='entropy', min_samples_split=4, min_samples_leaf=2, verbose=0, n_jobs=-1)
-    etr = ensemble.ExtraTreesRegressor(n_estimators=g['ne'], max_depth=g['md'], max_features=g['mf'], random_state=g['rs'],
-                                       min_samples_split=4, min_samples_leaf=2, verbose=0, n_jobs =-1)
+    from load import pca, data_load, data_transform_2, load_cache, save_cache
+    N = 650
 
-    rfc = ensemble.RandomForestClassifier(n_estimators=g['ne'], max_depth=g['md'], max_features=g['mf'], random_state=g['rs'],
-                                          criterion='entropy', min_samples_split=4, min_samples_leaf=2, verbose=0, n_jobs=-1)
-    rfr = ensemble.RandomForestRegressor(n_estimators=g['ne'], max_depth=g['md'], max_features=g['mf'], random_state=g['rs'],
-                                         min_samples_split= 4, min_samples_leaf= 2, verbose = 0, n_jobs =-1)
+    filepath_training = "{}/../input/train.csv".format(BASEPATH)
+    filepath_testing = "{}/../input/test.csv".format(BASEPATH)
 
-    xgr = xgb.XGBRegressor(n_estimators=g['ne'], max_depth=g['md'], seed=g['rs'], missing=np.nan, learning_rate=lr, subsample=0.8, colsample_bytree=0.85)
-    xgc = xgb.XGBClassifier(n_estimators=g['ne'], max_depth=g['md'], seed=g['rs'], missing=np.nan, learning_rate=lr, subsample=0.8, colsample_bytree=0.85)
+    filepath_cache_1 = "../input/{}_training_dataset.cache".format(N)
+    model_folder = "../prediction_model/others"
 
-    clf = {'etc':etc, 'etr':etr, 'rfc':rfc, 'rfr':rfr, 'xgr':xgr, 'xgc':xgc}
-    y_pred = {}
-    for key in clf.keys():
-        y_pred[key] = []
+    train_x, test_x, train_y, test_id = None, None, None, None
+    if os.path.exists(filepath_cache_1):
+        train_x, test_x, train_y, test_id = load_cache(filepath_cache_1)
 
-    best_score, start_time = 0.0, time.time()
+        log("Load data from cache file({}) for the original data sources".format(filepath_cache_1), INFO)
+    else:
+        train_x, test_x, train_y, test_id = data_transform_2(filepath_training, filepath_testing)
 
-    print "Training..."
-    for c in clf.keys():
-        if c[:1] != "x": #not xgb
-            model = GridSearchCV(estimator=clf[c], param_grid={}, n_jobs =-1, cv=2, verbose=0, scoring=LL)
-            model.fit(train_x, train_y)
-            if c[-1:] != "c": #not classifier
-                y_pred[c] = model.predict(test)
-                print("Ensemble Model: ", c, " Best CV score: ", model.best_score_, " Time: ", round(((time.time() - start_time)/60),2))
-            else: #classifier
-                best_score = (log_loss(train_y, model.predict_proba(train_x)[:,1]))*-1
-                y_pred[c] = model.predict_proba(test)[:,1]
-                print("Ensemble Model: ", c, " Best CV score: ", best_score, " Time: ", round(((time.time() - start_time)/60),2))
-        else: #xgb
-            X_fit, X_eval, y_fit, y_eval= train_test_split(train_x, train_y, test_size=0.35, train_size=0.65, random_state=g['rs'])
-            model = clf[c]
-            model.fit(X_fit, y_fit, early_stopping_rounds=20, eval_metric="logloss", eval_set=[(X_eval, y_eval)], verbose=0)
-            if c == "xgr": #xgb regressor
-                best_score = (log_loss(train_y, model.predict(train_x)))*-1
-                y_pred[c] = model.predict(test)
-            else: #xgb classifier
-                best_score = (log_loss(train_y, model.predict_proba(train_x)[:,1]))*-1
-                y_pred[c] = model.predict_proba(test)[:,1]
-            print("Ensemble Model: ", c, " Best CV score: ", best_score, " Time: ", round(((time.time() - start_time)/60),2))
+        save_cache((train_x, test_x, train_y, test_id), filepath_cache_1)
+        log("Save data to cache file({}) for the original data sources".format(filepath_cache_1))
 
-        for i in range(len(y_pred[c])):
-            if y_pred[c][i] < 0.0:
-                y_pred[c][i] = 0.0
-            if y_pred[c][i] > 1.0:
-                y_pred[c][i] = 1.0
+    train_X, test_X = train_x.values, test_x.values
+    train_y, test_id = train_y.values, test_id.values
+    train_Y = train_y.astype(float)
 
-    return y_pred
+    timestamp_start = time.time()
+    layer_1_cluster = None
+    filepath_model = "{}/kmeans_{}.cache".format(model_folder, n_clusters)
+    if os.path.exists(filepath_model):
+        layer_1_cluster = load_cache(filepath_model)
+    else:
+        layer_1_cluster = KaggleKMeans(n_clusters)
+        layer_1_cluster.fit(train_X)
+    print "Cost {} secends to build KMeans model".format(time.time() - timestamp_start)
+
+    for centroid in layer_1_cluster.get_centroid():
+        print centroid
