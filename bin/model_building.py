@@ -11,20 +11,20 @@ from utils import log, INFO
 from load import data_load, data_transform_1, data_transform_2, save_kaggle_submission, pca, save_cache, load_cache
 from learning import LearningFactory
 from deep_learning import KaggleCheckpoint
+from keras.callbacks import EarlyStopping
 from ensemble_learning import layer_one_model, layer_two_model
 
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
 @click.command()
 @click.option("--deep-dimension", default=100, help="Dimension of Hiddle Layer")
-@click.option("--deep-layer", default=2, help="Number of Hidden Layer")
-@click.option("--deep-layer2", is_flag=True, help="Use Deep in Layer-2")
+@click.option("--deep-layer", default=0, help="Number of Hidden Layer")
 @click.option("--nfold", default=10, help="Number of fold")
 @click.option("--estimators", default=100, help="Number of estimator")
 @click.option("--thread", default=1, help="Number of thread")
 @click.option("--pca-number", default=None, help="Dimension of PCA")
 @click.option("--transform", default=1, help="Tranform Methodology")
-def learning(pca_number, transform, thread, nfold, estimators, deep_layer2, deep_dimension, deep_layer):
+def learning(pca_number, transform, thread, nfold, estimators, deep_dimension, deep_layer):
     filepath_cache_1 = "../input/455_dataset.cache"
 
     drop_fields = ['v8','v23','v25','v36','v37','v46','v51','v53','v54','v63','v73','v75','v79','v81','v82','v89','v92','v95','v105','v107','v108','v109','v110','v116','v117','v118','v119','v123','v124','v128']
@@ -69,12 +69,19 @@ def learning(pca_number, transform, thread, nfold, estimators, deep_layer2, deep
     if not pca_number:
         pca_number = number_of_feature
 
-    models = ["shallow_gridsearch_extratree_regressor", "shallow_gridsearch_extratree_classifier",
-              "shallow_gridsearch_randomforest_regressor", "shallow_gridsearch_randomforest_classifier",
-              "shallow_xgboosting_regressor", #The logloss value is always nan, why???
-              "shallow_xgboosting_classifier"]
-              #"shallow_gridsearch_gradientboosting_regressor", "shallow_gridsearch_gradientboosting_classifier"]
+    models = ["shallow_gridsearch_extratree_regressor",
+              "shallow_gridsearch_extratree_classifier",
+              "shallow_gridsearch_randomforest_regressor",
+              "shallow_gridsearch_randomforest_classifier",
+              #"shallow_xgboosting_regressor", #The logloss value is always nan, why???
+              "shallow_xgboosting_classifier",
+              "shallow_gradientboosting_regressor",
+              "shallow_gradientboosting_classifier"
+              ]
+
     layer2_model_name = "shallow_gridsearch_logistic_regressor"
+    if deep_layer > 1:
+        layer2_model_name = "deep_logistic_regressor"
 
     model_folder = "{}/../prediction_model/ensemble_learning/transform={}_models={}_feature={}_pcanumber={}_estimators={}".format(\
                         BASEPATH, transform, len(models), number_of_feature, pca_number, estimators)
@@ -91,19 +98,27 @@ def learning(pca_number, transform, thread, nfold, estimators, deep_layer2, deep
 
     # Phase 2. --> Model Training
     deep_setting = {}
-    if deep_layer2:
-        checkpointer = KaggleCheckpoint(filepath=model_folder+"/{epoch}.weights.hdf5",
-                                        testing_set=(test_x, test_id),
-                                        folder_testing=model_folder,
+    if deep_layer > 1:
+        deep_learning_model_folder = "{}/nn_dimension={}".format(model_folder, deep_dimension)
+        if not os.path.isdir(deep_learning_model_folder):
+            os.makedirs(deep_learning_model_folder)
+
+        checkpointer = KaggleCheckpoint(filepath=deep_learning_model_folder + "/{epoch}.weights.hdf5",
+                                        testing_set=(layer_2_test_x, test_id),
+                                        folder_testing=deep_learning_model_folder,
                                         verbose=1, save_best_only=True)
 
+        early_stopping = EarlyStopping(monitor='binary_crossentropy', patience=20, verbose=0, mode='auto')
+
+        deep_setting["folder_weights"] = deep_learning_model_folder
         deep_setting["mini_batch"] = 5
         deep_setting["number_of_layer"] = 3
-        deep_setting["dimension"] = 1000
-        deep_setting["callbacks"] = [checkpointer]
+        deep_setting["dimension"] = deep_layer
+        deep_setting["callbacks"] = [checkpointer, early_stopping]
         deep_setting["nepoch"] = 1000
+        deep_setting["validation_split"] = 0.15
 
-    results = layer_two_model(models, layer_2_train_x, train_Y, layer_2_test_x, learning_loss, layer2_model_name, model_folder, deep_setting)
+    results = layer_two_model(models, layer_2_train_x, train_Y, test_id, layer_2_test_x, learning_loss, layer2_model_name, model_folder, deep_setting)
 
     # Save the submission CSV file
     filepath_output = "{}/kaggle_BNP_submission_{}.csv".format(model_folder, layer2_model_name)

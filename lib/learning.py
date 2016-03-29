@@ -54,7 +54,7 @@ class LearningFactory(object):
             elif method.find("logistic_regressor") > -1:
                 params = {"C": [1e-04, 1e-02, 1e-01, 1, 1e+01, 1e+02, 1e+04], "solver": ["newton-cg", "lbfgs", "liblinear"]}
 
-                model = Learning(method, GridSearchCV(LogisticRegression(), params, verbose=1, scoring=LL))
+                model = Learning(method, GridSearchCV(LogisticRegression(), params, verbose=1))#, scoring=LL))
             elif method.find("regressor") > -1:
                 if method.find("extratree") > -1:
                     gs = GridSearchCV(ExtraTreesRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
@@ -134,12 +134,16 @@ class Learning(object):
         self.name = name.lower()
         self.model = model
 
-    def init_deep_params(self, model_folder, layer, mini_batch, dimension, train_x, train_y, number_of_feature,
-                         nepoch, callbacks=[]):
+    def init_deep_params(self, model_folder,
+                         number_of_feature,
+                         layer, mini_batch, dimension,
+                         nepoch, validation_split, callbacks=[]):
+        self.mini_batch = mini_batch
         self.nepoch = nepoch
         self.callbacks = callbacks
+        self.validation_split = validation_split
 
-        self.model = logistic_regression(model_folder, layer, mini_batch, dimension, train_x, train_y, number_of_feature)
+        self.model = logistic_regression(model_folder, layer, mini_batch, dimension, number_of_feature)
 
     def is_shallow_learning(self):
         return self.name.find("shallow") != -1
@@ -169,16 +173,23 @@ class Learning(object):
             else:
                 self.model.fit(train_x, train_y)
         elif self.is_deep_learning():
-            self.model.fit(train_x, train_y, nb_epoch=self.nepoch, batch_size=self.mini_batch, callbacks=self.callbacks)
+            self.model.fit(train_x, train_y, nb_epoch=self.nepoch, batch_size=self.mini_batch, validation_split=self.validation_split, callbacks=self.callbacks)
 
     def predict(self, data):
-        if self.is_regressor():
-            return self.model.predict(data)
-        elif self.is_classifier():
-            # Only care the probability of class '1'
-            return self.model.predict_proba(data)[:,1]
-        elif self.is_svm():
-            return self.model.predict_proba(data)[:,1]
+        if self.is_shallow_learning():
+            if self.is_regressor():
+                if self.name.find("logistic_regressor") > -1:
+                    return self.model.predict_proba(data)[:, 1]
+                else:
+                    return self.model.predict(data)
+            elif self.is_classifier():
+                # Only care the probability of class '1'
+                return self.model.predict_proba(data)[:,1]
+            elif self.is_svm():
+                return self.model.predict_proba(data)[:,1]
+        elif self.is_deep_learning():
+            if self.is_regressor():
+                return [prob if prob else 0.0 for prob in self.model.predict_proba(data)]
 
     def grid_scores(self):
         if self.is_grid_search():
@@ -190,10 +201,13 @@ class Learning(object):
         return log_loss(y_true, self.predict(data))
 
     def coef(self):
-        if self.is_grid_search():
-            return self.model.best_estimator_.coef_ if hasattr(self.model.best_estimator_, "coef_") else np.nan
+        if self.is_shallow_learning():
+            if self.is_grid_search():
+                return self.model.best_estimator_.coef_ if hasattr(self.model.best_estimator_, "coef_") else np.nan
+            else:
+                return self.model.coef_ if hasattr(self.model, "coef_") else np.nan
         else:
-            return self.model.coef_ if hasattr(self.model, "coef_") else np.nan
+            return self.model.get_weights()
 
 class LearningLogLoss(object):
     def __init__(self, models, nfold):
@@ -310,8 +324,8 @@ class LearningThread(threading.Thread):
 
                 timestamp_end = time.time()
                 log("The grid score is {}".format(model.grid_scores()), DEBUG)
-                log("Cost {:02f} secends to train '{}' model for fold-{:02d}, and the logloss is {:.8f}, the best score is {:.8f}".format(\
-                        timestamp_end-timestamp_start, model.name, nfold, cost, model.coef()), INFO)
+                log("Cost {:02f} secends to train '{}' model for fold-{:02d}, and the logloss is {:.8f}".format(\
+                        timestamp_end-timestamp_start, model.name, nfold, cost), INFO)
 
             self.obj.learning_queue.task_done()
             self.obj.dump()

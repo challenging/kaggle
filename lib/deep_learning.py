@@ -2,6 +2,7 @@
 
 import os
 import sys
+import warnings
 
 import pandas as pd
 
@@ -9,6 +10,8 @@ from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation
 from keras.optimizers import RMSprop
 from keras.callbacks import ModelCheckpoint
+
+from utils import log, INFO
 
 class KaggleCheckpoint(ModelCheckpoint):
     def __init__(self, filepath, save_best_only=True, testing_set=(None, None), folder_testing=None, verbose=1):
@@ -18,7 +21,7 @@ class KaggleCheckpoint(ModelCheckpoint):
         self.folder_testing = folder_testing
 
     def on_epoch_end(self, epoch, logs={}):
-        filepath = self.filepath.format(epoch=epoch, **logs)
+        filepath = self.filepath.format(epoch=epoch+1, **logs)
         if self.save_best_only:
             current = logs.get(self.monitor)
             if current is None:
@@ -62,13 +65,9 @@ def get_newest_model(folder):
 
     return newest
 
-def logistic_regression(model_folder, layer, mini_batch, dimension, train_x, train_y, number_of_feature,
+def logistic_regression(model_folder, layer, mini_batch, dimension, number_of_feature,
        class_weight={0: 1, 1: 1}, origin_train=None, testing_data=None, testing_id=None,
        learning_rate=1e-6, dropout_rate=0.5, nepoch=10, activate_function="sigmoid"):
-
-    ori_train_x, ori_train_y = train_x, train_y
-    if origin_train:
-        ori_train_x, ori_train_y = origin_train
 
     model = Sequential()
     model.add(Dense(dimension, input_dim=number_of_feature, init="uniform"))
@@ -90,16 +89,8 @@ def logistic_regression(model_folder, layer, mini_batch, dimension, train_x, tra
     if filepath_model:
         model.load_weights(filepath_model)
 
-        print "Load weights from {}".format(filepath_model)
+        log("Load weights from {}".format(filepath_model), INFO)
+    else:
+        log("A new one model, {}".format(model_folder), INFO)
 
     return model
-    '''
-    checkpointer = KaggleCheckpoint(filepath=model_folder+"/{epoch}.weights.hdf5",
-                                    testing_set=(testing_data, testing_id),
-                                    folder_testing=model_folder,
-                                    verbose=1, save_best_only=True)
-
-    model.fit(train_x, train_y, nb_epoch=nepoch, batch_size=mini_batch, validation_split=0.1, class_weight=class_weight, callbacks=[checkpointer])
-
-    return model
-    '''

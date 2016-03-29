@@ -13,22 +13,17 @@ from sklearn.metrics import log_loss
 from learning import LearningFactory, Learning, LearningQueue, LearningLogLoss
 from utils import log, INFO
 
-def store_layer_output(models, dataset, filepath, target=[], ids=[]):
-    results_of_layer = {"ID": []}
+def store_layer_output(models, dataset, filepath, targets=[]):
+    results_of_layer = {}
     for model_idx, model_name in enumerate(models):
         results_of_layer.setdefault(model_name, [])
 
         for idx in range(0, len(dataset)):
-            if model_idx == 0:
-                if np.any(ids):
-                    results_of_layer["ID"].append(ids[idx])
-                else:
-                    results_of_layer["ID"].append(idx)
-
             results_of_layer[model_name].append(dataset[idx][model_idx])
 
-    if np.any(target):
-        results_of_layer.update(target)
+    if targets:
+        for target in targets:
+            results_of_layer.update(target)
 
     pd.DataFrame(results_of_layer).to_csv(filepath, index=False)
 
@@ -49,6 +44,11 @@ def layer_one_model(model_folder, train_x, train_y, test_x, test_id, models, lay
         if "layer2_lr" in learning_logloss.logloss:
             learning_logloss.logloss[layer2_model_name] = learning_logloss.logloss["layer2_lr"]
             del learning_logloss.logloss["layer2_lr"]
+
+        for model_name in learning_logloss.logloss.keys():
+            if model_name.find("shadow") > -1:
+                learning_logloss.logloss[model_name.replace("shadow", "shallow")] = learning_logloss.logloss[model_name]
+                del learning_logloss.logloss[model_name] 
     else:
         learning_logloss = LearningLogLoss(models + [layer2_model_name], n_folds)
         learning_queue.setup_layer_info(layer_two_training_dataset, layer_two_testing_dataset, learning_logloss)
@@ -82,18 +82,19 @@ def layer_one_model(model_folder, train_x, train_y, test_x, test_id, models, lay
     for idx in range(0, len(learning_queue.layer_two_testing_dataset)):
         layer_two_testing_dataset[idx] = learning_queue.layer_two_testing_dataset[idx].mean(axis=1)
 
-    # Save testing output of the layer one
-    filepath_first_layer_dataset = "{}/testing_layer1.csv".format(model_folder)
-    store_layer_output(models, layer_two_testing_dataset, filepath_first_layer_dataset, ids=test_id)
-
     return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_logloss
 
-def layer_two_model(layer_one_models, train_x, train_y, test_x, learning_logloss, model_name, model_folder, deep_setting={}):
+def layer_two_model(layer_one_models, train_x, train_y, test_id, test_x, learning_logloss, model_name, model_folder, deep_setting={}):
     model = LearningFactory.get_model(model_name)
     if deep_setting:
-        model.init_deep_params(model_folder, deep_setting["number_of_layer"], deep_setting["mini_batch"],
-                               deep_setting["dimension"], train_x, train_y, len(train_x[0]),
-                               deep_setting["nepoch"], deep_setting["callbacks"])
+        model.init_deep_params(deep_setting["folder_weights"],
+                               len(train_x[0]),
+                               deep_setting["number_of_layer"],
+                               deep_setting["mini_batch"],
+                               deep_setting["dimension"],
+                               deep_setting["nepoch"],
+                               deep_setting.get("validation_split", 0.15),
+                               deep_setting["callbacks"])
 
     model.train(train_x, train_y)
     log("The decision function is {}".format(model.coef()), INFO)
@@ -102,15 +103,30 @@ def layer_two_model(layer_one_models, train_x, train_y, test_x, learning_logloss
     training_prediction_results = model.predict(train_x)
 
     # min/max/mean probability calculation
-    min_probabilities, max_probability, mean_probability = [], [], []
+    min_probabilities, max_probabilities, mean_probabilities = [], [], []
     for values in train_x:
         min_probabilities.append(np.nanmin(values))
         max_probabilities.append(np.nanmax(values))
         mean_probabilities.append(np.nanmean(values))
 
     filepath_layer_dataset = "{}/training_layer.csv".format(model_folder)
-    results = {"Target": train_y, "Probability of Layer 2": training_prediction_results, "min.": min_probabilities, "max.": max_probability, "avg.": mean_probability}
-    store_layer_output(layer_one_models, train_x, filepath_layer_dataset, target=results)
+    targets = []
+    for key, values in {"Target": train_y, "Probability of Layer 2": training_prediction_results, "min.": min_probabilities, "max.": max_probabilities, "avg.": mean_probabilities}.items():
+        targets.append({key: values})
+    store_layer_output(layer_one_models, train_x, filepath_layer_dataset, targets=targets)
+
+    # Save the testing output for layer 1
+    min_probabilities, max_probabilities, mean_probabilities = [], [], []
+    for values in test_x:
+        min_probabilities.append(np.nanmin(values))
+        max_probabilities.append(np.nanmax(values))
+        mean_probabilities.append(np.nanmean(values))
+
+    filepath_layer_testing_dataset = "{}/testing_layer1.csv".format(model_folder)
+    targets = []
+    for key, values in {"ID":test_id ,"min.": min_probabilities, "max.": max_probabilities, "avg.": mean_probabilities}.items():
+        targets.append({key: values})
+    store_layer_output(layer_one_models, test_x, filepath_layer_testing_dataset, targets=targets)
 
     cost = log_loss(train_y, training_prediction_results)
     log("The overall logloss is {:.8f}".format(cost))
