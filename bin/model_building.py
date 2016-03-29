@@ -69,12 +69,12 @@ def learning(pca_number, transform, thread, nfold, estimators, deep_layer2, deep
     if not pca_number:
         pca_number = number_of_feature
 
-    models = ["shadow_gridsearch_extratree_regressor", "shadow_gridsearch_extratree_classifier",
-              "shadow_gridsearch_randomforest_regressor", "shadow_gridsearch_randomforest_classifier",
-              "shadow_xgboosting_regressor", #The logloss value is always nan, why???
-              "shadow_xgboosting_classifier"]
-              #"shadow_gridsearch_gradientboosting_regressor", "shadow_gridsearch_gradientboosting_classifier"]
-    layer2_model_name = "shadow_gridsearch_logistic_regressor"
+    models = ["shallow_gridsearch_extratree_regressor", "shallow_gridsearch_extratree_classifier",
+              "shallow_gridsearch_randomforest_regressor", "shallow_gridsearch_randomforest_classifier",
+              "shallow_xgboosting_regressor", #The logloss value is always nan, why???
+              "shallow_xgboosting_classifier"]
+              #"shallow_gridsearch_gradientboosting_regressor", "shallow_gridsearch_gradientboosting_classifier"]
+    layer2_model_name = "shallow_gridsearch_logistic_regressor"
 
     model_folder = "{}/../prediction_model/ensemble_learning/transform={}_models={}_feature={}_pcanumber={}_estimators={}".format(\
                         BASEPATH, transform, len(models), number_of_feature, pca_number, estimators)

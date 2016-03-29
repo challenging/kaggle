@@ -46,7 +46,7 @@ class LearningFactory(object):
         model = None
         LL = make_scorer(LearningFactory.cost_function, greater_is_better=False)
 
-        if method.find("shadow") > -1:
+        if method.find("shallow") > -1:
             if method.find("linear_regressor") > -1:
                 gs = GridSearchCV(estimator=LinearRegression(), param_grid={}, n_jobs=LearningFactory.n_jobs, cv=2, verbose=0, scoring=LL)
 
@@ -141,8 +141,8 @@ class Learning(object):
 
         self.model = logistic_regression(model_folder, layer, mini_batch, dimension, train_x, train_y, number_of_feature)
 
-    def is_shadow_learning(self):
-        return self.name.find("shadow") != -1
+    def is_shallow_learning(self):
+        return self.name.find("shallow") != -1
 
     def is_deep_learning(self):
         return self.name.find("deep") != -1
@@ -163,7 +163,7 @@ class Learning(object):
         return self.name.find("gridsearch") != -1
 
     def train(self, train_x, train_y):
-        if self.is_shadow_learning():
+        if self.is_shallow_learning():
             if self.is_xgb():
                 self.model.fit(train_x, train_y, eval_metric="logloss")
             else:
