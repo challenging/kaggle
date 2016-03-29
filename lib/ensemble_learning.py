@@ -28,8 +28,7 @@ def store_layer_output(models, dataset, filepath, target=[], ids=[]):
             results_of_layer[model_name].append(dataset[idx][model_idx])
 
     if np.any(target):
-        results_of_layer["Probability of Layer 2"] = target["Probability of Layer 2"]
-        results_of_layer["Target"] = target["Target"]
+        results_of_layer.update(target)
 
     pd.DataFrame(results_of_layer).to_csv(filepath, index=False)
 
@@ -102,8 +101,15 @@ def layer_two_model(layer_one_models, train_x, train_y, test_x, learning_logloss
     # Save the training output for layer 1/2
     training_prediction_results = model.predict(train_x)
 
+    # min/max/mean probability calculation
+    min_probabilities, max_probability, mean_probability = [], [], []
+    for values in train_x:
+        min_probabilities.append(np.nanmin(values))
+        max_probabilities.append(np.nanmax(values))
+        mean_probabilities.append(np.nanmean(values))
+
     filepath_layer_dataset = "{}/training_layer.csv".format(model_folder)
-    results = {"Target": train_y, "Probability of Layer 2": training_prediction_results}
+    results = {"Target": train_y, "Probability of Layer 2": training_prediction_results, "min.": min_probabilities, "max.": max_probability, "avg.": mean_probability}
     store_layer_output(layer_one_models, train_x, filepath_layer_dataset, target=results)
 
     cost = log_loss(train_y, training_prediction_results)
