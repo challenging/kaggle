@@ -7,15 +7,33 @@ import numpy as np
 import pandas as pd
 
 # For Shadow Learning
-from sklearn.linear_model import LogisticRegression
 from sklearn.cross_validation import StratifiedKFold
-from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import log_loss
 
-from learning import LearningQueue, LearningLogLoss
+from learning import LearningFactory, Learning, LearningQueue, LearningLogLoss
 from utils import log, INFO
 
-def ensemble_model(model_folder, train_x, train_y, test_x, test_id, models, n_folds=10, number_of_thread=1, filepath_queue=None, filepath_nfold=None):
+def store_layer_output(models, dataset, filepath, target=[], ids=[]):
+    results_of_layer = {"ID": []}
+    for model_idx, model_name in enumerate(models):
+        results_of_layer.setdefault(model_name, [])
+
+        for idx in range(0, len(dataset)):
+            if model_idx == 0:
+                if np.any(ids):
+                    results_of_layer["ID"].append(ids[idx])
+                else:
+                    results_of_layer["ID"].append(idx)
+
+            results_of_layer[model_name].append(dataset[idx][model_idx])
+
+    if np.any(target):
+        results_of_layer["Probability of Layer 2"] = target["Probability of Layer 2"]
+        results_of_layer["Target"] = target["Target"]
+
+    pd.DataFrame(results_of_layer).to_csv(filepath, index=False)
+
+def layer_one_model(model_folder, train_x, train_y, test_x, test_id, models, layer2_model_name, n_folds=10, number_of_thread=1, filepath_queue=None, filepath_nfold=None):
     skf = list(StratifiedKFold(train_y, n_folds))
 
     layer_two_training_dataset = np.zeros((train_x.shape[0], len(models)))
@@ -28,8 +46,12 @@ def ensemble_model(model_folder, train_x, train_y, test_x, test_id, models, n_fo
             learning_queue.setup_layer_info(layer_two_training_dataset, layer_two_testing_dataset, learning_logloss)
 
             learning_logloss = learning_queue.learning_logloss
+
+        if "layer2_lr" in learning_logloss.logloss:
+            learning_logloss.logloss[layer2_model_name] = learning_logloss.logloss["layer2_lr"]
+            del learning_logloss.logloss["layer2_lr"]
     else:
-        learning_logloss = LearningLogLoss(models + ["layer2_lr"], n_folds)
+        learning_logloss = LearningLogLoss(models + [layer2_model_name], n_folds)
         learning_queue.setup_layer_info(layer_two_training_dataset, layer_two_testing_dataset, learning_logloss)
 
         learning_queue.dump()
@@ -61,54 +83,36 @@ def ensemble_model(model_folder, train_x, train_y, test_x, test_id, models, n_fo
     for idx in range(0, len(learning_queue.layer_two_testing_dataset)):
         layer_two_testing_dataset[idx] = learning_queue.layer_two_testing_dataset[idx].mean(axis=1)
 
-    # Save the output of 1-layer
-    def store_layer_output(dataset, filepath, target=[], ids=[]):
-        results_of_layer = {"ID": []}
-        for model_idx, model_name in enumerate(models):
-            results_of_layer.setdefault(model_name, [])
-
-            for idx in range(0, len(dataset)):
-                if model_idx == 0:
-                    if np.any(ids):
-                        results_of_layer["ID"].append(ids[idx])
-                    else:
-                        results_of_layer["ID"].append(idx)
-
-                results_of_layer[model_name].append(dataset[idx][model_idx])
-
-        if np.any(target):
-            results_of_layer["Probability of Layer 2"] = target["Probability of Layer 2"]
-            results_of_layer["Target"] = target["Target"]
-
-        pd.DataFrame(results_of_layer).to_csv(filepath, index=False)
-
     # Save testing output of the layer one
     filepath_first_layer_dataset = "{}/testing_layer1.csv".format(model_folder)
-    store_layer_output(layer_two_testing_dataset, filepath_first_layer_dataset, ids=test_id)
+    store_layer_output(models, layer_two_testing_dataset, filepath_first_layer_dataset, ids=test_id)
 
-    layer_2_model = LogisticRegression()
-    params = {"C": [1e-04, 1e-02, 1e-01, 1, 1e+01, 1e+02, 1e+04],
-              "solver": ["newton-cg", "lbfgs", "liblinear"]}
-    clf = GridSearchCV(layer_2_model, params, verbose=1)
-    clf.fit(learning_queue.layer_two_training_dataset, train_y)
-    log("The decision function is {}".format(clf.best_estimator_.coef_), INFO)
+    return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_logloss
+
+def layer_two_model(layer_one_models, train_x, train_y, test_x, learning_logloss, model_name, model_folder, deep_setting={}):
+    model = LearningFactory.get_model(model_name)
+    if deep_setting:
+        model.init_deep_params(model_folder, deep_setting["number_of_layer"], deep_setting["mini_batch"],
+                               deep_setting["dimension"], train_x, train_y, len(train_x[0]),
+                               deep_setting["nepoch"], deep_setting["callbacks"])
+
+    model.train(train_x, train_y)
+    log("The decision function is {}".format(model.coef()), INFO)
 
     # Save the training output for layer 1/2
-    training_prediction_results = clf.predict_proba(learning_queue.layer_two_training_dataset)[:,1]
-    filepath_layer_dataset = "{}/training_layer.csv".format(model_folder)
-    results = {"Target": [], "Probability of Layer 2": training_prediction_results}
-    for value in train_y:
-        results["Target"].append(value)
-    store_layer_output(layer_two_training_dataset, filepath_layer_dataset, target=results)
+    training_prediction_results = model.predict(train_x)
 
-    cost = log_loss(train_y, clf.predict_proba(learning_queue.layer_two_training_dataset)[:,1])
+    filepath_layer_dataset = "{}/training_layer.csv".format(model_folder)
+    results = {"Target": train_y, "Probability of Layer 2": training_prediction_results}
+    store_layer_output(layer_one_models, train_x, filepath_layer_dataset, target=results)
+
+    cost = log_loss(train_y, training_prediction_results)
+    log("The overall logloss is {:.8f}".format(cost))
 
     # Hardcode to set nfold to be ZERO, and then save it
-    learning_logloss.insert_logloss("layer2_lr", 0, cost)
+    learning_logloss.insert_logloss(model.name, 0, cost)
 
     with open("{}/logloss.pickle".format(model_folder), "wb") as OUTPUT:
         pickle.dump(learning_logloss, OUTPUT)
 
-    log("The overall logloss is {:.8f}".format(cost))
-
-    return clf.predict_proba(layer_two_testing_dataset)[:,1]
+    return model.predict(test_x)

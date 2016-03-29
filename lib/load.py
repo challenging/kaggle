@@ -129,6 +129,17 @@ def save_kaggle_submission(test_id, results, filepath, normalization=False):
 
     pd.DataFrame({"ID": test_id, "PredictedProb": results}).to_csv(filepath, index=False)
 
+def save_cache(obj, filepath):
+    with open(filepath, "wb") as OUTPUT:
+        pickle.dump(obj, OUTPUT)
+
+def load_cache(filepath):
+    obj = None
+    with open(filepath, "rb") as INPUT:
+        obj = pickle.load(INPUT)
+
+    return obj
+
 if __name__ == "__main__":
     train_x, train_y, test_x, test_id = data_load()
 

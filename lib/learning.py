@@ -20,13 +20,16 @@ from keras.callbacks import ModelCheckpoint
 # For Shadow Learning
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, GradientBoostingRegressor
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import log_loss
+from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.grid_search import GridSearchCV
+from sklearn.metrics import log_loss, make_scorer
 
 sys.path.append("{}/../lib".format(os.path.dirname(os.path.abspath(__file__))))
-from utils import log, INFO, WARN, ERROR
+from utils import log, DEBUG, INFO, WARN, ERROR
+from deep_learning import logistic_regression, KaggleCheckpoint
 
 class LearningFactory(object):
+    n_jobs = -1
     ensemble_params = {"ne": 200,"md": 6,"mf": 80,"rs": 1201}
 
     @staticmethod
@@ -34,80 +37,118 @@ class LearningFactory(object):
         LearningFactory.ensemble_params["ne"] = n_estimators
 
     @staticmethod
+    def cost_function(y, y_hat):
+        flog_loss_ = log_loss(y, y_hat) #, eps=1e-15, normalize=True, sample_weight=None)
+        return flog_loss_
+
+    @staticmethod
     def get_model(method):
         model = None
+        LL = make_scorer(LearningFactory.cost_function, greater_is_better=False)
+
         if method.find("shadow") > -1:
-            if method.find("regressor") > -1:
+            if method.find("linear_regressor") > -1:
+                gs = GridSearchCV(estimator=LinearRegression(), param_grid={}, n_jobs=LearningFactory.n_jobs, cv=2, verbose=0, scoring=LL)
+
+                model = Learning(method, gs)
+            elif method.find("logistic_regressor") > -1:
+                params = {"C": [1e-04, 1e-02, 1e-01, 1, 1e+01, 1e+02, 1e+04], "solver": ["newton-cg", "lbfgs", "liblinear"]}
+
+                model = Learning(method, GridSearchCV(LogisticRegression(), params, verbose=1, scoring=LL))
+            elif method.find("regressor") > -1:
                 if method.find("extratree") > -1:
-                    model = Learning(method, ExtraTreesRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                                 max_depth=LearningFactory.ensemble_params["md"],
-                                                                 max_features=LearningFactory.ensemble_params["mf"],
-                                                                 random_state=LearningFactory.ensemble_params["rs"],
-                                                                 n_jobs=-1))
+                    gs = GridSearchCV(ExtraTreesRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
+                                                          max_depth=LearningFactory.ensemble_params["md"],
+                                                          max_features=LearningFactory.ensemble_params["mf"],
+                                                          random_state=LearningFactory.ensemble_params["rs"],
+                                                          n_jobs=-1),
+                                      param_grid={}, n_jobs=LearningFactory.n_jobs, cv=2, verbose=0, scoring=LL)
+                    model = Learning(method, gs)
                 elif method.find("randomforest") > -1:
-                    model = Learning(method, RandomForestRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                                   max_depth=LearningFactory.ensemble_params["md"],
-                                                                   max_features=LearningFactory.ensemble_params["mf"],
-                                                                   random_state=LearningFactory.ensemble_params["rs"],
-                                                                   min_samples_split=4,
-                                                                   min_samples_leaf=2,
-                                                                   verbose=0,
-                                                                   n_jobs=-1))
+                    gs = GridSearchCV(RandomForestRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
+                                                            max_depth=LearningFactory.ensemble_params["md"],
+                                                            max_features=LearningFactory.ensemble_params["mf"],
+                                                            random_state=LearningFactory.ensemble_params["rs"],
+                                                            min_samples_split=4,
+                                                            min_samples_leaf=2,
+                                                            verbose=0,
+                                                            n_jobs=-1),
+                                      param_grid={}, n_jobs=LearningFactory.n_jobs, cv=2, verbose=0, scoring=LL)
+                    model = Learning(method, gs)
                 elif method.find("gradientboosting") > -1:
-                    model = Learning(method, GradientBoostingRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                                       max_depth=LearningFactory.ensemble_params["md"],
-                                                                       max_features=LearningFactory.ensemble_params["mf"],
-                                                                       random_state=LearningFactory.ensemble_params["rs"],
-                                                                       learning_rate=1e-01))
+                    gs = GridSearchCV(GradientBoostingRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
+                                                                max_depth=LearningFactory.ensemble_params["md"],
+                                                                max_features=LearningFactory.ensemble_params["mf"],
+                                                                random_state=LearningFactory.ensemble_params["rs"],
+                                                                learning_rate=1e-01),
+                                      param_grid={}, n_jobs=LearningFactory.n_jobs, cv=2, verbose=0, scoring=LL)
+
+                    model = Learning(method, gs)
                 elif method.find("xgboosting") > -1:
                     model = Learning(method, xgb.XGBRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
                                                               max_depth=LearningFactory.ensemble_params["md"],
                                                               seed=LearningFactory.ensemble_params["rs"],
-                                                              missing=-1.0, learning_rate=1e-01, subsample=0.9, colsample_bytree=0.85, objective="reg:linear"))
+                                                              missing=np.nan, learning_rate=1e-02, subsample=0.9, colsample_bytree=0.85, objective="reg:linear"))
             elif method.find("classifier") > -1:
                 if method.find("extratree") > -1:
-                    model = Learning(method, ExtraTreesClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                                  max_depth=LearningFactory.ensemble_params["md"],
-                                                                  max_features=LearningFactory.ensemble_params["mf"],
-                                                                  random_state=LearningFactory.ensemble_params["rs"],
-                                                                  n_jobs=-1))
+                    gs = GridSearchCV(ExtraTreesClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
+                                                           max_depth=LearningFactory.ensemble_params["md"],
+                                                           max_features=LearningFactory.ensemble_params["mf"],
+                                                           random_state=LearningFactory.ensemble_params["rs"],
+                                                           n_jobs=-1),
+                                      param_grid={}, n_jobs=LearningFactory.n_jobs, cv=2, verbose=0, scoring=LL)
+                    model = Learning(method, gs)
                 elif method.find("randomforest") > -1:
-                    model = Learning(method, RandomForestClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                                    max_depth=LearningFactory.ensemble_params["md"],
-                                                                    max_features=LearningFactory.ensemble_params["mf"],
-                                                                    random_state=LearningFactory.ensemble_params["rs"],
-                                                                    criterion="entropy",
-                                                                    min_samples_split=4, min_samples_leaf=2, verbose=0, n_jobs=-1))
+                    gs = GridSearchCV(RandomForestClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
+                                                             max_depth=LearningFactory.ensemble_params["md"],
+                                                             max_features=LearningFactory.ensemble_params["mf"],
+                                                             random_state=LearningFactory.ensemble_params["rs"],
+                                                             criterion="entropy",
+                                                             min_samples_split=4, min_samples_leaf=2, verbose=0, n_jobs=-1),
+                                      param_grid={}, n_jobs=LearningFactory.n_jobs, cv=2, verbose=0, scoring=LL)
+                    model = Learning(method, gs)
                 elif method.find("gradientboosting") > -1:
-                    model = Learning(method, GradientBoostingClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                                        max_depth=LearningFactory.ensemble_params["md"],
-                                                                        max_features=LearningFactory.ensemble_params["mf"],
-                                                                        random_state=LearningFactory.ensemble_params["rs"],
-                                                                        learning_rate=1e-01))
+                    gs = GridSearchCV(GradientBoostingClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
+                                                                 max_depth=LearningFactory.ensemble_params["md"],
+                                                                 max_features=LearningFactory.ensemble_params["mf"],
+                                                                 random_state=LearningFactory.ensemble_params["rs"],
+                                                                 learning_rate=1e-01),
+                                      param_grid={}, n_jobs=LearningFactory.n_jobs, cv=2, verbose=0, scoring=LL)
+                    model = Learning(method, gs)
                 elif method.find("xgboosting") > -1:
                     model = Learning(method, xgb.XGBClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
                                                               max_depth=LearningFactory.ensemble_params["md"],
                                                               seed=LearningFactory.ensemble_params["rs"],
-                                                              missing=-1.0, learning_rate=1e-01, subsample=0.9, colsample_bytree=0.85, objective="binary:logistic"))
+                                                              missing=np.nan, learning_rate=1e-02, subsample=0.9, colsample_bytree=0.85, objective="binary:logistic"))
             elif method.find("svm") > -1:
                     model = Learning(method, SVC(probability=True, random_state=LearningFactory.ensemble_params["rs"]))
             else:
                 log("Error model naming - {}".format(method), WARN)
-        else:
-            log("Error model naming - {}".format(method), WARN)
+        elif method.find("deep") > -1:
+            model = Learning(method, None)
 
         return model
 
 class Learning(object):
     def __init__(self, name, model):
-        self.name = name
+        self.name = name.lower()
         self.model = model
+
+    def init_deep_params(self, model_folder, layer, mini_batch, dimension, train_x, train_y, number_of_feature,
+                         nepoch, callbacks=[]):
+        self.nepoch = nepoch
+        self.callbacks = callbacks
+
+        self.model = logistic_regression(model_folder, layer, mini_batch, dimension, train_x, train_y, number_of_feature)
 
     def is_shadow_learning(self):
         return self.name.find("shadow") != -1
 
     def is_deep_learning(self):
         return self.name.find("deep") != -1
+
+    def is_xgb(self):
+        return self.name.find("xgb") != -1
 
     def is_regressor(self):
         return self.name.find("regressor") != -1
@@ -118,8 +159,17 @@ class Learning(object):
     def is_svm(self):
         return self.name.find("svm") != -1
 
+    def is_grid_search(self):
+        return self.name.find("gridsearch") != -1
+
     def train(self, train_x, train_y):
-        self.model.fit(train_x, train_y)
+        if self.is_shadow_learning():
+            if self.is_xgb():
+                self.model.fit(train_x, train_y, eval_metric="logloss")
+            else:
+                self.model.fit(train_x, train_y)
+        elif self.is_deep_learning():
+            self.model.fit(train_x, train_y, nb_epoch=self.nepoch, batch_size=self.mini_batch, callbacks=self.callbacks)
 
     def predict(self, data):
         if self.is_regressor():
@@ -130,8 +180,20 @@ class Learning(object):
         elif self.is_svm():
             return self.model.predict_proba(data)[:,1]
 
+    def grid_scores(self):
+        if self.is_grid_search():
+            return self.model.grid_scores_
+        else:
+            return None
+
     def cost(self, data, y_true):
         return log_loss(y_true, self.predict(data))
+
+    def coef(self):
+        if self.is_grid_search():
+            return self.model.best_estimator_.coef_ if hasattr(self.model.best_estimator_, "coef_") else np.nan
+        else:
+            return self.model.coef_ if hasattr(self.model, "coef_") else np.nan
 
 class LearningLogLoss(object):
     def __init__(self, models, nfold):
@@ -203,7 +265,7 @@ class LearningQueue(object):
                 with open(self.filepath, "wb") as OUTPUT:
                     pickle.dump(objs, OUTPUT)
 
-                log("Save queue in {}".format(self.filepath), INFO)
+                log("Save queue in {}".format(self.filepath), DEBUG)
             else:
                 log("Not set the filepath to save", WARN)
         finally:
@@ -247,8 +309,9 @@ class LearningThread(threading.Thread):
                     self.obj.learning_logloss.insert_logloss(model_name, nfold, cost)
 
                 timestamp_end = time.time()
-                log("Cost {:02f} secends to train '{}' model for fold-{:02d}, and the logloss is {:.8f}".format(\
-                        timestamp_end-timestamp_start, model.name, nfold, cost))
+                log("The grid score is {}".format(model.grid_scores()), DEBUG)
+                log("Cost {:02f} secends to train '{}' model for fold-{:02d}, and the logloss is {:.8f}, the best score is {:.8f}".format(\
+                        timestamp_end-timestamp_start, model.name, nfold, cost, model.coef()), INFO)
 
             self.obj.learning_queue.task_done()
             self.obj.dump()

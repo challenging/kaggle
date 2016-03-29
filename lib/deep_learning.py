@@ -62,11 +62,9 @@ def get_newest_model(folder):
 
     return newest
 
-def lr(model_folder, layer, mini_batch, dimension,
-       train_x, train_y, class_weight={0: 1, 1: 1}, origin_train=None,
-       testing_data=None, testing_id=None,
+def logistic_regression(model_folder, layer, mini_batch, dimension, train_x, train_y, number_of_feature,
+       class_weight={0: 1, 1: 1}, origin_train=None, testing_data=None, testing_id=None,
        learning_rate=1e-6, dropout_rate=0.5, nepoch=10, activate_function="sigmoid"):
-    number_of_feature = len(train_x[0])
 
     ori_train_x, ori_train_y = train_x, train_y
     if origin_train:
@@ -94,10 +92,14 @@ def lr(model_folder, layer, mini_batch, dimension,
 
         print "Load weights from {}".format(filepath_model)
 
+    return model
+    '''
     checkpointer = KaggleCheckpoint(filepath=model_folder+"/{epoch}.weights.hdf5",
                                     testing_set=(testing_data, testing_id),
                                     folder_testing=model_folder,
                                     verbose=1, save_best_only=True)
+
     model.fit(train_x, train_y, nb_epoch=nepoch, batch_size=mini_batch, validation_split=0.1, class_weight=class_weight, callbacks=[checkpointer])
 
     return model
+    '''
