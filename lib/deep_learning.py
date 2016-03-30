@@ -28,6 +28,8 @@ class KaggleCheckpoint(ModelCheckpoint):
         results = {"PredictedProb": probas}
         if is_testing:
             results["ID"] = self.testing_id
+        else:
+            results["Target"] = self.training_y
 
         pd.DataFrame(results).to_csv(filepath, index=False)
         log("Save the results in {}".format(filepath), DEBUG)
