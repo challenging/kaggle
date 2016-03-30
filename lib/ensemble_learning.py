@@ -88,23 +88,27 @@ def layer_one_model(model_folder, train_x, train_y, test_x, test_id, models, lay
 
     return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_logloss
 
-def layer_two_model(layer_one_models, train_x, train_y, test_id, test_x, learning_logloss, model_name, model_folder, deep_setting={}):
+def layer_two_model(layer_one_models, train_x, train_y, test_id, test_x, learning_logloss, model_name, filepath_training, filepath_testing, filepath_logloss,
+                    deep_setting={}):
     model = LearningFactory.get_model(model_name)
     if deep_setting:
         model.init_deep_params(deep_setting["folder_weights"],
                                len(train_x[0]),
                                deep_setting["number_of_layer"],
-                               deep_setting["mini_batch"],
+                               deep_setting["batch_size"],
                                deep_setting["dimension"],
                                deep_setting["nepoch"],
                                deep_setting.get("validation_split", 0.15),
+                               deep_setting.get("class_weight", None),
                                deep_setting["callbacks"])
 
-    model.train(train_x, train_y)
-    log("The decision function is {}".format(model.coef()), INFO)
+        model.train([train_x, train_x], train_y)
+        training_prediction_results = model.predict([train_x, train_x])
+    else:
+        model.train(train_x, train_y)
+        training_prediction_results = model.predict(train_x)
 
-    # Save the training output for layer 1/2
-    training_prediction_results = model.predict(train_x)
+    log("The decision function is {}".format(model.coef()), INFO)
 
     # min/max/mean probability calculation
     min_probabilities, max_probabilities, mean_probabilities = [], [], []
@@ -113,11 +117,14 @@ def layer_two_model(layer_one_models, train_x, train_y, test_id, test_x, learnin
         max_probabilities.append(np.nanmax(values))
         mean_probabilities.append(np.nanmean(values))
 
-    filepath_layer_dataset = "{}/training_layer.csv".format(model_folder)
+    cost_min = log_loss(train_y, min_probabilities)
+    cost_mean = log_loss(train_y, mean_probabilities)
+    cost_max = log_loss(train_y, max_probabilities)
+
     targets = []
     for key, values in {"Target": train_y, "Probability of Layer 2": training_prediction_results, "min.": min_probabilities, "max.": max_probabilities, "avg.": mean_probabilities}.items():
         targets.append({key: values})
-    store_layer_output(layer_one_models, train_x, filepath_layer_dataset, targets=targets)
+    store_layer_output(layer_one_models, train_x, filepath_training, targets=targets)
 
     # Save the testing output for layer 1
     min_probabilities, max_probabilities, mean_probabilities = [], [], []
@@ -126,19 +133,21 @@ def layer_two_model(layer_one_models, train_x, train_y, test_id, test_x, learnin
         max_probabilities.append(np.nanmax(values))
         mean_probabilities.append(np.nanmean(values))
 
-    filepath_layer_testing_dataset = "{}/testing_layer1.csv".format(model_folder)
     targets = []
     for key, values in {"ID":test_id ,"min.": min_probabilities, "max.": max_probabilities, "avg.": mean_probabilities}.items():
         targets.append({key: values})
-    store_layer_output(layer_one_models, test_x, filepath_layer_testing_dataset, targets=targets)
+    store_layer_output(layer_one_models, test_x, filepath_testing, targets=targets)
 
     cost = log_loss(train_y, training_prediction_results)
-    log("The overall logloss is {:.8f}".format(cost))
+    log("The logloss of layer2 model is {:.8f}".format(cost), INFO)
+
+    # If use average, the logloss will be ...
+    log("The logloss of min/mean/max-model is {:.8f}/{:.8f}/{:.8f}".format(cost_min, cost_mean, cost_max), INFO)
 
     # Hardcode to set nfold to be ZERO, and then save it
     learning_logloss.insert_logloss(model.name, 0, cost)
 
-    with open("{}/logloss.pickle".format(model_folder), "wb") as OUTPUT:
+    with open(filepath_logloss, "wb") as OUTPUT:
         pickle.dump(learning_logloss, OUTPUT)
 
     return model.predict(test_x)

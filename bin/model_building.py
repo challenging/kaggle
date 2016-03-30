@@ -23,7 +23,10 @@ BASEPATH = os.path.dirname(os.path.abspath(__file__))
 @click.option("--estimators", default=100, help="Number of estimator")
 @click.option("--thread", default=1, help="Number of thread")
 def learning(thread, nfold, estimators, deep_dimension, deep_layer):
-    N = 650
+    drop_fields = []
+    #drop_fields = ['v8','v23','v25','v36','v37','v46','v51','v53','v54','v63','v73','v75','v79','v81','v82','v89','v92','v95','v105','v107','v108','v109','v110','v116','v117','v118','v119','v123','v124','v128']
+
+    N = 650 - len(drop_fields)
 
     filepath_training = "{}/../input/train.csv".format(BASEPATH)
     filepath_testing = "{}/../input/test.csv".format(BASEPATH)
@@ -33,13 +36,9 @@ def learning(thread, nfold, estimators, deep_dimension, deep_layer):
     train_x, test_x, train_y, test_id = None, None, None, None
     if os.path.exists(filepath_cache_1):
         train_x, test_x, train_y, test_id = load_cache(filepath_cache_1)
-
-        log("Load data from cache file({}) for the original data sources".format(filepath_cache_1), INFO)
     else:
-        train_x, test_x, train_y, test_id = data_transform_2(filepath_training, filepath_testing)
-
+        train_x, test_x, train_y, test_id = data_transform_2(filepath_training, filepath_testing, drop_fields)
         save_cache((train_x, test_x, train_y, test_id), filepath_cache_1)
-        log("Save data to cache file({}) for the original data sources".format(filepath_cache_1))
 
     train_X, test_X = train_x.values, test_x.values
     train_y = train_y.values
@@ -59,7 +58,6 @@ def learning(thread, nfold, estimators, deep_dimension, deep_layer):
               #"shallow_gradientboosting_regressor",
               #"shallow_gradientboosting_classifier"
               ]
-
     layer2_model_name = "shallow_gridsearch_logistic_regressor"
     if deep_layer > 1:
         layer2_model_name = "deep_logistic_regressor"
@@ -80,26 +78,32 @@ def learning(thread, nfold, estimators, deep_dimension, deep_layer):
     # Phase 2. --> Model Training
     deep_setting = {}
     if deep_layer > 1:
-        deep_learning_model_folder = "{}/nn_dimension={}".format(model_folder, deep_dimension)
+        deep_learning_model_folder = "{}/nn_layer={}_dimension={}".format(model_folder, deep_layer, deep_dimension)
         if not os.path.isdir(deep_learning_model_folder):
             os.makedirs(deep_learning_model_folder)
 
         checkpointer = KaggleCheckpoint(filepath=deep_learning_model_folder + "/{epoch}.weights.hdf5",
-                                        testing_set=(layer_2_test_x, test_id),
-                                        folder_testing=deep_learning_model_folder,
+                                        training_set=([layer_2_train_x, layer_2_train_x], train_Y),
+                                        testing_set=([layer_2_test_x, layer_2_test_x], test_id),
+                                        folder=deep_learning_model_folder,
                                         verbose=1, save_best_only=True)
 
         early_stopping = EarlyStopping(monitor='binary_crossentropy', patience=20, verbose=0, mode='auto')
 
         deep_setting["folder_weights"] = deep_learning_model_folder
-        deep_setting["mini_batch"] = 5
+        deep_setting["batch_size"] = 64
         deep_setting["number_of_layer"] = 3
         deep_setting["dimension"] = deep_layer
         deep_setting["callbacks"] = [checkpointer]
-        deep_setting["nepoch"] = 1000
+        deep_setting["nepoch"] = 10000
         deep_setting["validation_split"] = 0.15
+        deep_setting["class_weight"] = {0: 2, 1: 1}
 
-    results = layer_two_model(models, layer_2_train_x, train_Y, test_id, layer_2_test_x, learning_loss, layer2_model_name, model_folder, deep_setting)
+        model_folder = deep_learning_model_folder
+
+    results = layer_two_model(models, layer_2_train_x, train_Y, test_id, layer_2_test_x, learning_loss, layer2_model_name,
+                              "{}/training.csv".format(model_folder), "{}/testing.csv".format(model_folder), "{}/logloss.pickle".format(model_folder),
+                              deep_setting)
 
     # Save the submission CSV file
     filepath_output = "{}/kaggle_BNP_submission_{}.csv".format(model_folder, layer2_model_name)

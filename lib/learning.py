@@ -26,7 +26,7 @@ from sklearn.metrics import log_loss, make_scorer
 
 sys.path.append("{}/../lib".format(os.path.dirname(os.path.abspath(__file__))))
 from utils import log, DEBUG, INFO, WARN, ERROR
-from deep_learning import logistic_regression, KaggleCheckpoint
+from deep_learning import logistic_regression, logistic_regression_2, KaggleCheckpoint
 
 class LearningFactory(object):
     n_jobs = -1
@@ -136,14 +136,17 @@ class Learning(object):
 
     def init_deep_params(self, model_folder,
                          number_of_feature,
-                         layer, mini_batch, dimension,
-                         nepoch, validation_split, callbacks=[]):
-        self.mini_batch = mini_batch
+                         layer, batch_size, dimension,
+                         nepoch, validation_split,
+                         class_weight,
+                         callbacks=[]):
+        self.batch_size = batch_size
         self.nepoch = nepoch
         self.callbacks = callbacks
+        self.class_weight = class_weight
         self.validation_split = validation_split
 
-        self.model = logistic_regression(model_folder, layer, mini_batch, dimension, number_of_feature)
+        self.model = logistic_regression_2(model_folder, layer, batch_size, dimension, number_of_feature)
 
     def is_shallow_learning(self):
         return self.name.find("shallow") != -1
@@ -173,7 +176,7 @@ class Learning(object):
             else:
                 self.model.fit(train_x, train_y)
         elif self.is_deep_learning():
-            self.model.fit(train_x, train_y, nb_epoch=self.nepoch, batch_size=self.mini_batch, validation_split=self.validation_split, callbacks=self.callbacks)
+            self.model.fit(train_x, train_y, nb_epoch=self.nepoch, batch_size=self.batch_size, validation_split=self.validation_split, class_weight=self.class_weight, callbacks=self.callbacks)
 
     def predict(self, data):
         if self.is_shallow_learning():

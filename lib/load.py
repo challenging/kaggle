@@ -65,14 +65,18 @@ def data_transform_1(train, test):
 
     return train, test
 
-def data_transform_2(filepath_training, filepath_testing):
+def data_transform_2(filepath_training, filepath_testing, drop_fields=[]):
     train = pd.read_csv(filepath_training)
     test = pd.read_csv(filepath_testing)
+
+    if drop_fields:
+        train = train.drop(drop_fields, axis=1)
+        test = test.drop(drop_fields, axis=1)
 
     num_train = train.shape[0]
 
     y_train = train['target']
-    train = train.drop(['target'],axis=1)
+    train = train.drop(['target'], axis=1)
     id_test = test['ID']
 
     def fill_nan_null(val):
@@ -147,6 +151,8 @@ def save_cache(obj, filepath):
     with open(filepath, "wb") as OUTPUT:
         pickle.dump(obj, OUTPUT)
 
+    log("Save {}'s cache in {}".format(obj.__class__, filepath), INFO)
+
 def load_cache(filepath):
     log("Try to load {}".format(filepath))
 
@@ -154,6 +160,8 @@ def load_cache(filepath):
     try:
         with open(filepath, "rb") as INPUT:
             obj = pickle.load(INPUT)
+
+        log("Load {} from cache, {}".format(obj.__class__, filepath), INFO)
     except ValueError as e:
         log("Error when loading pickle file so removing it", WARN)
 
