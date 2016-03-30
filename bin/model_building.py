@@ -12,7 +12,7 @@ from load import data_load, data_transform_1, data_transform_2, save_kaggle_subm
 from learning import LearningFactory
 from deep_learning import KaggleCheckpoint
 from keras.callbacks import EarlyStopping
-from ensemble_learning import layer_one_model, layer_two_model
+from ensemble_learning import layer_one_model, layer_two_model, get_max_mean_min_probabilities
 
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -82,9 +82,12 @@ def learning(thread, nfold, estimators, deep_dimension, deep_layer):
         if not os.path.isdir(deep_learning_model_folder):
             os.makedirs(deep_learning_model_folder)
 
+        proba_training_min, proba_training_max, proba_training_mean = get_max_mean_min_probabilities(layer_2_train_x)
+        proba_testing_min, proba_testing_max, proba_testing_mean = get_max_mean_min_probabilities(layer_2_test_x)
+
         checkpointer = KaggleCheckpoint(filepath=deep_learning_model_folder + "/{epoch}.weights.hdf5",
-                                        training_set=([layer_2_train_x, layer_2_train_x], train_Y),
-                                        testing_set=([layer_2_test_x, layer_2_test_x], test_id),
+                                        training_set=([layer_2_train_x, train_X], train_Y),
+                                        testing_set=([layer_2_test_x, test_X], test_id),
                                         folder=deep_learning_model_folder,
                                         verbose=1, save_best_only=True)
 
@@ -103,7 +106,7 @@ def learning(thread, nfold, estimators, deep_dimension, deep_layer):
 
     results = layer_two_model(models, layer_2_train_x, train_Y, test_id, layer_2_test_x, learning_loss, layer2_model_name,
                               "{}/training.csv".format(model_folder), "{}/testing.csv".format(model_folder), "{}/logloss.pickle".format(model_folder),
-                              deep_setting)
+                              deep_setting, train_X)
 
     # Save the submission CSV file
     filepath_output = "{}/kaggle_BNP_submission_{}.csv".format(model_folder, layer2_model_name)

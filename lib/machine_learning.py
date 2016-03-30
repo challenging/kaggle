@@ -38,7 +38,7 @@ class KaggleKMeans(object):
 
 if __name__ == "__main__":
     BASEPATH = "."
-    n_clusters = 200
+    n_clusters = 100
 
     import time
 

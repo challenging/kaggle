@@ -135,7 +135,7 @@ class Learning(object):
         self.model = model
 
     def init_deep_params(self, model_folder,
-                         number_of_feature,
+                         input_dims,
                          layer, batch_size, dimension,
                          nepoch, validation_split,
                          class_weight,
@@ -146,7 +146,7 @@ class Learning(object):
         self.class_weight = class_weight
         self.validation_split = validation_split
 
-        self.model = logistic_regression_2(model_folder, layer, batch_size, dimension, number_of_feature)
+        self.model = logistic_regression_2(model_folder, layer, batch_size, dimension, input_dims)
 
     def is_shallow_learning(self):
         return self.name.find("shallow") != -1
@@ -216,9 +216,13 @@ class LearningLogLoss(object):
     def __init__(self, models, nfold):
         self.logloss = {}
         for model in models:
-            self.logloss.setdefault(model, [0.0 for idx in range(0, nfold)])
+            self.logloss.setdefault(model, np.zeros(nfold).astype(float))
 
     def insert_logloss(self, model_name, nfold, cost):
+        if model_name not in self.logloss:
+            self.logloss.setdefault(model_name, np.zeros(len(self.logloss[self.logloss.keys[0]])).astype(float))
+            log("Not Found {} in self.logloss, so creating it".format(model_name), WARN)
+
         self.logloss[model_name][nfold] += cost
 
 class LearningQueue(object):

@@ -14,6 +14,15 @@ from sklearn.utils import shuffle
 from learning import LearningFactory, Learning, LearningQueue, LearningLogLoss
 from utils import log, INFO
 
+def get_max_mean_min_probabilities(x):
+    min_probabilities, max_probabilities, mean_probabilities = [], [], []
+    for values in x:
+        min_probabilities.append(np.nanmin(values))
+        max_probabilities.append(np.nanmax(values))
+        mean_probabilities.append(np.nanmean(values))
+
+    return min_probabilities, max_probabilities, mean_probabilities
+
 def store_layer_output(models, dataset, filepath, targets=[]):
     results_of_layer = {}
     for model_idx, model_name in enumerate(models):
@@ -89,11 +98,21 @@ def layer_one_model(model_folder, train_x, train_y, test_x, test_id, models, lay
     return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_logloss
 
 def layer_two_model(layer_one_models, train_x, train_y, test_id, test_x, learning_logloss, model_name, filepath_training, filepath_testing, filepath_logloss,
-                    deep_setting={}):
+                    deep_setting={}, optional_train_x=[]):
+
+    # min/max/mean probability calculation
+    min_probabilities, max_probabilities, mean_probabilities = get_max_mean_min_probabilities(train_x)
+    min_probabilities, max_probabilities, mean_probabilities = get_max_mean_min_probabilities(test_x)
+
     model = LearningFactory.get_model(model_name)
     if deep_setting:
+        if not np.any(optional_train_x):
+            optional_train_x = train_x
+
+        input_dims = [len(train_x[0]), len(optional_train_x[0])]
+
         model.init_deep_params(deep_setting["folder_weights"],
-                               len(train_x[0]),
+                               input_dims,
                                deep_setting["number_of_layer"],
                                deep_setting["batch_size"],
                                deep_setting["dimension"],
@@ -102,36 +121,24 @@ def layer_two_model(layer_one_models, train_x, train_y, test_id, test_x, learnin
                                deep_setting.get("class_weight", None),
                                deep_setting["callbacks"])
 
-        model.train([train_x, train_x], train_y)
-        training_prediction_results = model.predict([train_x, train_x])
+        model.train([train_x, optional_train_x], train_y)
+        training_prediction_results = model.predict([train_x, optional_train_x])
     else:
         model.train(train_x, train_y)
         training_prediction_results = model.predict(train_x)
 
     log("The decision function is {}".format(model.coef()), INFO)
 
-    # min/max/mean probability calculation
-    min_probabilities, max_probabilities, mean_probabilities = [], [], []
-    for values in train_x:
-        min_probabilities.append(np.nanmin(values))
-        max_probabilities.append(np.nanmax(values))
-        mean_probabilities.append(np.nanmean(values))
-
     cost_min = log_loss(train_y, min_probabilities)
     cost_mean = log_loss(train_y, mean_probabilities)
     cost_max = log_loss(train_y, max_probabilities)
+    # If use average, the logloss will be ...
+    log("The logloss of min/mean/max-model is {:.8f}/{:.8f}/{:.8f}".format(cost_min, cost_mean, cost_max), INFO)
 
     targets = []
     for key, values in {"Target": train_y, "Probability of Layer 2": training_prediction_results, "min.": min_probabilities, "max.": max_probabilities, "avg.": mean_probabilities}.items():
         targets.append({key: values})
     store_layer_output(layer_one_models, train_x, filepath_training, targets=targets)
-
-    # Save the testing output for layer 1
-    min_probabilities, max_probabilities, mean_probabilities = [], [], []
-    for values in test_x:
-        min_probabilities.append(np.nanmin(values))
-        max_probabilities.append(np.nanmax(values))
-        mean_probabilities.append(np.nanmean(values))
 
     targets = []
     for key, values in {"ID":test_id ,"min.": min_probabilities, "max.": max_probabilities, "avg.": mean_probabilities}.items():
@@ -139,10 +146,12 @@ def layer_two_model(layer_one_models, train_x, train_y, test_id, test_x, learnin
     store_layer_output(layer_one_models, test_x, filepath_testing, targets=targets)
 
     cost = log_loss(train_y, training_prediction_results)
-    log("The logloss of layer2 model is {:.8f}".format(cost), INFO)
 
-    # If use average, the logloss will be ...
-    log("The logloss of min/mean/max-model is {:.8f}/{:.8f}/{:.8f}".format(cost_min, cost_mean, cost_max), INFO)
+    max_proba = np.max(training_prediction_results, axis=0)
+    norm_training_prediction_results = training_prediction_results / max_proba
+    norm_cost = log_loss(train_y, norm_training_prediction_results)
+
+    log("The logloss of layer2 model is {:.8f}/{:8f}".format(cost, norm_cost), INFO)
 
     # Hardcode to set nfold to be ZERO, and then save it
     learning_logloss.insert_logloss(model.name, 0, cost)
