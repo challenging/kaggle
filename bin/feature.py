@@ -42,6 +42,10 @@ def feature_engineer(methodology, n_clusters):
                    "n_jobs": -1,
                    "n_init": 10}
 
+        if methodology.find("agglomerative") > -1:
+            setting["X"] = train_X
+            setting["n_neighbors"] = 20
+
         layer_process(model_folder, N, methodology, train_X, train_y, train_id, test_X, test_id, setting=setting)
 
     layer_aggregate_features(model_folder, methodology, n_clusters, N)

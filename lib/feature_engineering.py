@@ -9,9 +9,9 @@ import pandas as pd
 
 from load import load_cache, save_cache
 from utils import log, INFO, WARN
-from sklearn.cluster import KMeans, DBSCAN
-from sklearn.neighbors import NearestCentroid
-from sklearn.preprocessing import MinMaxScaler, Imputer
+from sklearn.cluster import KMeans, DBSCAN, AffinityPropagation, AgglomerativeClustering, SpectralClustering
+from sklearn.neighbors import NearestCentroid, kneighbors_graph
+from sklearn.preprocessing import MinMaxScaler, Imputer, StandardScaler
 
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -22,6 +22,17 @@ class ClusterFactory(object):
             return Cluster(method, KMeans(n_clusters=setting["n_clusters"], n_init=setting.get("n_init", 10), init="k-means++", random_state=1201, n_jobs=setting.get("n_jobs", 1)))
         elif method.find("knn") > -1:
             return Cluster(method, NearestCentroid(shrink_threshold=setting.get("shrink", 0.1)))
+        elif method.find("affinitypropagation") > -1:
+            return Cluster(method, AffinityPropagation(convergence_iter=setting.get("convergence_iter", 100), max_iter=setting.get("max_iter", 5000), verbose=1))
+        elif method.find("spectral") > -1:
+            return Cluster(method, SpectralClustering(n_clusters=setting["n_clusters"], eigen_solver='amg', affinity="rbf"))
+        elif method.find("agglomerative") > -1:
+            # connectivity matrix for structured Ward
+            connectivity = kneighbors_graph(setting["X"], n_neighbors=setting.get("n_neighbors", 10), include_self=False)
+            # make connectivity symmetric
+            connectivity = 0.5 * (connectivity + connectivity.T)
+
+            return Cluster(method, AgglomerativeClustering(linkage="average", affinity="cityblock", n_clusters=setting["n_clusters"], connectivity=connectivity))
 
 class Cluster(object):
     def __init__(self, name, model):
