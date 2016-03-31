@@ -38,7 +38,7 @@ class KaggleKMeans(object):
 
 if __name__ == "__main__":
     BASEPATH = "."
-    n_clusters = 100
+    n_clusters = 800
 
     import time
 
@@ -54,7 +54,7 @@ if __name__ == "__main__":
 
     train_x, test_x, train_y, test_id = None, None, None, None
     if os.path.exists(filepath_cache_1):
-        train_x, test_x, train_y, test_id = load_cache(filepath_cache_1)
+        train_x, test_x, train_y, test_id, train_id = load_cache(filepath_cache_1)
 
         log("Load data from cache file({}) for the original data sources".format(filepath_cache_1), INFO)
     else:
@@ -72,6 +72,12 @@ if __name__ == "__main__":
     filepath_model = "{}/kmeans_nclusters={}_nfeature={}.cache".format(model_folder, n_clusters, N)
     if os.path.exists(filepath_model):
         layer_1_cluster = load_cache(filepath_model)
+
+        print layer_1_cluster.__class__
+        if layer_1_cluster.__class__.__name__ == "KaggleKMeans":
+            os.rename(filepath_model, "{}.kaggle".format(filepath_model))
+
+            save_cache(layer_1_cluster.model, filepath_model)
     else:
         layer_1_cluster = KaggleKMeans(n_clusters)
         layer_1_cluster.fit(train_X)
@@ -80,5 +86,7 @@ if __name__ == "__main__":
 
     print "Cost {} secends to build KMeans model".format(time.time() - timestamp_start)
 
+    '''
     for centroid in layer_1_cluster.get_centroid():
         print centroid
+    '''

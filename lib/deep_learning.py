@@ -54,11 +54,6 @@ class KaggleCheckpoint(ModelCheckpoint):
             if current is None:
                 warnings.warn('Can save best model only with %s available, skipping.' % (self.monitor), RuntimeWarning)
             else:
-                proba_training = self.model.predict_proba(self.training_x)
-
-                max_proba = np.max(proba_training, axis=0)
-                norm_proba_training = proba_training / max_proba
-
                 if self.monitor_op(current, self.best):
                     log("Epoch %05d: %s improved from %0.8f to %0.8f" % (epoch+1, self.monitor, self.best, current), INFO)
 
@@ -67,6 +62,11 @@ class KaggleCheckpoint(ModelCheckpoint):
 
                     # Save the prediction results for testing set
                     if self.folder:
+                        proba_training = self.model.predict_proba(self.training_x)
+
+                        max_proba = np.max(proba_training, axis=0)
+                        norm_proba_training = proba_training / max_proba
+
                         # Save the training results
                         filepath_training = "{}/training_{:05d}.csv".format(self.folder, epoch+1)
                         base_proba = self.save_results(filepath_training, proba_training)
@@ -75,13 +75,13 @@ class KaggleCheckpoint(ModelCheckpoint):
                         filepath_testing = "{}/submission_{:05d}.csv".format(self.folder, epoch+1)
                         proba = self.model.predict_proba(self.testing_x)
                         self.save_results(filepath_testing, proba, base_proba, is_testing=True)
+
+                        logloss = log_loss(self.training_y, proba_training)
+                        norm_logloss = log_loss(self.training_y, norm_proba_training)
+                        log("Epoch {:05d}: current logloss is {:.8f}/{:.8f}".format(epoch+1, logloss, norm_logloss), INFO)
                 else:
                     if self.verbose > 0:
                         log('Epoch %05d: %s did not improve' %(epoch, self.monitor), DEBUG)
-
-                logloss = log_loss(self.training_y, proba_training)
-                norm_logloss = log_loss(self.training_y, norm_proba_training)
-                log("Epoch {:05d}: current logloss is {:.8f}/{:.8f}".format(epoch+1, logloss, norm_logloss), INFO)
         else:
             if self.verbose > 0:
                 log('Epoch %05d: saving model to %s' % (epoch+1, filepath), DEBUG)
@@ -128,34 +128,35 @@ def logistic_regression(model_folder, layer, batch_size, dimension, number_of_fe
 
     return model
 
-
 def logistic_regression_2(model_folder, layer, batch_size, dimension, input_dims,
-       learning_rate=1e-6, dropout_rate=0.5, nepoch=10, activation="tanh"):
+       learning_rate=1e-6, dropout_rate=0.5, nepoch=10, init="uniform", activation="tanh"):
 
     sources = []
     for input_dim in input_dims:
-        model_a = Sequential()
-        model_a.add(Dense(dimension, input_dim=input_dim, init="uniform", activation=activation))
-        model_a.add(Dropout(dropout_rate))
+        model = Sequential()
+        model.add(Dense(dimension, input_dim=input_dim, init=init, activation=activation))
+        model.add(Dropout(dropout_rate))
 
-        sources.append(model_a)
+        sources.append(model)
 
-    model_a = Sequential()
-    model_a.add(Merge(sources[:2], mode="dot"))
+    sources_dot = []
+    for idx in range(0, len(sources), 2):
+        model = Sequential()
+        model.add(Merge(sources[idx: idx+2], mode="dot"))
+        model.add(Dense(dimension, input_dim=dimension, init=init, activation=activation))
 
-    model_b = Sequential()
-    model_b.add(Merge(sources[2:], mode="dot"))
+        sources_dot.append(model)
 
     model = Sequential()
-    model.add(Merge([model_a, model_b], mode="sum"))
-    model.add(Dense(dimension, input_dim=dimension, init="uniform", activation=activation))
+    model.add(Merge(sources_dot, mode="sum"))
+    model.add(Dense(dimension, input_dim=dimension, init=init, activation=activation))
     model.add(Dropout(dropout_rate))
 
     for idx in range(0, layer-3, 1):
-        model.add(Dense(dimension, input_dim=dimension, init="uniform", activation=activation))
+        model.add(Dense(dimension, input_dim=dimension, init=init, activation=activation))
         model.add(Dropout(dropout_rate))
 
-    model.add(Dense(1, init="uniform", activation=activation))
+    model.add(Dense(1, init=init, activation=activation))
 
     optimizer = RMSprop(lr=learning_rate, rho=0.9, epsilon=1e-06)
     model.compile(loss="binary_crossentropy", optimizer=optimizer)

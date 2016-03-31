@@ -141,6 +141,15 @@ def load_data(filepath, filepath_training, filepath_testing, drop_fields=[]):
 
     return train_x, test_x, train_y, test_id, train_id
 
+def load_advanced_data(filepath_training, filepath_testing):
+    df_train = pd.read_csv(filepath_training)
+    df_train = df_train.drop(["ID", "Target"], axis=1)
+
+    df_test = pd.read_csv(filepath_testing)
+    df_test = df_test.drop(["ID"], axis=1)
+
+    return df_train.values, df_test.values
+
 def data_balance(x, y, criteria, ratio):
     print "Balance data by ratio={}".format(ratio)
 
@@ -172,7 +181,7 @@ def save_cache(obj, filepath):
     log("Save {}'s cache in {}".format(obj.__class__, filepath), INFO)
 
 def load_cache(filepath):
-    from feature_engineering import KaggleKMeans
+    #from feature_engineering import KaggleKMeans
 
     log("Try to load {}".format(filepath))
 

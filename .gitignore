@@ -1,1 +1,6 @@
+.DS_Store
+*.cache
 *.pyc
+*.csv
+*.pickle
+*.twb
