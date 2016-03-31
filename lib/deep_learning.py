@@ -132,16 +132,22 @@ def logistic_regression(model_folder, layer, batch_size, dimension, number_of_fe
 def logistic_regression_2(model_folder, layer, batch_size, dimension, input_dims,
        learning_rate=1e-6, dropout_rate=0.5, nepoch=10, activation="tanh"):
 
+    sources = []
+    for input_dim in input_dims:
+        model_a = Sequential()
+        model_a.add(Dense(dimension, input_dim=input_dim, init="uniform", activation=activation))
+        model_a.add(Dropout(dropout_rate))
+
+        sources.append(model_a)
+
     model_a = Sequential()
-    model_a.add(Dense(dimension, input_dim=input_dims[0], init="uniform", activation=activation))
-    model_a.add(Dropout(dropout_rate))
+    model_a.add(Merge(sources[:2], mode="dot"))
 
     model_b = Sequential()
-    model_b.add(Dense(dimension, input_dim=input_dims[1], init="uniform", activation=activation))
-    model_b.add(Dropout(dropout_rate))
+    model_b.add(Merge(sources[2:], mode="dot"))
 
     model = Sequential()
-    model.add(Merge([model_a, model_b], mode="dot"))
+    model.add(Merge([model_a, model_b], mode="sum"))
     model.add(Dense(dimension, input_dim=dimension, init="uniform", activation=activation))
     model.add(Dropout(dropout_rate))
 

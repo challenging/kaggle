@@ -66,6 +66,8 @@ def data_transform_1(train, test):
     return train, test
 
 def data_transform_2(filepath_training, filepath_testing, drop_fields=[]):
+    log("Try to load CSV files, {} and {}".format(filepath_training, filepath_testing), INFO)
+
     train = pd.read_csv(filepath_training)
     test = pd.read_csv(filepath_testing)
 
@@ -86,9 +88,13 @@ def data_transform_2(filepath_training, filepath_testing, drop_fields=[]):
 
         return ret_fill_nan_null
 
+    id_train = train["ID"]
+
     df_all = pd.concat((train, test), axis=0, ignore_index=True)
     df_all['null_count'] = df_all.isnull().sum(axis=1).tolist()
+
     df_all_temp = df_all['ID']
+
     df_all = df_all.drop(['ID'],axis=1)
     df_data_types = df_all.dtypes[:] #{'object':0,'int64':0,'float64':0,'datetime64':0}
     d_col_drops = []
@@ -97,6 +103,7 @@ def data_transform_2(filepath_training, filepath_testing, drop_fields=[]):
         df_all[str(df_data_types.index[i])+'_nan_'] = df_all[str(df_data_types.index[i])].map(lambda x:fill_nan_null(pd.isnull(x)))
     df_all = df_all.fillna(-9999)
 
+    log("Try to convert 'categorical variable to onehot vector'", INFO)
     for i in range(len(df_data_types)):
         if str(df_data_types[i]) == 'object':
             df_u = pd.unique(df_all[str(df_data_types.index[i])].ravel())
@@ -120,8 +127,19 @@ def data_transform_2(filepath_training, filepath_testing, drop_fields=[]):
     test = df_all.iloc[num_train:]
     train = train.drop(d_col_drops,axis=1)
     test = test.drop(d_col_drops,axis=1)
+    log("Finish the whole data process", INFO)
 
-    return train, test, y_train, id_test
+    return train, test, y_train, id_test, id_train
+
+def load_data(filepath, filepath_training, filepath_testing, drop_fields=[]):
+    train_x, test_x, train_y, test_id, train_id = None, None, None, None, None
+    if os.path.exists(filepath):
+        train_x, test_x, train_y, test_id, train_id = load_cache(filepath)
+    else:
+        train_x, test_x, train_y, test_id, train_id = data_transform_2(filepath_training, filepath_testing, drop_fields)
+        save_cache((train_x, test_x, train_y, test_id, train_id), filepath)
+
+    return train_x, test_x, train_y, test_id, train_id
 
 def data_balance(x, y, criteria, ratio):
     print "Balance data by ratio={}".format(ratio)
@@ -154,6 +172,8 @@ def save_cache(obj, filepath):
     log("Save {}'s cache in {}".format(obj.__class__, filepath), INFO)
 
 def load_cache(filepath):
+    from feature_engineering import KaggleKMeans
+
     log("Try to load {}".format(filepath))
 
     obj = None

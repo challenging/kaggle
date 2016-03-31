@@ -220,7 +220,7 @@ class LearningLogLoss(object):
 
     def insert_logloss(self, model_name, nfold, cost):
         if model_name not in self.logloss:
-            self.logloss.setdefault(model_name, np.zeros(len(self.logloss[self.logloss.keys[0]])).astype(float))
+            self.logloss.setdefault(model_name, np.zeros(len(self.logloss.values()[0])))
             log("Not Found {} in self.logloss, so creating it".format(model_name), WARN)
 
         self.logloss[model_name][nfold] += cost

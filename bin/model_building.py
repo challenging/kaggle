@@ -8,7 +8,7 @@ import numpy as np
 
 sys.path.append("{}/../lib".format(os.path.dirname(os.path.abspath(__file__))))
 from utils import log, INFO
-from load import data_load, data_transform_1, data_transform_2, save_kaggle_submission, save_cache, load_cache
+from load import load_data, save_kaggle_submission
 from learning import LearningFactory
 from deep_learning import KaggleCheckpoint
 from keras.callbacks import EarlyStopping
@@ -17,12 +17,14 @@ from ensemble_learning import layer_one_model, layer_two_model, get_max_mean_min
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
 @click.command()
+@click.option("--nepoch", default=5000, help="Number of Iteration for Deep Learning")
 @click.option("--deep-dimension", default=100, help="Dimension of Hiddle Layer")
 @click.option("--deep-layer", default=0, help="Number of Hidden Layer")
 @click.option("--nfold", default=10, help="Number of fold")
 @click.option("--estimators", default=100, help="Number of estimator")
 @click.option("--thread", default=1, help="Number of thread")
-def learning(thread, nfold, estimators, deep_dimension, deep_layer):
+@click.option("--weight", default=1, help="Weight of Class 0")
+def learning(thread, nfold, estimators, deep_dimension, deep_layer, weight, nepoch):
     drop_fields = []
     #drop_fields = ['v8','v23','v25','v36','v37','v46','v51','v53','v54','v63','v73','v75','v79','v81','v82','v89','v92','v95','v105','v107','v108','v109','v110','v116','v117','v118','v119','v123','v124','v128']
 
@@ -30,15 +32,9 @@ def learning(thread, nfold, estimators, deep_dimension, deep_layer):
 
     filepath_training = "{}/../input/train.csv".format(BASEPATH)
     filepath_testing = "{}/../input/test.csv".format(BASEPATH)
-
     filepath_cache_1 = "../input/{}_training_dataset.cache".format(N)
 
-    train_x, test_x, train_y, test_id = None, None, None, None
-    if os.path.exists(filepath_cache_1):
-        train_x, test_x, train_y, test_id = load_cache(filepath_cache_1)
-    else:
-        train_x, test_x, train_y, test_id = data_transform_2(filepath_training, filepath_testing, drop_fields)
-        save_cache((train_x, test_x, train_y, test_id), filepath_cache_1)
+    train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
     train_X, test_X = train_x.values, test_x.values
     train_y = train_y.values
@@ -78,35 +74,44 @@ def learning(thread, nfold, estimators, deep_dimension, deep_layer):
     # Phase 2. --> Model Training
     deep_setting = {}
     if deep_layer > 1:
-        deep_learning_model_folder = "{}/nn_layer={}_dimension={}".format(model_folder, deep_layer, deep_dimension)
+        deep_learning_model_folder = "{}/nn_layer={}_dimension={}_weight={}".format(model_folder, deep_layer, deep_dimension, weight)
         if not os.path.isdir(deep_learning_model_folder):
             os.makedirs(deep_learning_model_folder)
 
         proba_training_min, proba_training_max, proba_training_mean = get_max_mean_min_probabilities(layer_2_train_x)
         proba_testing_min, proba_testing_max, proba_testing_mean = get_max_mean_min_probabilities(layer_2_test_x)
 
+        def reshape(proba):
+            return np.reshape(proba, (len(proba), 1))
+
+        proba_training_min, proba_training_max, proba_training_mean = reshape(proba_training_min), reshape(proba_training_max), reshape(proba_training_mean)
+        proba_training = np.hstack((proba_training_min, proba_training_max, proba_training_mean))
+
+        proba_testing_min, proba_testing_max, proba_testing_mean = reshape(proba_testing_min), reshape(proba_testing_max), reshape(proba_testing_mean)
+        proba_testing = np.hstack((proba_testing_min, proba_testing_max, proba_testing_mean))
+
         checkpointer = KaggleCheckpoint(filepath=deep_learning_model_folder + "/{epoch}.weights.hdf5",
-                                        training_set=([layer_2_train_x, train_X], train_Y),
-                                        testing_set=([layer_2_test_x, test_X], test_id),
+                                        training_set=([layer_2_train_x, train_X, proba_training, train_X], train_Y),
+                                        testing_set=([layer_2_test_x, test_X, proba_testing, test_X], test_id),
                                         folder=deep_learning_model_folder,
                                         verbose=1, save_best_only=True)
 
-        early_stopping = EarlyStopping(monitor='binary_crossentropy', patience=20, verbose=0, mode='auto')
+        #early_stopping = EarlyStopping(monitor='binary_crossentropy', patience=20, verbose=0, mode='auto')
 
         deep_setting["folder_weights"] = deep_learning_model_folder
         deep_setting["batch_size"] = 64
         deep_setting["number_of_layer"] = 3
         deep_setting["dimension"] = deep_layer
         deep_setting["callbacks"] = [checkpointer]
-        deep_setting["nepoch"] = 10000
+        deep_setting["nepoch"] = nepoch
         deep_setting["validation_split"] = 0.15
-        deep_setting["class_weight"] = {0: 2, 1: 1}
+        deep_setting["class_weight"] = {0: weight, 1: 1}
 
         model_folder = deep_learning_model_folder
 
-    results = layer_two_model(models, layer_2_train_x, train_Y, test_id, layer_2_test_x, learning_loss, layer2_model_name,
-                              "{}/training.csv".format(model_folder), "{}/testing.csv".format(model_folder), "{}/logloss.pickle".format(model_folder),
-                              deep_setting, train_X)
+        results = layer_two_model(models, layer_2_train_x, train_Y, test_id, layer_2_test_x, learning_loss, layer2_model_name,
+                                  "{}/training.csv".format(model_folder), "{}/testing.csv".format(model_folder), "{}/logloss.pickle".format(model_folder),
+                                  deep_setting, [train_X, proba_training, train_X], [test_X, proba_testing, test_X])
 
     # Save the submission CSV file
     filepath_output = "{}/kaggle_BNP_submission_{}.csv".format(model_folder, layer2_model_name)

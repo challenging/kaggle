@@ -98,18 +98,11 @@ def layer_one_model(model_folder, train_x, train_y, test_x, test_id, models, lay
     return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_logloss
 
 def layer_two_model(layer_one_models, train_x, train_y, test_id, test_x, learning_logloss, model_name, filepath_training, filepath_testing, filepath_logloss,
-                    deep_setting={}, optional_train_x=[]):
-
-    # min/max/mean probability calculation
-    min_probabilities, max_probabilities, mean_probabilities = get_max_mean_min_probabilities(train_x)
-    min_probabilities, max_probabilities, mean_probabilities = get_max_mean_min_probabilities(test_x)
+                    deep_setting={}, optional_train_x=[], optional_test_x=[]):
 
     model = LearningFactory.get_model(model_name)
     if deep_setting:
-        if not np.any(optional_train_x):
-            optional_train_x = train_x
-
-        input_dims = [len(train_x[0]), len(optional_train_x[0])]
+        input_dims = [len(train_x[0])] + [len(x[0]) for x in optional_train_x]
 
         model.init_deep_params(deep_setting["folder_weights"],
                                input_dims,
@@ -121,14 +114,19 @@ def layer_two_model(layer_one_models, train_x, train_y, test_id, test_x, learnin
                                deep_setting.get("class_weight", None),
                                deep_setting["callbacks"])
 
-        model.train([train_x, optional_train_x], train_y)
-        training_prediction_results = model.predict([train_x, optional_train_x])
+        training_dataset = [train_x]
+        for x in optional_train_x:
+            training_dataset.append(x)
+
+        model.train(training_dataset, train_y)
+        training_prediction_results = model.predict(training_dataset)
     else:
         model.train(train_x, train_y)
         training_prediction_results = model.predict(train_x)
 
     log("The decision function is {}".format(model.coef()), INFO)
 
+    min_probabilities, max_probabilities, mean_probabilities = get_max_mean_min_probabilities(train_x)
     cost_min = log_loss(train_y, min_probabilities)
     cost_mean = log_loss(train_y, mean_probabilities)
     cost_max = log_loss(train_y, max_probabilities)
@@ -140,6 +138,7 @@ def layer_two_model(layer_one_models, train_x, train_y, test_id, test_x, learnin
         targets.append({key: values})
     store_layer_output(layer_one_models, train_x, filepath_training, targets=targets)
 
+    min_probabilities, max_probabilities, mean_probabilities = get_max_mean_min_probabilities(test_x)
     targets = []
     for key, values in {"ID":test_id ,"min.": min_probabilities, "max.": max_probabilities, "avg.": mean_probabilities}.items():
         targets.append({key: values})
@@ -159,4 +158,11 @@ def layer_two_model(layer_one_models, train_x, train_y, test_id, test_x, learnin
     with open(filepath_logloss, "wb") as OUTPUT:
         pickle.dump(learning_logloss, OUTPUT)
 
-    return model.predict(test_x)
+    if deep_setting:
+        testing_dataset = [test_x]
+        for x in optional_test_x:
+            testing_dataset.append(x)
+
+        return model.predict(testing_dataset)
+    else:
+        return model.predict(test_x)
