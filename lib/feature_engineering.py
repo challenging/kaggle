@@ -84,7 +84,7 @@ def layer1_tag_labels(model_folder, n_features, methodology, train_x, test_x, se
         cluster_model = ClusterFactory.get_model(methodology, setting)
         cluster_model.fit(train_x)
 
-        save_cache(cluster_model, filepath_model)
+        save_cache(cluster_model.model, filepath_model)
 
     log("Cost {} secends to build {} model".format(time.time() - timestamp_start, methodology), INFO)
 
