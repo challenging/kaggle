@@ -2,13 +2,15 @@
 
 import os
 import sys
+import time
 import pickle
 
-import numpy
+import numpy as np
 import pandas as pd
 
-from utils import log, INFO, WARN
+from utils import log, DEBUG, INFO, WARN
 from sklearn import decomposition
+from sklearn.preprocessing import PolynomialFeatures
 
 def data_load(filepath_train="../input/train.csv", filepath_test="../input/test.csv", drop_fields=[], filepath_cache=None):
     log("Load data...", INFO)
@@ -78,7 +80,8 @@ def data_transform_2(filepath_training, filepath_testing, drop_fields=[]):
     num_train = train.shape[0]
 
     y_train = train['target']
-    train = train.drop(['target'], axis=1)
+    #train = train.drop(['target'], axis=1)
+    #test["target"] = [-9999 for idx in range(0, len(test.values))]
     id_test = test['ID']
 
     def fill_nan_null(val):
@@ -92,6 +95,9 @@ def data_transform_2(filepath_training, filepath_testing, drop_fields=[]):
 
     df_all = pd.concat((train, test), axis=0, ignore_index=True)
     df_all['null_count'] = df_all.isnull().sum(axis=1).tolist()
+    #df_all["class"] = ["Training" if idx < num_train else "Testing" for idx in range(0, len(df_all.values))]
+    #df_all.to_csv("../input/all.csv")
+    #df_all.drop(["class"], axis=1)
 
     df_all_temp = df_all['ID']
 
@@ -122,6 +128,8 @@ def data_transform_2(filepath_training, filepath_testing, drop_fields=[]):
 
     df_all_temp = df_all_temp.drop(['ID'],axis=1)
     df_all = pd.concat([df_all, df_all_temp], axis=1)
+    #df_all["class"] = ["Training" if idx < num_train else "Testing" for idx in range(0, len(df_all.values))]
+    #df_all.to_csv("../input/all_transform.csv")
 
     train = df_all.iloc[:num_train]
     test = df_all.iloc[num_train:]
@@ -130,6 +138,27 @@ def data_transform_2(filepath_training, filepath_testing, drop_fields=[]):
     log("Finish the whole data process", INFO)
 
     return train, test, y_train, id_test, id_train
+
+def data_polynomial(filepath, train_x, train_y):
+    def polynomial(dataset):
+        timestamp_start = time.time()
+        log("Start to feature extending by polynomial for training dataset", INFO)
+        dataset = PolynomialFeatures(interaction_only=True).fit_transform(dataset)
+        log("Cost {} secends to finish".format(time.time() - timestamp_start), INFO)
+
+        return dataset
+
+    if os.path.exists(filepath):
+        train_x, test_x = load_cache(filepath)
+        log("Load cache file from {}".format(filepath), INFO)
+    else:
+        train_x = polynomial(train_x)[1:]
+        test_x = polynomial(train_y)[1:]
+
+        save_cache((train_x, test_x), filepath)
+        log("Save cache in {}".format(filepath), INFO)
+
+    return train_x, test_x
 
 def load_data(filepath, filepath_training, filepath_testing, drop_fields=[]):
     train_x, test_x, train_y, test_id, train_id = None, None, None, None, None
@@ -142,31 +171,17 @@ def load_data(filepath, filepath_training, filepath_testing, drop_fields=[]):
     return train_x, test_x, train_y, test_id, train_id
 
 def load_advanced_data(filepath_training, filepath_testing):
-    df_train = pd.read_csv(filepath_training)
-    df_train = df_train.drop(["ID", "Target"], axis=1)
+    if os.path.exists(filepath_training) and os.path.exists(filepath_testing):
+        df_train = pd.read_csv(filepath_training)
+        df_train = df_train.drop(["ID", "Target"], axis=1)
 
-    df_test = pd.read_csv(filepath_testing)
-    df_test = df_test.drop(["ID"], axis=1)
+        df_test = pd.read_csv(filepath_testing)
+        df_test = df_test.drop(["ID"], axis=1)
+    else:
+        log("Not Found {} or {}".format(filepath_training, filepath_testing), INFO)
+        return None, None
 
     return df_train.values, df_test.values
-
-def data_balance(x, y, criteria, ratio):
-    print "Balance data by ratio={}".format(ratio)
-
-    idxs = numpy.where(y==criteria)[0]
-
-    x_set = x[idxs]
-    y_set = y[idxs]
-    for i in range(0, int(ratio)-1):
-        x = numpy.concatenate((x, x_set), axis=0)
-        y = numpy.concatenate((y, y_set), axis=0)
-
-    if ratio - int(ratio) > 0:
-        idxs = idxs[:int(len(idxs)*(ratio-int(ratio)))]
-        x = numpy.concatenate((x, x[idxs]), axis=0)
-        y = numpy.concatenate((y, y[idxs]), axis=0)
-
-    return x, y
 
 def save_kaggle_submission(test_id, results, filepath, normalization=False):
     if normalization:
@@ -198,10 +213,3 @@ def load_cache(filepath):
         sys.exit(100)
 
     return obj
-
-if __name__ == "__main__":
-    train_x, train_y, test_x, test_id = data_load()
-
-    train_X, test_X = data_transform_1(train_x, test_x)
-    print train_X.columns
-    print train_X.values[0]

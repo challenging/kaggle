@@ -14,7 +14,7 @@ import numpy as np
 
 sys.path.append("{}/../lib".format(os.path.dirname(os.path.abspath(__file__))))
 from utils import log, INFO
-from load import load_data, load_advanced_data, save_kaggle_submission
+from load import load_data, load_advanced_data, data_polynomial, save_kaggle_submission
 from learning import LearningFactory
 from deep_learning import KaggleCheckpoint
 from keras.callbacks import EarlyStopping
@@ -30,7 +30,9 @@ BASEPATH = os.path.dirname(os.path.abspath(__file__))
 @click.option("--estimators", default=100, help="Number of estimator")
 @click.option("--thread", default=1, help="Number of thread")
 @click.option("--weight", default=1, help="Weight of Class 0")
-def learning(thread, nfold, estimators, deep_dimension, deep_layer, weight, nepoch):
+@click.option("--polynomial", is_flag=True, help="Use Polynomial")
+@click.option("--kmeans-feature", is_flag=True, help="Use the features of Kmeans")
+def learning(thread, nfold, estimators, deep_dimension, deep_layer, weight, nepoch, polynomial, kmeans_feature):
     drop_fields = []
     #drop_fields = ['v8','v23','v25','v36','v37','v46','v51','v53','v54','v63','v73','v75','v79','v81','v82','v89','v92','v95','v105','v107','v108','v109','v110','v116','v117','v118','v119','v123','v124','v128']
 
@@ -40,20 +42,25 @@ def learning(thread, nfold, estimators, deep_dimension, deep_layer, weight, nepo
     filepath_testing = "{}/../input/test.csv".format(BASEPATH)
     filepath_cache_1 = "../input/{}_training_dataset.cache".format(N)
 
-    # others/kmeans_nclusters\=all_nfeatures\=620_training_advanced_features.csv
-    filepath_training_advanced = "{}/../prediction_model/others/kmeans_nclusters=all_nfeatures=620_training_advanced_features.csv".format(BASEPATH)
-    filepath_testing_advanced = "{}/../prediction_model/others/kmeans_nclusters=all_nfeatures=620_testing_advanced_features.csv".format(BASEPATH)
-
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
     train_X, test_X = train_x.values, test_x.values
+    if polynomial:
+        filepath_cache = "{}/../input/polynomial.pickle".format(BASEPATH)
+        train_X, test_X = data_polynomial(filepath_cache, train_X, test_X)
+
     train_y = train_y.values
     test_id = test_id.values
     train_Y = train_y.astype(float)
     number_of_feature = len(train_X[0])
 
     # Load Advanced Data
-    train_advanced_x, test_advanced_x = load_advanced_data(filepath_training_advanced, filepath_testing_advanced)
+    # others/kmeans_nclusters\=all_nfeatures\=620_training_advanced_features.csv
+    train_advanced_x, test_advanced_x = None, None
+    if kmeans_feature:
+        filepath_training_advanced = "{}/../prediction_model/others/kmeans_nclusters=all_nfeatures=620_training_advanced_features.csv".format(BASEPATH)
+        filepath_testing_advanced = "{}/../prediction_model/others/kmeans_nclusters=all_nfeatures=620_testing_advanced_features.csv".format(BASEPATH)
+        train_advanced_x, test_advanced_x = load_advanced_data(filepath_training_advanced, filepath_testing_advanced)
 
     # Init the parameters
     LearningFactory.set_n_estimators(estimators)
@@ -71,8 +78,8 @@ def learning(thread, nfold, estimators, deep_dimension, deep_layer, weight, nepo
     if deep_layer > 1:
         layer2_model_name = "deep_logistic_regressor"
 
-    model_folder = "{}/../prediction_model/ensemble_learning/nfold={}_models={}_feature={}_estimators={}".format(\
-                        BASEPATH, nfold, len(models), number_of_feature, estimators)
+    model_folder = "{}/../prediction_model/ensemble_learning/nfold={}_models={}_feature={}_estimators={}_kmeansfeature={}_polynomial={}".format(\
+                        BASEPATH, nfold, len(models), number_of_feature, estimators, len(train_advanced_x[0]) if kmeans_feature else 0, polynomial)
 
     print "Data Distribution is ({}, {}), and then the number of feature is {}".format(np.sum(train_Y==0), np.sum(train_Y==1), number_of_feature),
 
@@ -103,9 +110,14 @@ def learning(thread, nfold, estimators, deep_dimension, deep_layer, weight, nepo
         proba_testing_min, proba_testing_max, proba_testing_mean = reshape(proba_testing_min), reshape(proba_testing_max), reshape(proba_testing_mean)
         proba_testing = np.hstack((proba_testing_min, proba_testing_max, proba_testing_mean))
 
+        training_dataset, testing_dataset = [layer_2_train_x, train_X, proba_training, train_X], [layer_2_test_x, test_X, proba_testing, test_X]
+        if kmeans_feature:
+            training_dataset.append([train_advanced_x, train_X])
+            testing_dataset.append([test_advanced_x, test_X])
+
         checkpointer = KaggleCheckpoint(filepath=deep_learning_model_folder + "/{epoch}.weights.hdf5",
-                                        training_set=([layer_2_train_x, train_X, proba_training, train_X, train_advanced_x, train_X], train_Y),
-                                        testing_set=([layer_2_test_x, test_X, proba_testing, test_X, test_advanced_x, test_X], test_id),
+                                        training_set=(training_dataset, train_Y),
+                                        testing_set=(testing_dataset, test_id),
                                         folder=deep_learning_model_folder,
                                         verbose=1, save_best_only=True)
 
@@ -122,9 +134,14 @@ def learning(thread, nfold, estimators, deep_dimension, deep_layer, weight, nepo
 
         model_folder = deep_learning_model_folder
 
+        optional_training_dataset, optional_testing_dataset = [train_X, proba_training, train_X], [test_X, proba_testing, test_X]
+        if kmeans_feature:
+            optional_training_dataset.append([train_advanced_x, train_X])
+            optional_testing_dataset.append([test_advanced_x, test_X])
+
         results = layer_two_model(models, layer_2_train_x, train_Y, test_id, layer_2_test_x, learning_loss, layer2_model_name,
                                   "{}/training.csv".format(model_folder), "{}/testing.csv".format(model_folder), "{}/logloss.pickle".format(model_folder),
-                                  deep_setting, [train_X, proba_training, train_X, train_advanced_x, train_X], [test_X, proba_testing, test_X, test_advanced_x, test_X])
+                                  deep_setting, optional_training_dataset, optional_testing_dataset)
     else:
         results = layer_two_model(models, layer_2_train_x, train_Y, test_id, layer_2_test_x, learning_loss, layer2_model_name,
                                   "{}/training.csv".format(model_folder), "{}/testing.csv".format(model_folder), "{}/logloss.pickle".format(model_folder),
