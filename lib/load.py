@@ -67,7 +67,7 @@ def data_transform_1(train, test):
 
     return train, test
 
-def data_transform_2(filepath_training, filepath_testing, drop_fields=[]):
+def data_transform_2(filepath_training, filepath_testing, drop_fields=[], keep_nan=False):
     log("Try to load CSV files, {} and {}".format(filepath_training, filepath_testing), INFO)
 
     train = pd.read_csv(filepath_training)
@@ -80,7 +80,7 @@ def data_transform_2(filepath_training, filepath_testing, drop_fields=[]):
     num_train = train.shape[0]
 
     y_train = train['target']
-    #train = train.drop(['target'], axis=1)
+    train = train.drop(['target'], axis=1)
     #test["target"] = [-9999 for idx in range(0, len(test.values))]
     id_test = test['ID']
 
@@ -107,7 +107,9 @@ def data_transform_2(filepath_training, filepath_testing, drop_fields=[]):
 
     for i in range(len(df_data_types)):
         df_all[str(df_data_types.index[i])+'_nan_'] = df_all[str(df_data_types.index[i])].map(lambda x:fill_nan_null(pd.isnull(x)))
-    df_all = df_all.fillna(-9999)
+
+    if not keep_nan:
+        df_all = df_all.fillna(-9999)
 
     log("Try to convert 'categorical variable to onehot vector'", INFO)
     for i in range(len(df_data_types)):

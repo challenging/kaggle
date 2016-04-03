@@ -5,50 +5,55 @@ import sys
 
 import click
 import numpy as np
-
-sys.path.append("{}/../lib".format(os.path.dirname(os.path.abspath(__file__))))
-from utils import log, INFO
-from load import load_data
-from feature_engineering import layer_process, layer_aggregate_features
+import pandas as pd
 
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
+sys.path.append("{}/../lib".format(BASEPATH))
+import feature_engineering
+
+from utils import log, INFO
+from load import data_load, data_transform_2
+
 @click.command()
-@click.option("--methodology", required=True, help="Which clustering methodology")
-@click.option("--n-clusters", default="100", help="Number of clusters")
-def feature_engineer(methodology, n_clusters):
-    drop_fields = []
-    drop_fields = ['v8','v23','v25','v36','v37','v46','v51','v53','v54','v63','v73','v75','v79','v81','v82','v89','v92','v95','v105','v107','v108','v109','v110','v116','v117','v118','v119','v123','v124','v128']
+@click.option("--feature-importance", is_flag=True, help="Calculate the feature importance")
+@click.option("--interaction-information", is_flag=True, help="Calculate the interaction information")
+@click.option("--binsize", default=16, help="bin/bucket size setting")
+def feature_engineer(feature_importance, interaction_information, binsize):
+    if feature_importance:
+        log("Try to calculate the feature ranking/score/importance", INFO)
+        drop_fields = []
+        train_x, train_y, test_x, test_id = data_load(drop_fields=drop_fields)
+        train_x, test_x = data_transform_2(train_x, test_x)
 
-    N = 650 - len(drop_fields)
+        names = train_x.columns
+        print "Data Distribution is ({}, {}), and then the number of feature is {}".format(np.sum(train_y==0), np.sum(train_y==1), len(names))
 
-    filepath_training = "{}/../input/train.csv".format(BASEPATH)
-    filepath_testing = "{}/../input/test.csv".format(BASEPATH)
-    filepath_cache_1 = "../input/{}_training_dataset.cache".format(N)
+        # output folder
+        folder_feature = "{}/../feature_profiling".format(BASEPATH)
+        if not os.path.isdir(folder_feature):
+            os.makedirs(folder_feature)
 
-    model_folder = "{}/../prediction_model/others".format(BASEPATH)
+        names = list(train_x.columns.values)
+        filepath_feature = "{}/BNP.csv".format(folder_feature)
 
-    train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
+        fp = feature_engineering.FeatureProfile()
+        ranks = fp.profile(train_x.values, train_y, names, filepath_feature, int(len(train_x.columns)*0.5))
 
-    train_X, test_X = train_x.values, test_x.values
-    train_y = train_y.values
-    test_id = test_id.values
-    train_id = train_id.values
-    train_Y = train_y.astype(float)
+    if interaction_information:
+        log("Try to calculate the interaction information", INFO)
 
-    for n_cluster in n_clusters.split(","):
-        log("Start to build {} model for {} n_cluster".format(methodology, n_cluster), INFO)
-        setting = {"n_clusters": int(n_cluster),
-                   "n_jobs": -1,
-                   "n_init": 10}
+        filepath_training = "{}/../input/train.csv".format(BASEPATH)
+        filepath_testing = "{}/../input/test.csv".format(BASEPATH)
 
-        if methodology.find("agglomerative") > -1:
-            setting["X"] = train_X
-            setting["n_neighbors"] = 20
+        train_x, test_x, train_y, id_train, id_test = data_transform_2(filepath_training, filepath_testing, keep_nan=True)
 
-        layer_process(model_folder, N, methodology, train_X, train_y, train_id, test_X, test_id, setting=setting)
+        results_single, results_couple = feature_engineering.interaction_information(train_x, train_y, binsize=binsize, threshold=0.01)
+        results = results_single
+        results.update(results_couple)
 
-    layer_aggregate_features(model_folder, methodology, n_clusters, N)
+        filepath_results = "{}/../input/transform2_binsize={}.csv".format(BASEPATH, binsize)
+        pd.DataFrame(results).to_csv(filepath_results)
 
 if __name__ == "__main__":
     feature_engineer()

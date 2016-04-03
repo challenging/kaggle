@@ -1,71 +1,148 @@
-#!/usr/bin/env python
-
 import os
 import sys
 import time
-import pprint
 
 import dit
 import numpy as np
 import pandas as pd
 
-from load import load_cache, save_cache
-from utils import log, DEBUG, INFO, WARN
-from cluster import ClusterFactory, Cluster
+from sklearn.datasets import load_boston
+from sklearn.linear_model import LinearRegression, Ridge, Lasso, RandomizedLasso
+from sklearn.feature_selection import RFE, f_regression
+from sklearn.preprocessing import MinMaxScaler, Imputer
+from sklearn.ensemble import RandomForestRegressor
+from minepy import MINE
 
-BASEPATH = os.path.dirname(os.path.abspath(__file__))
+sys.path.append("{}/../lib".format(os.path.dirname(os.path.abspath(__file__))))
+from utils import log, INFO, WARN
 
-def layer1_tag_labels(model_folder, n_features, methodology, train_x, test_x, setting={}):
-    timestamp_start = time.time()
-    cluster_model = None
-    filepath_model = "{}/{}_nclusters={}_nfeature={}.cache".format(model_folder, methodology, setting["n_clusters"], n_features)
-    if os.path.exists(filepath_model):
-        model = load_cache(filepath_model)
+class FeatureProfile(object):
+    def __init__(self):
+        pass
 
-        # Backward Support
-        if type(model).__name__ == "KaggleKMeans":
-            cluster_model = Cluster(methodology, model.model)
+    def normalization(slef, ranks, names, order=1):
+        if np.isnan(ranks).any():
+            log("Found {} NaN values, so try to transform them to 'mean'".format(np.isnan(ranks).sum()), WARN)
 
-            os.rename(filepath_model, "{}.kaggle".format(filepath_model))
-            save_cache(model.model, filepath_model)
-        else:
-            cluster_model = Cluster(methodology, model)
-    else:
-        log("Not Found cache file, {}".format(filepath_model), INFO)
+            imp = Imputer(missing_values='NaN', strategy='mean', axis=1)
+            imp.fit(ranks)
+            ranks = imp.transform(ranks)[0]
 
-        cluster_model = ClusterFactory.get_model(methodology, setting)
-        cluster_model.fit(train_x)
+        minmax = MinMaxScaler()
+        r = minmax.fit_transform(order*np.array([ranks]).T).T[0]
+        r = map(lambda x: round(x, 8), r)
 
-        save_cache(cluster_model.model, filepath_model)
+        return dict(zip(names, r))
 
-    log("Cost {} secends to build {} model".format(time.time() - timestamp_start, methodology), INFO)
+    def profile(self, X, Y, names, filepath, n_features_rfe=5):
+        ranks = {}
 
-    training_labels = cluster_model.get_labels()
-    testing_labels = cluster_model.predict(test_x)
+        timestamp_start = time.time()
+        lr = LinearRegression(normalize=True)
+        lr.fit(X, Y)
+        ranks["Linear reg"] = self.normalization(np.abs(lr.coef_), names)
+        log("Cost {:.4f} secends to finish Linear Regression".format(time.time() - timestamp_start), INFO)
 
-    return training_labels, testing_labels
+        timestamp_start = time.time()
+        ridge = Ridge(alpha=7)
+        ridge.fit(X, Y)
+        ranks["Ridge"] = self.normalization(np.abs(ridge.coef_), names)
+        log("Cost {:.4f} secends to finish Ridge".format(time.time() - timestamp_start), INFO)
 
-def interaction_information(dataset, train_y, binsize=2):
-    LABELS = "abcdefghijklmnopqrstuvwxy".upper()
+        timestamp_start = time.time()
+        lasso = Lasso(alpha=.05)
+        lasso.fit(X, Y)
+        ranks["Lasso"] = self.normalization(np.abs(lasso.coef_), names)
+        log("Cost {:.4f} secends to finish Lasso".format(time.time() - timestamp_start), INFO)
+
+        timestamp_start = time.time()
+        rlasso = RandomizedLasso(alpha=0.04)
+        rlasso.fit(X, Y)
+        ranks["Stability"] = self.normalization(np.abs(rlasso.scores_), names)
+        log("Cost {:.4f} secends to finish Stability".format(time.time() - timestamp_start), INFO)
+
+        #stop the search when 5 features are left (they will get equal scores)
+        timestamp_start = time.time()
+        rfe = RFE(lr, n_features_to_select=n_features_rfe)
+        rfe.fit(X,Y)
+        ranks["RFE"] = self.normalization(map(float, rfe.ranking_), names, order=-1)
+        log("Cost {:.4f} secends to finish RFE".format(time.time() - timestamp_start), INFO)
+
+        timestamp_start = time.time()
+        rf = RandomForestRegressor()
+        rf.fit(X,Y)
+        ranks["RF"] = self.normalization(rf.feature_importances_, names)
+        log("Cost {:.4f} secends to finish Random Forest".format(time.time() - timestamp_start), INFO)
+
+        timestamp_start = time.time()
+        f, pval = f_regression(X, Y, center=True)
+        ranks["Corr."] = self.normalization(f, names)
+        log("Cost {:.4f} secends to finish Corr.".format(time.time() - timestamp_start), INFO)
+
+        '''
+        timestamp_start = time.time()
+        mine = MINE()
+        mic_scores = []
+        for i in range(X.shape[1]):
+            mine.compute_score(X[:,i], Y)
+            m = mine.mic()
+            mic_scores.append(m)
+
+        ranks["MIC"] = self.normalization(mic_scores, names)
+        '''
+
+        r = {}
+        for name in names:
+            r[name] = round(np.mean([ranks[method][name] for method in ranks.keys()]), 8)
+        log("Cost {:.4f} secends to finish MIC".format(time.time() - timestamp_start), INFO)
+
+        methods = sorted(ranks.keys())
+        ranks["Mean"] = r
+        methods.append("Mean")
+
+        ranks["Feature"] = dict(zip(names, names))
+
+        '''
+        print "\t%s" % "\t".join(methods)
+        for name in names:
+            print "%s\t%s" % (name, "\t".join(map(str, [ranks[method][name] for method in methods])))
+        '''
+
+        pd.DataFrame(ranks).to_csv(filepath, index=False)
+
+        return ranks
+
+def interaction_information(dataset, train_y, binsize=2, threshold=0.01):
+    LABELS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXY0123456789!@#$%^&*()_+~"
 
     idxs = []
     for idx, column in enumerate(dataset.columns):
+        log("Try to process {}".format(column), INFO)
+
         data_type = dataset.dtypes[idx]
+        unique_values = dataset[column].unique()
 
         try:
             if data_type != "object" and column != "target":
-                dataset[column] = pd.qcut(dataset[column].values, binsize, labels=[c for c in LABELS[:binsize]])
-                dataset[column] = ["Z" if str(value) == "nan" else value for value in dataset[column]]
+                if len(unique_values) < len(LABELS):
+                    for i, unique_value in enumerate(unique_values):
+                        dataset[column][dataset[column] == unique_value] = LABELS[i]
+                    log("Change {} by unique type".format(column), INFO)
+                else:
+                    dataset[column] = pd.qcut(dataset[column].values, binsize, labels=[c for c in LABELS[:binsize]])
+                    log("Change {} by bucket type".format(column), INFO)
 
+                dataset[column] = ["Z" if str(value) == "nan" else value for value in dataset[column]]
                 idxs.append(idx)
         except ValueError as e:
-            log("Error in '{}' column".format(column), WARN)
+            log("The size of unique values of {} is {}, greater than {}".format(column, len(unique_values), len(LABELS)), INFO)
 
     results_single, results_couple = {}, {}
     size = len(dataset.values)
     for i in range(0, len(idxs)):
         column_x = dataset.columns[idxs[i]]
 
+        timestamp_start_x = time.time()
         for ii in range(i+1, len(idxs)):
             timestamp_start = time.time()
 
@@ -74,7 +151,7 @@ def interaction_information(dataset, train_y, binsize=2):
 
             series = {column_x: pd.Series(dataset[column_x]),
                       column_y: pd.Series(dataset[column_y]),
-                      "t": pd.Series(train_y.astype(str))}
+                      "target": pd.Series(train_y.astype(str))}
 
             tmp_df = pd.DataFrame(series)
 
@@ -82,7 +159,7 @@ def interaction_information(dataset, train_y, binsize=2):
                 for criteria_y in list(LABELS[:binsize]) + ["Z"]:
                     for criteria_z in ["0", "1"]:
                         key = "{}{}{}".format(criteria_x, criteria_y, criteria_z)
-                        distribution[key] = len(np.where((tmp_df[column_x] == criteria_x) & (tmp_df[column_y] == criteria_y) & (tmp_df["t"] == criteria_z))[0])
+                        distribution[key] = len(np.where((tmp_df[column_x] == criteria_x) & (tmp_df[column_y] == criteria_y) & (tmp_df["target"] == criteria_z))[0])
 
             #pprint.pprint(distribution)
 
@@ -94,126 +171,18 @@ def interaction_information(dataset, train_y, binsize=2):
             mi = dit.Distribution(keys, values)
             mi.set_rv_names(["X", "Y", "Z"])
             interaction_information = dit.shannon.mutual_information(mi, ["X", "Y"], ["Z"])
-            log("Cost {:.2f} secends to calculate I({};{};target) is {}".format(time.time()-timestamp_start, column_x, column_y, interaction_information), INFO)
+            timestamp_end = time.time()
+
+            if interaction_information >= threshold:
+                log("Cost {:.2f} secends to calculate I({};{};target) is {}".format(timestamp_end-timestamp_start, column_x, column_y, interaction_information), INFO)
+
             results_couple["I({};{};target)".format(column_x, column_y)] = interaction_information
 
         mi = dit.shannon.mutual_information(mi, ["X"], ["Z"])
-        log("I({};target) is {}".format(column_x, mi), INFO)
+
+        timestamp_end_x = time.time()
+        log("{:.2f} secends, I({};target) is {}".format(timestamp_end_x-timestamp_start_x, column_x, mi), INFO)
+
         results_single["I({};target)".format(column_x)] = mi
 
-        mi = dit.shannon.mutual_information(mi, ["Y"], ["Z"])
-        log("I({};target) is {}".format(column_y, mi), INFO)
-        results_single["I({};target)".format(column_y)] = mi
-
     return results_single, results_couple
-
-def layer2_calculation(labels, train_y):
-    ratio = {}
-
-    timestamp_start = time.time()
-    for idx, target in enumerate(train_y):
-        label = labels[idx]
-
-        ratio.setdefault(label, [0, 0])
-        ratio[label][int(target)] += 1
-
-    for label, nums in ratio.items():
-        target_0, target_1 = nums[0], nums[1]
-
-        ratio[label] = float(target_1) / (target_0 + target_1)
-
-    log("Cost {} secends to calculate the ratio".format(time.time() - timestamp_start), INFO)
-
-    return ratio
-
-def layer_process(model_folder, n_features, methodology, train_x, train_y, train_id, test_x, test_id, setting={}):
-    training_labels, testing_labels = layer1_tag_labels(model_folder, n_features, methodology, train_x, test_x, setting)
-
-    ratio_target = layer2_calculation(training_labels, train_y)
-
-    def save_advanced_features(filepath, results):
-        pd.DataFrame(results).to_csv(filepath, index=False)
-
-    # Training CSV Filepath
-    filepath = "{}/{}_nclusters={}_nfeatures={}_training_advanced_features.csv".format(model_folder, methodology, setting["n_clusters"], n_features)
-
-    ratio = []
-    for idx, label in enumerate(training_labels):
-        ratio.append(ratio_target[label])
-    results = {"ID": train_id, "Target": train_y, "Label": training_labels, "Ratio": ratio}
-    save_advanced_features(filepath, results)
-
-    # Testing CSV Filepath
-    filepath = "{}/{}_nclusters={}_nfeatures={}_testing_advanced_features.csv".format(model_folder, methodology, setting["n_clusters"], n_features)
-
-    ratio = []
-    for idx, label in enumerate(testing_labels):
-        ratio.append(ratio_target[label])
-    results = {"ID": test_id, "Label": testing_labels, "Ratio": ratio}
-
-    save_advanced_features(filepath, results)
-
-def layer_aggregate_features(folder, methodology, n_clusters, N):
-    advanced_training_df = None
-    advanced_testing_df = None
-    for idx, n_cluster in enumerate(n_clusters.split(",")):
-        # kmeans_nclusters=800_nfeatures=620_training_advanced_features.csv
-        filepath_training = "{}/{}_nclusters={}_nfeatures={}_training_advanced_features.csv".format(folder, methodology, n_cluster, N)
-        filepath_testing = "{}/{}_nclusters={}_nfeatures={}_testing_advanced_features.csv".format(folder, methodology, n_cluster, N)
-
-        training_df = pd.read_csv(filepath_training)
-        training_df = training_df.rename(columns={"Ratio": "Ratio_nclusters={}".format(n_cluster)})
-        training_df = training_df.drop(["Label"], axis=1)
-        training_df.set_index(["ID"])
-
-        testing_df = pd.read_csv(filepath_testing)
-        testing_df = testing_df.rename(columns={"Ratio": "Ratio_nclusters={}".format(n_cluster)})
-        testing_df = testing_df.drop(["Label"], axis=1)
-        testing_df.set_index(["ID"])
-
-        if idx == 0:
-            advanced_training_df = training_df
-            advanced_testing_df = testing_df
-        else:
-            training_df = training_df.drop(["Target"], axis=1)
-            advanced_training_df = pd.concat([advanced_training_df, training_df], join="inner", axis=1)
-
-            advanced_testing_df = pd.concat([advanced_testing_df, testing_df], join="inner", axis=1)
-
-    size = len(n_clusters.split(","))
-    advanced_training_df = advanced_training_df[np.unique(advanced_training_df.columns)]
-    len_training_columns = len(advanced_training_df.columns)
-    advanced_training_df = advanced_training_df.iloc[:, [idx for idx in range(size-1, len_training_columns)]]
-
-    advanced_testing_df = advanced_testing_df[np.unique(advanced_testing_df.columns)]
-    len_testing_columns = len(advanced_testing_df.columns)
-    advanced_testing_df = advanced_testing_df.iloc[:, [idx for idx in range(size-1, len_testing_columns)]]
-
-    filepath_training = "{}/{}_nclusters=all_nfeatures={}_training_advanced_features.csv".format(folder, methodology, N)
-    advanced_training_df.to_csv(filepath_training, index=False)
-
-    filepath_testing = "{}/{}_nclusters=all_nfeatures={}_testing_advanced_features.csv".format(folder, methodology, N)
-    advanced_testing_df.to_csv(filepath_testing, index=False)
-
-if __name__ == "__main__":
-    from load import data_load, data_transform_2
-
-    filepath_training = "../input/train.csv"
-    filepath_testing = "../input/test.csv"
-
-    #train_x, test_x, train_y, id_train, id_test = data_transform_2(filepath_training, filepath_testing)
-    train_x, train_y, test_x, test_id = data_load()
-
-    '''
-    d = {"x": pd.Series([0, 0, 1, 1]),
-         "y": pd.Series([0, 1, 0, 1])}
-    train_x = pd.DataFrame(d)
-
-    d = {"target": pd.Series([0, 1, 1, 0])}
-    train_y = pd.DataFrame(d)
-    train_y = train_y["target"].values
-    '''
-
-    binsize = int(sys.argv[1])
-    results_single, results_couple = interaction_information(train_x, train_y, binsize=binsize)
-    save_cache((results_single, results_couple), "interaction_information_binsize={}.pkl".format(binsize))
