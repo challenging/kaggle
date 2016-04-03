@@ -112,6 +112,12 @@ class FeatureProfile(object):
 
         return ranks
 
+def compose_interaction_information_key(keys):
+    return "I({})".format(";".join(keys))
+
+def decompose_interaction_information_key(key):
+    return key[2:-1].split(";")
+
 def interaction_information(dataset, train_y, binsize=2, threshold=0.01):
     LABELS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXY0123456789!@#$%^&*()_+~"
 
@@ -161,8 +167,6 @@ def interaction_information(dataset, train_y, binsize=2, threshold=0.01):
                         key = "{}{}{}".format(criteria_x, criteria_y, criteria_z)
                         distribution[key] = len(np.where((tmp_df[column_x] == criteria_x) & (tmp_df[column_y] == criteria_y) & (tmp_df["target"] == criteria_z))[0])
 
-            #pprint.pprint(distribution)
-
             keys = distribution.keys()
             values = distribution.values()
             total = sum(values)
@@ -176,13 +180,19 @@ def interaction_information(dataset, train_y, binsize=2, threshold=0.01):
             if interaction_information >= threshold:
                 log("Cost {:.2f} secends to calculate I({};{};target) is {}".format(timestamp_end-timestamp_start, column_x, column_y, interaction_information), INFO)
 
-            results_couple["I({};{};target)".format(column_x, column_y)] = interaction_information
+            results_couple[compose_interaction_information_key([column_x, column_y, "target"])] = interaction_information
 
         mi = dit.shannon.mutual_information(mi, ["X"], ["Z"])
 
         timestamp_end_x = time.time()
         log("{:.2f} secends, I({};target) is {}".format(timestamp_end_x-timestamp_start_x, column_x, mi), INFO)
 
-        results_single["I({};target)".format(column_x)] = mi
+        results_single[compose_interaction_information_key([column_x, "target"])] = mi
 
     return results_single, results_couple
+
+if __name__ == "__main__":
+    key = compose_interaction_information_key(["v1", "v2", "target"])
+    print key
+
+    print decompose_interaction_information_key(key)
