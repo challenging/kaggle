@@ -195,7 +195,7 @@ def save_cache(obj, filepath):
     with open(filepath, "wb") as OUTPUT:
         pickle.dump(obj, OUTPUT)
 
-    log("Save {}'s cache in {}".format(obj.__class__, filepath), INFO)
+    log("Save {}'s cache in {}".format(obj.__class__, filepath), DEBUG)
 
 def load_cache(filepath):
     #from feature_engineering import KaggleKMeans

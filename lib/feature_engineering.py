@@ -1,10 +1,14 @@
 import os
 import sys
 import time
+import pprint
 
 import dit
 import numpy as np
 import pandas as pd
+
+from Queue import Queue
+from threading import Thread, Lock
 
 from sklearn.datasets import load_boston
 from sklearn.linear_model import LinearRegression, Ridge, Lasso, RandomizedLasso
@@ -13,7 +17,7 @@ from sklearn.preprocessing import MinMaxScaler, Imputer
 from sklearn.ensemble import RandomForestRegressor
 from minepy import MINE
 
-sys.path.append("{}/../lib".format(os.path.dirname(os.path.abspath(__file__))))
+from load import save_cache, load_cache
 from utils import log, DEBUG, INFO, WARN
 
 class FeatureProfile(object):
@@ -112,107 +116,192 @@ class FeatureProfile(object):
 
         return ranks
 
-def compose_interaction_information_key(keys):
-    return "I({})".format(";".join(keys))
+def transform(distribution):
+    keys = distribution.keys()
+    values = distribution.values()
+    total = sum(values)
+    values = map(lambda x: x/float(total), values)
 
-def decompose_interaction_information_key(key):
-    return key[2:-1].split(";")
+    return keys, values
 
-def interaction_information(dataset, train_y, binsize=2, threshold=0.01):
+class InteractionInformation(object):
+    def __init__(self, dataset, train_y, filepath_couple, filepath_single, threshold=0.01):
+        self.dataset = dataset
+        self.train_y = train_y
+
+        self.filepath_couple = filepath_couple
+        self.filepath_single = filepath_single
+
+        self.queue = Queue()
+        self.lock_couple = Lock()
+        self.lock_single = Lock()
+
+        self.threshold = threshold
+
+        self.results_single = {}
+        self.results_couple = {}
+
+    def read_cache(self):
+        if os.path.exists(self.filepath_single):
+            self.results_single = load_cache(self.filepath_single)
+
+        if os.path.exists(self.filepath_couple):
+            self.results_couple = load_cache(self.filepath_couple)
+
+    def add_item(self, column_x, column_y=None):
+        if column_y:
+            if column_x not in self.results_couple or column_y not in self.results_couple[column_x]:
+                self.queue.put((column_x, column_y))
+                log("Put I({};{};target) into the queue".format(column_x, column_y), INFO)
+            else:
+                log("I({};{};target) is done".format(column_x, column_y), INFO)
+        else:
+            if column_x not in self.results_single:
+                self.queue.put((column_x, column_y))
+            else:
+                log("I({};target) is done".format(column_x), INFO)
+
+    def add_single(self, x, v):
+        self.results_single[x] = v
+
+        with self.lock_single:
+            save_cache(self.results_single, self.filepath_single)
+
+    def add_couple(self, x, y ,v):
+        self.results_couple.setdefault(x, {})
+        self.results_couple[x][y] = v
+
+        with self.lock_couple:
+            save_cache(self.results_couple, self.filepath_couple)
+
+class InteractionInformationThread(Thread):
+    def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
+        Thread.__init__(self, group=group, target=target, name=name, verbose=verbose)
+
+        self.args = args
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    def run(self):
+        while True:
+            timestamp_start = time.time()
+            (column_x, column_y) = self.ii.queue.get()
+
+            interaction_information = -1
+            column_x_criteria = self.ii.dataset[column_x].unique()
+            if column_y:
+                column_y_criteria = self.ii.dataset[column_y].unique()
+
+                series = {column_x: pd.Series(self.ii.dataset[column_x]),
+                          column_y: pd.Series(self.ii.dataset[column_y]),
+                          "target": pd.Series(self.ii.train_y.astype(str))}
+                tmp_df = pd.DataFrame(series)
+
+                distribution = {}
+                for criteria_x in column_x_criteria:
+                    for criteria_y in column_y_criteria:
+                        for criteria_z in ["0", "1"]:
+                            key = "{}{}{}".format(criteria_x, criteria_y, criteria_z)
+                            distribution[key] = len(np.where((tmp_df[column_x] == criteria_x) & (tmp_df[column_y] == criteria_y) & (tmp_df["target"] == criteria_z))[0])
+                keys, values = transform(distribution)
+
+                mi = dit.Distribution(keys, values)
+                mi.set_rv_names(["X", "Y", "Z"])
+                interaction_information = dit.shannon.mutual_information(mi, ["X", "Y"], ["Z"])
+
+                self.ii.add_couple(column_x, column_y, interaction_information)
+            else:
+                series = {column_x: pd.Series(self.ii.dataset[column_x]),
+                          "target": pd.Series(self.ii.train_y.astype(str))}
+                tmp_df = pd.DataFrame(series)
+
+                distribution = {}
+                for criteria_x in column_x_criteria:
+                    for criteria_z in ["0", "1"]:
+                        key = "{}{}".format(criteria_x, criteria_z)
+                        distribution[key] = len(np.where((tmp_df[column_x] == criteria_x) & (tmp_df["target"] == criteria_z))[0])
+
+                keys, values = transform(distribution)
+
+                mi = dit.Distribution(keys, values)
+                mi.set_rv_names(["X", "Z"])
+                interaction_information = dit.shannon.mutual_information(mi, ["X"], ["Z"])
+
+                self.ii.add_single(column_x, interaction_information)
+
+            timestamp_end = time.time()
+            if interaction_information >= self.ii.threshold:
+                if column_y:
+                    log("Cost {:.2f} secends to calculate I({};{};target) is {}".format(timestamp_end-timestamp_start, column_x, column_y, interaction_information), INFO)
+                else:
+                    log("Cost {:.2f} secends to calculate I({};target) is {}".format(timestamp_end-timestamp_start, column_x, interaction_information), INFO)
+            else:
+                if column_y:
+                    log("Cost {:.2f} secends to calculate I({};{};target) is {}".format(timestamp_end-timestamp_start, column_x, column_y, interaction_information), DEBUG)
+                else:
+                    log("Cost {:.2f} secends to calculate I({};target) is {}".format(timestamp_end-timestamp_start, column_x, interaction_information), DEBUG)
+
+            self.ii.queue.task_done()
+
+def load_dataset(filepath_cache, dataset, binsize=2):
     LABELS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXY0123456789!@#$%^&*()_+~"
 
-    idxs, column_binsize = [], []
-    for idx, column in enumerate(dataset.columns):
-        data_type = dataset.dtypes[idx]
-        unique_values = dataset[column].unique()
+    idxs = []
+    if os.path.exists(filepath_cache):
+        idxs, dataset = load_cache(filepath_cache)
+    else:
+        for idx, column in enumerate(dataset.columns):
+            data_type = dataset.dtypes[idx]
+            unique_values = dataset[column].unique()
 
-        try:
-            if data_type != "object" and column != "target":
-                if len(unique_values) < len(LABELS):
-                    for i, unique_value in enumerate(unique_values):
-                        dataset[column][dataset[column] == unique_value] = LABELS[i]
-                    log("Change {} by unique type".format(column), INFO)
+            try:
+                if data_type != "object" and column != "target":
+                    if len(unique_values) < len(LABELS):
+                        for i, unique_value in enumerate(unique_values):
+                            dataset[column][dataset[column] == unique_value] = LABELS[i]
+                        log("Change {} by unique type".format(column), INFO)
+                    else:
+                        dataset[column] = pd.qcut(dataset[column].values, binsize, labels=[c for c in LABELS[:binsize]])
+                        log("Change {} by bucket type".format(column), INFO)
+
+                    dataset[column] = ["Z" if str(value) == "nan" else value for value in dataset[column]]
+
+                    idxs.append(idx)
                 else:
-                    dataset[column] = pd.qcut(dataset[column].values, binsize, labels=[c for c in LABELS[:binsize]])
-                    log("Change {} by bucket type".format(column), INFO)
+                    log("The type of {} is already categorical".format(column), INFO)
+            except ValueError as e:
+                log("The size of unique values of {} is {}, greater than {}".format(column, len(unique_values), len(LABELS)), INFO)
 
-                dataset[column] = ["Z" if str(value) == "nan" else value for value in dataset[column]]
+        save_cache((idxs, dataset), filepath_cache)
 
-                idxs.append(idx)
-                column_binsize.append(len(dataset[column].unique()))
-            else:
-                log("The type of {} is already categorical".format(column), INFO)
-        except ValueError as e:
-            log("The size of unique values of {} is {}, greater than {}".format(column, len(unique_values), len(LABELS)), INFO)
+    return idxs, dataset
 
-    results_single, results_couple = {}, {}
-    size = len(dataset.values)
+def calculate_interaction_information(filepath_cache, dataset, train_y, filepath_couple, filepath_single, binsize=2, threshold=0.01, nthread=4, is_testing=None):
+    idxs, dataset = load_dataset(filepath_cache, dataset, binsize)
+
+    ii = InteractionInformation(dataset, train_y, filepath_couple, filepath_single, threshold)
+
     for column_x_idx in range(0, len(idxs)):
         column_x = dataset.columns[idxs[column_x_idx]]
         column_x_criteria = dataset[column_x].unique()
 
         timestamp_start_x = time.time()
         for column_y_idx in range(column_x_idx+1, len(idxs)):
-            distribution = {}
-            timestamp_start = time.time()
-
             column_y = dataset.columns[idxs[column_y_idx]]
-            column_y_criteria = dataset[column_y].unique()
 
-            series = {column_x: pd.Series(dataset[column_x]),
-                      column_y: pd.Series(dataset[column_y]),
-                      "target": pd.Series(train_y.astype(str))}
+            ii.add_item(column_x, column_y)
+        ii.add_item(column_x)
 
-            tmp_df = pd.DataFrame(series)
+        if is_testing and column_x_idx > is_testing:
+            log("Early break due to the is_testing is True", INFO)
+            break
 
-            for criteria_x in column_x_criteria:
-                for criteria_y in column_y_criteria:
-                    for criteria_z in ["0", "1"]:
-                        key = "{}{}{}".format(criteria_x, criteria_y, criteria_z)
-                        distribution[key] = len(np.where((tmp_df[column_x] == criteria_x) & (tmp_df[column_y] == criteria_y) & (tmp_df["target"] == criteria_z))[0])
+    for idx in range(0, nthread):
+        worker = InteractionInformationThread(kwargs={"ii": ii})
+        worker.setDaemon(True)
+        worker.start()
 
-            keys = distribution.keys()
-            values = distribution.values()
-            total = sum(values)
-            values = map(lambda x: x/float(total), values)
+    log("Wait for the completion of the calculation of Interaction Information", INFO)
+    ii.queue.join()
 
-            mi = dit.Distribution(keys, values)
-            mi.set_rv_names(["X", "Y", "Z"])
-            interaction_information = dit.shannon.mutual_information(mi, ["X", "Y"], ["Z"])
-            timestamp_end = time.time()
-
-            if interaction_information >= threshold:
-                log("Cost {:.2f} secends to calculate I({};{};target) is {}".format(timestamp_end-timestamp_start, column_x, column_y, interaction_information), INFO)
-            else:
-                log("Cost {:.2f} secends to calculate I({};{};target) is {}".format(timestamp_end-timestamp_start, column_x, column_y, interaction_information), DEBUG)
-
-            results_couple[compose_interaction_information_key([column_x, column_y, "target"])] = interaction_information
-
-        distribution = {}
-        for criteria_x in column_x_criteria:
-            for criteria_z in ["0", "1"]:
-                key = "{}{}".format(criteria_x, criteria_z)
-                distribution[key] = len(np.where((tmp_df[column_x] == criteria_x) & (tmp_df["target"] == criteria_z))[0])
-
-        keys = distribution.keys()
-        values = distribution.values()
-        total = sum(values)
-        values = map(lambda x: x/float(total), values)
-
-        mi = dit.Distribution(keys, values)
-        mi.set_rv_names(["X", "Z"])
-
-        interactino_information = dit.shannon.mutual_information(mi, ["X"], ["Z"])
-
-        timestamp_end_x = time.time()
-        log("{:.2f} secends, I({};target) is {}".format(timestamp_end_x-timestamp_start_x, column_x, interaction_information), INFO)
-
-        results_single[compose_interaction_information_key([column_x, "target"])] = mi
-
-    return results_single, results_couple
-
-if __name__ == "__main__":
-    key = compose_interaction_information_key(["v1", "v2", "target"])
-    print key
-
-    print decompose_interaction_information_key(key)
+    return ii.results_single, ii.results_couple
