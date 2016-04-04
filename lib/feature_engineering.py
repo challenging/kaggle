@@ -14,7 +14,7 @@ from sklearn.ensemble import RandomForestRegressor
 from minepy import MINE
 
 sys.path.append("{}/../lib".format(os.path.dirname(os.path.abspath(__file__))))
-from utils import log, INFO, WARN
+from utils import log, DEBUG, INFO, WARN
 
 class FeatureProfile(object):
     def __init__(self):
@@ -121,10 +121,8 @@ def decompose_interaction_information_key(key):
 def interaction_information(dataset, train_y, binsize=2, threshold=0.01):
     LABELS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXY0123456789!@#$%^&*()_+~"
 
-    idxs = []
+    idxs, column_binsize = [], []
     for idx, column in enumerate(dataset.columns):
-        log("Try to process {}".format(column), INFO)
-
         data_type = dataset.dtypes[idx]
         unique_values = dataset[column].unique()
 
@@ -139,21 +137,27 @@ def interaction_information(dataset, train_y, binsize=2, threshold=0.01):
                     log("Change {} by bucket type".format(column), INFO)
 
                 dataset[column] = ["Z" if str(value) == "nan" else value for value in dataset[column]]
+
                 idxs.append(idx)
+                column_binsize.append(len(dataset[column].unique()))
+            else:
+                log("The type of {} is already categorical".format(column), INFO)
         except ValueError as e:
             log("The size of unique values of {} is {}, greater than {}".format(column, len(unique_values), len(LABELS)), INFO)
 
     results_single, results_couple = {}, {}
     size = len(dataset.values)
-    for i in range(0, len(idxs)):
-        column_x = dataset.columns[idxs[i]]
+    for column_x_idx in range(0, len(idxs)):
+        column_x = dataset.columns[idxs[column_x_idx]]
+        column_x_criteria = dataset[column_x].unique()
 
         timestamp_start_x = time.time()
-        for ii in range(i+1, len(idxs)):
+        for column_y_idx in range(column_x_idx+1, len(idxs)):
+            distribution = {}
             timestamp_start = time.time()
 
-            distribution = {}
-            column_y = dataset.columns[idxs[ii]]
+            column_y = dataset.columns[idxs[column_y_idx]]
+            column_y_criteria = dataset[column_y].unique()
 
             series = {column_x: pd.Series(dataset[column_x]),
                       column_y: pd.Series(dataset[column_y]),
@@ -161,8 +165,8 @@ def interaction_information(dataset, train_y, binsize=2, threshold=0.01):
 
             tmp_df = pd.DataFrame(series)
 
-            for criteria_x in list(LABELS[:binsize]) + ["Z"]:
-                for criteria_y in list(LABELS[:binsize]) + ["Z"]:
+            for criteria_x in column_x_criteria:
+                for criteria_y in column_y_criteria:
                     for criteria_z in ["0", "1"]:
                         key = "{}{}{}".format(criteria_x, criteria_y, criteria_z)
                         distribution[key] = len(np.where((tmp_df[column_x] == criteria_x) & (tmp_df[column_y] == criteria_y) & (tmp_df["target"] == criteria_z))[0])
@@ -179,13 +183,29 @@ def interaction_information(dataset, train_y, binsize=2, threshold=0.01):
 
             if interaction_information >= threshold:
                 log("Cost {:.2f} secends to calculate I({};{};target) is {}".format(timestamp_end-timestamp_start, column_x, column_y, interaction_information), INFO)
+            else:
+                log("Cost {:.2f} secends to calculate I({};{};target) is {}".format(timestamp_end-timestamp_start, column_x, column_y, interaction_information), DEBUG)
 
             results_couple[compose_interaction_information_key([column_x, column_y, "target"])] = interaction_information
 
-        mi = dit.shannon.mutual_information(mi, ["X"], ["Z"])
+        distribution = {}
+        for criteria_x in column_x_criteria:
+            for criteria_z in ["0", "1"]:
+                key = "{}{}".format(criteria_x, criteria_z)
+                distribution[key] = len(np.where((tmp_df[column_x] == criteria_x) & (tmp_df["target"] == criteria_z))[0])
+
+        keys = distribution.keys()
+        values = distribution.values()
+        total = sum(values)
+        values = map(lambda x: x/float(total), values)
+
+        mi = dit.Distribution(keys, values)
+        mi.set_rv_names(["X", "Z"])
+
+        interactino_information = dit.shannon.mutual_information(mi, ["X"], ["Z"])
 
         timestamp_end_x = time.time()
-        log("{:.2f} secends, I({};target) is {}".format(timestamp_end_x-timestamp_start_x, column_x, mi), INFO)
+        log("{:.2f} secends, I({};target) is {}".format(timestamp_end_x-timestamp_start_x, column_x, interaction_information), INFO)
 
         results_single[compose_interaction_information_key([column_x, "target"])] = mi
 
