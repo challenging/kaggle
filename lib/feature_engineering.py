@@ -125,7 +125,7 @@ def transform(distribution):
     return keys, values
 
 class InteractionInformation(object):
-    def __init__(self, dataset, train_y, filepath_couple, filepath_single, threshold=0.01):
+    def __init__(self, dataset, train_y, filepath_couple, filepath_single, threshold=0.01, save_size=100):
         self.dataset = dataset
         self.train_y = train_y
 
@@ -133,10 +133,17 @@ class InteractionInformation(object):
         self.filepath_single = filepath_single
 
         self.queue = Queue()
-        self.lock_couple = Lock()
         self.lock_single = Lock()
+        self.lock_couple = Lock()
+        self.lock_s = Lock()
+        self.lock_c = Lock()
 
         self.threshold = threshold
+        self.ori_save_size = save_size
+        self.save_size = save_size
+
+        self.cache_series = {}
+        self.cache_criteria = {}
 
         self.results_single = {}
         self.results_couple = {}
@@ -147,6 +154,21 @@ class InteractionInformation(object):
 
         if os.path.exists(self.filepath_couple):
             self.results_couple = load_cache(self.filepath_couple)
+
+    def get_values_from_cache(self, column_x):
+        a, b = None, None
+
+        if column_x not in self.cache_series:
+            with self.lock_s:
+                self.cache_series[column_x] = pd.Series(self.dataset[column_x])
+        a = self.cache_series[column_x]
+
+        if column_x not in self.cache_criteria:
+            with self.lock_c:
+                self.cache_criteria[column_x] = self.dataset[column_x].unique()
+        b = self.cache_criteria[column_x]
+
+        return (a, b)
 
     def add_item(self, column_x, column_y=None):
         if column_y:
@@ -162,17 +184,25 @@ class InteractionInformation(object):
                 log("I({};target) is done".format(column_x), INFO)
 
     def add_single(self, x, v):
-        self.results_single[x] = v
-
         with self.lock_single:
-            save_cache(self.results_single, self.filepath_single)
+            self.results_single[x] = v
+
+            if self.save_size < 0:
+                save_cache(self.results_single, self.filepath_single)
+                self.save_size = self.ori_save_size
+            else:
+                self.save_size -= 1
 
     def add_couple(self, x, y ,v):
-        self.results_couple.setdefault(x, {})
-        self.results_couple[x][y] = v
-
         with self.lock_couple:
-            save_cache(self.results_couple, self.filepath_couple)
+            self.results_couple.setdefault(x, {})
+            self.results_couple[x][y] = v
+
+            if self.save_size < 0:
+                save_cache(self.results_couple, self.filepath_couple)
+                self.save_size = self.ori_save_size
+            else:
+                self.save_size -= 1
 
 class InteractionInformationThread(Thread):
     def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
@@ -183,18 +213,18 @@ class InteractionInformationThread(Thread):
             setattr(self, key, value)
 
     def run(self):
+        series_target = pd.Series(self.ii.train_y.astype(str))
+
         while True:
             timestamp_start = time.time()
             (column_x, column_y) = self.ii.queue.get()
 
             interaction_information = -1
-            column_x_criteria = self.ii.dataset[column_x].unique()
             if column_y:
-                column_y_criteria = self.ii.dataset[column_y].unique()
+                series_x, column_x_criteria = self.ii.get_values_from_cache(column_x)
+                series_y, column_y_criteria = self.ii.get_values_from_cache(column_y)
 
-                series = {column_x: pd.Series(self.ii.dataset[column_x]),
-                          column_y: pd.Series(self.ii.dataset[column_y]),
-                          "target": pd.Series(self.ii.train_y.astype(str))}
+                series = {column_x: series_x, column_y: series_y, "target": series_target}
                 tmp_df = pd.DataFrame(series)
 
                 distribution = {}
@@ -211,8 +241,8 @@ class InteractionInformationThread(Thread):
 
                 self.ii.add_couple(column_x, column_y, interaction_information)
             else:
-                series = {column_x: pd.Series(self.ii.dataset[column_x]),
-                          "target": pd.Series(self.ii.train_y.astype(str))}
+                series_x, column_x_criteria = self.ii.get_values_from_cache(column_x)
+                series = {column_x: series_x, "target": series_target}
                 tmp_df = pd.DataFrame(series)
 
                 distribution = {}
@@ -290,7 +320,8 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, filepath
             column_y = dataset.columns[idxs[column_y_idx]]
 
             ii.add_item(column_x, column_y)
-        ii.add_item(column_x)
+
+        ii.add_item((column_x, None))
 
         if is_testing and column_x_idx > is_testing:
             log("Early break due to the is_testing is True", INFO)
