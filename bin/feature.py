@@ -51,7 +51,6 @@ def feature_engineer(thread, transform2, feature_importance, interaction_informa
 
         filepath_training = "{}/../input/train.csv".format(BASEPATH)
         filepath_testing = "{}/../input/test.csv".format(BASEPATH)
-        filepath_cache = "{}/../input/transform2={}_cache.pkl".format(BASEPATH, transform2)
 
         train_x, test_x, train_y, id_train, id_test = None, None, None, None, None
         if transform2:
@@ -59,10 +58,11 @@ def feature_engineer(thread, transform2, feature_importance, interaction_informa
         else:
             train_x, train_y, test_x, test_id = data_load(drop_fields=drop_fields)
 
+        filepath_cache = "{}/../input/transform2={}_binsize={}_cache.pkl".format(BASEPATH, transform2, binsize)
         filepath_couple = "{}/../input/transform2={}_testing={}_type=2_binsize={}.pkl".format(BASEPATH, transform2, testing, binsize)
         filepath_single = "{}/../input/transform2={}_testing={}_type=1_binsize={}.pkl".format(BASEPATH, transform2, testing, binsize)
-        filepath_series = "{}/../input/transform2={}_testing={}_type=1_binsize={}_series.pkl".format(BASEPATH, transform2, testing, binsize)
-        filepath_criteria = "{}/../input/transform2={}_testing={}_type=1_binsize={}_criteria.pkl".format(BASEPATH, transform2, testing, binsize)
+        filepath_series = "{}/../input/transform2={}_testing={}_binsize={}_series.pkl".format(BASEPATH, transform2, testing, binsize)
+        filepath_criteria = "{}/../input/transform2={}_testing={}_binsize={}_criteria.pkl".format(BASEPATH, transform2, testing, binsize)
 
         results_single, results_couple = feature_engineering.calculate_interaction_information(filepath_cache,\
             train_x, train_y,\

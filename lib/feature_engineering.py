@@ -137,8 +137,6 @@ class InteractionInformation(object):
         self.queue = Queue()
         self.lock_single = Lock()
         self.lock_couple = Lock()
-        self.lock_s = Lock()
-        self.lock_c = Lock()
 
         self.threshold = threshold
         self.ori_save_size = save_size
@@ -149,6 +147,8 @@ class InteractionInformation(object):
 
         self.results_single = {}
         self.results_couple = {}
+
+        self.read_cache()
 
     def read_cache(self):
         if os.path.exists(self.filepath_single):
@@ -163,19 +163,19 @@ class InteractionInformation(object):
         if os.path.exists(self.filepath_criteria):
             self.cache_criteria = load_cache(self.filepath_criteria)
 
+    def write_cache(self):
+        save_cache(self.cache_series, self.filepath_series)
+        save_cache(self.cache_criteria, self.filepath_criteria)
+
     def get_values_from_cache(self, column_x):
         a, b = None, None
 
         if column_x not in self.cache_series:
-            with self.lock_s:
-                self.cache_series[column_x] = pd.Series(self.dataset[column_x])
-                save_cache(self.cache_series, self.filepath_series)
+            self.cache_series[column_x] = pd.Series(self.dataset[column_x])
         a = self.cache_series[column_x]
 
         if column_x not in self.cache_criteria:
-            with self.lock_c:
-                self.cache_criteria[column_x] = self.dataset[column_x].unique()
-                save_cache(self.cache_criteria, self.filepath_criteria)
+            self.cache_criteria[column_x] = self.dataset[column_x].unique()
         b = self.cache_criteria[column_x]
 
         return (a, b)
@@ -243,6 +243,7 @@ class InteractionInformationThread(Thread):
                         for criteria_z in ["0", "1"]:
                             key = "{}{}{}".format(criteria_x, criteria_y, criteria_z)
                             distribution[key] = len(np.where((tmp_df[column_x] == criteria_x) & (tmp_df[column_y] == criteria_y) & (tmp_df["target"] == criteria_z))[0])
+
                 keys, values = transform(distribution)
 
                 mi = dit.Distribution(keys, values)
@@ -322,17 +323,24 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, filepath
 
     ii = InteractionInformation(dataset, train_y, filepath_couple, filepath_single, filepah_series, filepath_criteria, threshold)
 
+    # Build Cache File
+    timestamp_start = time.time()
     for column_x_idx in range(0, len(idxs)):
         column_x = dataset.columns[idxs[column_x_idx]]
-        column_x_criteria = dataset[column_x].unique()
+        ii.get_values_from_cache(column_x)
+    ii.write_cache()
+    timestamp_end = time.time()
+    log("Cost {:.4f} secends to build cache files".format(timestamp_end-timestamp_start), INFO)
 
-        timestamp_start_x = time.time()
+    for column_x_idx in range(0, len(idxs)):
+        column_x = dataset.columns[idxs[column_x_idx]]
+
         for column_y_idx in range(column_x_idx+1, len(idxs)):
             column_y = dataset.columns[idxs[column_y_idx]]
 
             ii.add_item(column_x, column_y)
 
-        ii.add_item((column_x, None))
+        ii.add_item(column_x, None)
 
         if is_testing and column_x_idx > is_testing:
             log("Early break due to the is_testing is True", INFO)
