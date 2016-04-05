@@ -61,9 +61,12 @@ def feature_engineer(thread, transform2, feature_importance, interaction_informa
 
         filepath_couple = "{}/../input/transform2={}_testing={}_type=2_binsize={}.pkl".format(BASEPATH, transform2, testing, binsize)
         filepath_single = "{}/../input/transform2={}_testing={}_type=1_binsize={}.pkl".format(BASEPATH, transform2, testing, binsize)
+        filepath_series = "{}/../input/transform2={}_testing={}_type=1_binsize={}_series.pkl".format(BASEPATH, transform2, testing, binsize)
+        filepath_criteria = "{}/../input/transform2={}_testing={}_type=1_binsize={}_criteria.pkl".format(BASEPATH, transform2, testing, binsize)
 
         results_single, results_couple = feature_engineering.calculate_interaction_information(filepath_cache,\
-            train_x, train_y, filepath_couple, filepath_single,\
+            train_x, train_y,\
+            filepath_couple, filepath_single,filepath_series, filepath_criteria,\
             binsize=binsize, nthread=thread, threshold=0.01, is_testing=int(testing) if testing != -1 else None)
 
 if __name__ == "__main__":

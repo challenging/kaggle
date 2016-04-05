@@ -125,12 +125,14 @@ def transform(distribution):
     return keys, values
 
 class InteractionInformation(object):
-    def __init__(self, dataset, train_y, filepath_couple, filepath_single, threshold=0.01, save_size=100):
+    def __init__(self, dataset, train_y, filepath_couple, filepath_single, filepath_series, filepath_criteria, threshold=0.01, save_size=100):
         self.dataset = dataset
         self.train_y = train_y
 
         self.filepath_couple = filepath_couple
         self.filepath_single = filepath_single
+        self.filepath_series = filepath_series
+        self.filepath_criteria = filepath_criteria
 
         self.queue = Queue()
         self.lock_single = Lock()
@@ -155,17 +157,25 @@ class InteractionInformation(object):
         if os.path.exists(self.filepath_couple):
             self.results_couple = load_cache(self.filepath_couple)
 
+        if os.path.exists(self.filepath_series):
+            self.cache_series = load_cache(self.filepath_series)
+
+        if os.path.exists(self.filepath_criteria):
+            self.cache_criteria = load_cache(self.filepath_criteria)
+
     def get_values_from_cache(self, column_x):
         a, b = None, None
 
         if column_x not in self.cache_series:
             with self.lock_s:
                 self.cache_series[column_x] = pd.Series(self.dataset[column_x])
+                save_cache(self.cache_series, self.filepath_series)
         a = self.cache_series[column_x]
 
         if column_x not in self.cache_criteria:
             with self.lock_c:
                 self.cache_criteria[column_x] = self.dataset[column_x].unique()
+                save_cache(self.cache_criteria, self.filepath_criteria)
         b = self.cache_criteria[column_x]
 
         return (a, b)
@@ -262,9 +272,9 @@ class InteractionInformationThread(Thread):
             timestamp_end = time.time()
             if interaction_information >= self.ii.threshold:
                 if column_y:
-                    log("Cost {:.2f} secends to calculate I({};{};target) is {}".format(timestamp_end-timestamp_start, column_x, column_y, interaction_information), INFO)
+                    log("Cost {:.2f} secends to calculate I({};{};target) is {}, the remaining size is {}".format(timestamp_end-timestamp_start, column_x, column_y, interaction_information, self.ii.queue.qsize()), INFO)
                 else:
-                    log("Cost {:.2f} secends to calculate I({};target) is {}".format(timestamp_end-timestamp_start, column_x, interaction_information), INFO)
+                    log("Cost {:.2f} secends to calculate I({};target) is {}, and the remaining size is {}".format(timestamp_end-timestamp_start, column_x, interaction_information, self.ii.queue.qsize()), INFO)
             else:
                 if column_y:
                     log("Cost {:.2f} secends to calculate I({};{};target) is {}".format(timestamp_end-timestamp_start, column_x, column_y, interaction_information), DEBUG)
@@ -306,10 +316,11 @@ def load_dataset(filepath_cache, dataset, binsize=2):
 
     return idxs, dataset
 
-def calculate_interaction_information(filepath_cache, dataset, train_y, filepath_couple, filepath_single, binsize=2, threshold=0.01, nthread=4, is_testing=None):
+def calculate_interaction_information(filepath_cache, dataset, train_y, filepath_couple, filepath_single, filepah_series, filepath_criteria,
+                                      binsize=2, threshold=0.01, nthread=4, is_testing=None):
     idxs, dataset = load_dataset(filepath_cache, dataset, binsize)
 
-    ii = InteractionInformation(dataset, train_y, filepath_couple, filepath_single, threshold)
+    ii = InteractionInformation(dataset, train_y, filepath_couple, filepath_single, filepah_series, filepath_criteria, threshold)
 
     for column_x_idx in range(0, len(idxs)):
         column_x = dataset.columns[idxs[column_x_idx]]
