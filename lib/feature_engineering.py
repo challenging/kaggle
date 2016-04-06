@@ -163,9 +163,13 @@ class InteractionInformation(object):
         if os.path.exists(self.filepath_criteria):
             self.cache_criteria = load_cache(self.filepath_criteria)
 
-    def write_cache(self):
-        save_cache(self.cache_series, self.filepath_series)
-        save_cache(self.cache_criteria, self.filepath_criteria)
+    def write_cache(self, results=False):
+        if results:
+            save_cache(self.results_single, self.filepath_single)
+            save_cache(self.results_couple, self.filepath_couple)
+        else:
+            save_cache(self.cache_series, self.filepath_series)
+            save_cache(self.cache_criteria, self.filepath_criteria)
 
     def get_values_from_cache(self, column_x):
         a, b = None, None
@@ -353,5 +357,8 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, filepath
 
     log("Wait for the completion of the calculation of Interaction Information", INFO)
     ii.queue.join()
+
+    log("Write the results", INFO)
+    ii.write_cache(results=True)
 
     return ii.results_single, ii.results_couple
