@@ -172,18 +172,32 @@ def load_data(filepath, filepath_training, filepath_testing, drop_fields=[]):
 
     return train_x, test_x, train_y, test_id, train_id
 
-def load_advanced_data(filepath_training, filepath_testing):
+def load_advanced_data(filepath_training, filepath_testing, drop_fields=[]):
     if os.path.exists(filepath_training) and os.path.exists(filepath_testing):
         df_train = pd.read_csv(filepath_training)
-        df_train = df_train.drop(["ID", "Target"], axis=1)
+        df_train = df_train.drop(["Target"], axis=1)
+        df_train = df_train.drop(drop_fields, axis=1)
 
         df_test = pd.read_csv(filepath_testing)
-        df_test = df_test.drop(["ID"], axis=1)
+        df_test = df_test.drop(drop_fields, axis=1)
     else:
         log("Not Found {} or {}".format(filepath_training, filepath_testing), INFO)
         return None, None
 
-    return df_train.values, df_test.values
+    return df_train, df_test
+
+def load_interaction_information(self, filepath, threshold=0.02):
+    results = None
+    with open(filepath, "rb") as INPUT:
+        results = pickle.load(INPUT)
+
+    wanted = []
+    for layer1, info in results.items():
+        for layer2, value in infor.items():
+            if value > threshold:
+                wanted.append((layer1, layer2))
+
+    return wanted
 
 def save_kaggle_submission(test_id, results, filepath, normalization=False):
     if normalization:
@@ -198,8 +212,6 @@ def save_cache(obj, filepath):
     log("Save {}'s cache in {}".format(obj.__class__, filepath), DEBUG)
 
 def load_cache(filepath):
-    #from feature_engineering import KaggleKMeans
-
     log("Try to load {}".format(filepath))
 
     obj = None

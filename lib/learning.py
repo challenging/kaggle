@@ -24,9 +24,16 @@ from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import log_loss, make_scorer
 
-sys.path.append("{}/../lib".format(os.path.dirname(os.path.abspath(__file__))))
+# For Cluster
+from sklearn.cluster import KMeans, DBSCAN, AffinityPropagation, AgglomerativeClustering, SpectralClustering
+from sklearn.neighbors import NearestCentroid, kneighbors_graph
+from sklearn.preprocessing import MinMaxScaler, Imputer, StandardScaler
+
+from load import load_advanced_data, save_cache
 from utils import log, DEBUG, INFO, WARN, ERROR
 from deep_learning import logistic_regression, logistic_regression_2, KaggleCheckpoint
+
+BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
 class LearningFactory(object):
     n_jobs = -1
@@ -42,8 +49,10 @@ class LearningFactory(object):
         return flog_loss_
 
     @staticmethod
-    def get_model(method):
+    def get_model(pair):
         model = None
+        method, setting = pair
+
         LL = make_scorer(LearningFactory.cost_function, greater_is_better=False)
 
         if method.find("shallow") > -1:
@@ -117,15 +126,19 @@ class LearningFactory(object):
                     model = Learning(method, gs)
                 elif method.find("xgboosting") > -1:
                     model = Learning(method, xgb.XGBClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                              max_depth=LearningFactory.ensemble_params["md"],
-                                                              seed=LearningFactory.ensemble_params["rs"],
-                                                              missing=np.nan, learning_rate=1e-02, subsample=0.9, colsample_bytree=0.85, objective="binary:logistic"))
+                                                               max_depth=LearningFactory.ensemble_params["md"],
+                                                               seed=LearningFactory.ensemble_params["rs"],
+                                                               missing=np.nan, learning_rate=1e-02, subsample=0.9, colsample_bytree=0.85, objective="binary:logistic"))
             elif method.find("svm") > -1:
                     model = Learning(method, SVC(probability=True, random_state=LearningFactory.ensemble_params["rs"]))
             else:
                 log("Error model naming - {}".format(method), WARN)
+        elif method.find("cluster") > -1:
+            if method.find("kmeans") > -1:
+                model = Learning(method, KMeans(n_clusters=setting["n_clusters"], n_init=setting["n_init"], init="k-means++", random_state=setting["random_state"]))
         elif method.find("deep") > -1:
             model = Learning(method, None)
+            model.init_deep_params(**setting)
 
         return model
 
@@ -134,43 +147,88 @@ class Learning(object):
         self.name = name.lower()
         self.model = model
 
-    def init_deep_params(self, model_folder,
-                         input_dims,
-                         layer, batch_size, dimension,
-                         nepoch, validation_split,
-                         class_weight,
-                         callbacks=[]):
+    def init_deep_params(self, folder, input_dims,
+                         number_of_layer, batch_size, dimension,
+                         nepoch, validation_split, class_weight, callbacks=[]):
+
         self.batch_size = batch_size
         self.nepoch = nepoch
         self.callbacks = callbacks
         self.class_weight = class_weight
         self.validation_split = validation_split
 
-        self.model = logistic_regression_2(model_folder, layer, batch_size, dimension, input_dims)
+        self.model = logistic_regression(folder, number_of_layer, dimension, input_dims)
 
     def is_shallow_learning(self):
-        return self.name.find("shallow") != -1
+        return self.name.find("shallow") > -1
 
     def is_deep_learning(self):
-        return self.name.find("deep") != -1
+        return self.name.find("deep") > -1
 
     def is_xgb(self):
-        return self.name.find("xgb") != -1
+        return self.name.find("xgb") > -1
 
     def is_regressor(self):
-        return self.name.find("regressor") != -1
+        return self.name.find("regressor") > -1
 
     def is_classifier(self):
-        return self.name.find("classifier") != -1
+        return self.name.find("classifier") > -1
 
     def is_svm(self):
-        return self.name.find("svm") != -1
+        return self.name.find("svm") > -1
+
+    def is_cluster(self):
+        return self.name.find("cluster") > -1
 
     def is_grid_search(self):
-        return self.name.find("gridsearch") != -1
+        return self.name.find("gridsearch") > -1
+
+    def get_labels(self):
+        if self.is_cluster():
+            return self.model.labels_
+        else:
+            return None
+
+    def get_cluster_results(self, train_x, test_x):
+        labels = self.get_labels()
+
+        training_results, testing_results = [], []
+
+        training_labels = self.predict(train_x)
+        for label in training_labels:
+            training_results.append(self.ratio[label])
+
+        testing_labels = self.predict(test_x)
+        for label in testing_labels:
+            testing_results.append(self.ratio[label])
+
+        return training_results, testing_results
 
     def train(self, train_x, train_y):
-        if self.is_shallow_learning():
+        if self.is_cluster():
+            train_x = train_x.astype(float) - train_x.min(0) / train_x.ptp(axis=0)
+            if np.isnan(train_x).any():
+                log("Found {} NaN values, so try to transform them to 'mean'".format(np.isnan(train_x).sum()), WARN)
+
+                imp = Imputer(missing_values='NaN', strategy='mean', axis=1)
+                imp.fit(train_x)
+
+                train_x = imp.transform(train_x)
+
+            self.model.fit(train_x)
+
+            ratio = {}
+            for idx, target in enumerate(train_y):
+                label = labels[idx]
+
+                ratio.setdefault(label, [0, 0])
+                ratio[label][int(target)] += 1
+
+            for label, nums in ratio.items():
+                target_0, target_1 = nums[0], nums[1]
+                ratio[label] = float(target_1) / (target_0 + target_1)
+            self.ratio = ratio
+        elif self.is_shallow_learning():
             if self.is_xgb():
                 self.model.fit(train_x, train_y, eval_metric="logloss")
             else:
@@ -190,9 +248,10 @@ class Learning(object):
                 return self.model.predict_proba(data)[:,1]
             elif self.is_svm():
                 return self.model.predict_proba(data)[:,1]
+        elif self.is_cluster():
+            return self.model.predict(data)
         elif self.is_deep_learning():
-            if self.is_regressor():
-                return [prob if prob else 0.0 for prob in self.model.predict_proba(data)]
+            return [prob[0] if prob else 0.0 for prob in self.model.predict_proba(data)]
 
     def grid_scores(self):
         if self.is_grid_search():
@@ -261,6 +320,7 @@ class LearningQueue(object):
         self.lock.acquire()
 
         try:
+            print len(results), len(layer_two_training_idx)
             self.layer_two_training_dataset[layer_two_training_idx, model_idx] = results
         finally:
             self.lock.release()
@@ -283,8 +343,7 @@ class LearningQueue(object):
                     os.makedirs(folder)
 
                 objs = (self.layer_two_training_dataset, self.layer_two_testing_dataset, self.learning_logloss)
-                with open(self.filepath, "wb") as OUTPUT:
-                    pickle.dump(objs, OUTPUT)
+                save_cache(objs, self.filepath)
 
                 log("Save queue in {}".format(self.filepath), DEBUG)
             else:
@@ -303,24 +362,28 @@ class LearningThread(threading.Thread):
 
     def run(self):
         while True:
-            (nfold, model_idx, (train_x_idx, test_x_idx), model_name) = self.obj.learning_queue.get()
+            (nfold, model_idx, (train_x_idx, test_x_idx), pair) = self.obj.learning_queue.get()
             timestamp_start = time.time()
+            model_name = pair[0]
 
-            model = LearningFactory.get_model(model_name)
-            if model == None:
+            cost = -1
+            model = LearningFactory.get_model(pair)
+            if not model or not model.model:
                 log("Can't init this model({})".format(model_name), WARN)
+            elif model.is_cluster():
+                model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])
+                training_results, testing_results = model.get_cluster_results(self.obj.train_x[test_x_idx], self.obj.test_x)
+
+                self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, training_results)
+                self.obj.insert_layer_two_testing_dataset(model_idx, nfold, testing_results)
+                self.obj.learning_logloss.insert_logloss(model_name, nfold, -1)
             else:
                 model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])
 
                 results = model.predict(self.obj.train_x[test_x_idx])
                 self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, results)
 
-                layer_two_testing_dataset= None
-                if model.is_regressor():
-                    layer_two_testing_dataset = model.predict(self.obj.test_x)
-                elif model.is_classifier():
-                    layer_two_testing_dataset = model.predict(self.obj.test_x)
-
+                layer_two_testing_dataset = model.predict(self.obj.test_x)
                 self.obj.insert_layer_two_testing_dataset(model_idx, nfold, layer_two_testing_dataset)
 
                 cost = model.cost(self.obj.train_x[test_x_idx], self.obj.train_y[test_x_idx])
@@ -329,10 +392,11 @@ class LearningThread(threading.Thread):
                 else:
                     self.obj.learning_logloss.insert_logloss(model_name, nfold, cost)
 
-                timestamp_end = time.time()
                 log("The grid score is {}".format(model.grid_scores()), DEBUG)
-                log("Cost {:02f} secends to train '{}' model for fold-{:02d}, and the logloss is {:.8f}".format(\
-                        timestamp_end-timestamp_start, model.name, nfold, cost), INFO)
+
+            timestamp_end = time.time()
+            log("Cost {:02f} secends to train '{}' model for fold-{:02d}, and the logloss is {:.8f}".format(\
+                    timestamp_end-timestamp_start, model.name, nfold, cost), INFO)
 
             self.obj.learning_queue.task_done()
             self.obj.dump()

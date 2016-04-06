@@ -18,7 +18,7 @@ console.setLevel(INFO)
 console.setFormatter(formatter)
 
 # Setup Logger
-logger = logging.getLogger("Git Profile")
+logger = logging.getLogger("Kaggle")
 logger.addHandler(console)
 logger.setLevel(INFO)
 

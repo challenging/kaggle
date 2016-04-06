@@ -23,16 +23,13 @@ from ensemble_learning import layer_one_model, layer_two_model, get_max_mean_min
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
 @click.command()
-@click.option("--nepoch", default=5000, help="Number of Iteration for Deep Learning")
-@click.option("--deep-dimension", default=100, help="Dimension of Hiddle Layer")
-@click.option("--deep-layer", default=0, help="Number of Hidden Layer")
 @click.option("--nfold", default=10, help="Number of fold")
 @click.option("--estimators", default=100, help="Number of estimator")
 @click.option("--thread", default=1, help="Number of thread")
 @click.option("--weight", default=1, help="Weight of Class 0")
 @click.option("--polynomial", is_flag=True, help="Use Polynomial")
-@click.option("--kmeans-feature", is_flag=True, help="Use the features of Kmeans")
-def learning(thread, nfold, estimators, deep_dimension, deep_layer, weight, nepoch, polynomial, kmeans_feature):
+@click.option("--kmeans", is_flag=True, help="Use the features of Kmeans")
+def learning(thread, nfold, estimators, weight, polynomial, kmeans):
     drop_fields = []
     #drop_fields = ['v8','v23','v25','v36','v37','v46','v51','v53','v54','v63','v73','v75','v79','v81','v82','v89','v92','v95','v105','v107','v108','v109','v110','v116','v117','v118','v119','v123','v124','v128']
 
@@ -54,32 +51,54 @@ def learning(thread, nfold, estimators, deep_dimension, deep_layer, weight, nepo
     train_Y = train_y.astype(float)
     number_of_feature = len(train_X[0])
 
-    # Load Advanced Data
-    # others/kmeans_nclusters\=all_nfeatures\=620_training_advanced_features.csv
-    train_advanced_x, test_advanced_x = None, None
-    if kmeans_feature:
-        filepath_training_advanced = "{}/../prediction_model/others/kmeans_nclusters=all_nfeatures=620_training_advanced_features.csv".format(BASEPATH)
-        filepath_testing_advanced = "{}/../prediction_model/others/kmeans_nclusters=all_nfeatures=620_testing_advanced_features.csv".format(BASEPATH)
-        train_advanced_x, test_advanced_x = load_advanced_data(filepath_training_advanced, filepath_testing_advanced)
-
     # Init the parameters
     LearningFactory.set_n_estimators(estimators)
 
-    models = ["shallow_gridsearch_extratree_regressor",
-              "shallow_gridsearch_extratree_classifier",
-              "shallow_gridsearch_randomforest_regressor",
-              "shallow_gridsearch_randomforest_classifier",
-              "shallow_xgboosting_regressor", #The logloss value is always nan, why???
-              "shallow_xgboosting_classifier",
+    # Init the parameters of cluster
+    cluster_kmeans4_setting = {"n_clusters": 4, "n_init": 10, "random_state": 1201}
+
+    # Init the parameters of deep learning
+    deep_learning_model_folder = "{}/../prediction_model/deep_learning/layer=3_neurno=2000".format(BASEPATH)
+    if not os.path.isdir(deep_learning_model_folder):
+        os.makedirs(deep_learning_model_folder)
+
+    training_dataset, testing_dataset = [train_X], [test_X]
+    checkpointer = KaggleCheckpoint(filepath=deep_learning_model_folder  + "/{epoch}.weights.hdf5",
+                                    training_set=(training_dataset, train_Y),
+                                    testing_set=(testing_dataset, test_id),
+                                    folder=None,
+                                    verbose=1, save_best_only=True)
+
+    deep_layer3_neurno2000_setting = {"folder": deep_learning_model_folder,
+                                      "input_dims": number_of_feature,
+                                      "batch_size": 128,
+                                      "number_of_layer": 3,
+                                      "dimension": 1000,
+                                      "callbacks": [checkpointer],
+                                      "nepoch": 10,
+                                      "validation_split": 0,
+                                      "class_weight": {0: weight, 1: 1}}
+
+    models = [\
+              ("shallow_gridsearch_extratree_regressor", None),
+              #"shallow_gridsearch_extratree_classifier",
+              #"shallow_gridsearch_randomforest_regressor",
+              #"shallow_gridsearch_randomforest_classifier",
+              #"shallow_xgboosting_regressor", #The logloss value is always nan, why???
+              #"shallow_xgboosting_classifier",
+              ("cluster_kmeans_16", cluster_kmeans4_setting),
+              #"cluster_kmeans_64",
+              #"cluster_kmeans_128",
+              #"cluster_kmeans_512",
+              ("deep_layer3_neuron2000", deep_layer3_neurno2000_setting),
+              #"deep_layer5_neuron2000"
               #"shallow_gradientboosting_regressor",
               #"shallow_gradientboosting_classifier"
               ]
-    layer2_model_name = "shallow_gridsearch_logistic_regressor"
-    if deep_layer > 1:
-        layer2_model_name = "deep_logistic_regressor"
 
-    model_folder = "{}/../prediction_model/ensemble_learning/nfold={}_models={}_feature={}_estimators={}_kmeansfeature={}_polynomial={}".format(\
-                        BASEPATH, nfold, len(models), number_of_feature, estimators, len(train_advanced_x[0]) if kmeans_feature else 0, polynomial)
+    layer2_model_name = "shallow_gridsearch_logistic_regressor"
+    model_folder = "{}/../prediction_model/ensemble_learning/nfold={}_models={}_feature={}_estimators={}_polynomial={}".format(\
+                        BASEPATH, nfold, len(models), number_of_feature, estimators, polynomial)
 
     print "Data Distribution is ({}, {}), and then the number of feature is {}".format(np.sum(train_Y==0), np.sum(train_Y==1), number_of_feature),
 
@@ -92,60 +111,8 @@ def learning(thread, nfold, estimators, deep_dimension, deep_layer, weight, nepo
                              filepath_queue="{}/queue.pickle".format(model_folder), filepath_nfold="{}/nfold.pickle".format(model_folder))
 
     # Phase 2. --> Model Training
-    results, deep_setting = None, {}
-    if deep_layer > 1:
-        deep_learning_model_folder = "{}/nn_layer={}_dimension={}_weight={}_v2".format(model_folder, deep_layer, deep_dimension, weight)
-        if not os.path.isdir(deep_learning_model_folder):
-            os.makedirs(deep_learning_model_folder)
-
-        proba_training_min, proba_training_max, proba_training_mean = get_max_mean_min_probabilities(layer_2_train_x)
-        proba_testing_min, proba_testing_max, proba_testing_mean = get_max_mean_min_probabilities(layer_2_test_x)
-
-        def reshape(proba):
-            return np.reshape(proba, (len(proba), 1))
-
-        proba_training_min, proba_training_max, proba_training_mean = reshape(proba_training_min), reshape(proba_training_max), reshape(proba_training_mean)
-        proba_training = np.hstack((proba_training_min, proba_training_max, proba_training_mean))
-
-        proba_testing_min, proba_testing_max, proba_testing_mean = reshape(proba_testing_min), reshape(proba_testing_max), reshape(proba_testing_mean)
-        proba_testing = np.hstack((proba_testing_min, proba_testing_max, proba_testing_mean))
-
-        training_dataset, testing_dataset = [layer_2_train_x, train_X, proba_training, train_X], [layer_2_test_x, test_X, proba_testing, test_X]
-        if kmeans_feature:
-            training_dataset.append([train_advanced_x, train_X])
-            testing_dataset.append([test_advanced_x, test_X])
-
-        checkpointer = KaggleCheckpoint(filepath=deep_learning_model_folder + "/{epoch}.weights.hdf5",
-                                        training_set=(training_dataset, train_Y),
-                                        testing_set=(testing_dataset, test_id),
-                                        folder=deep_learning_model_folder,
-                                        verbose=1, save_best_only=True)
-
-        #early_stopping = EarlyStopping(monitor='binary_crossentropy', patience=20, verbose=0, mode='auto')
-
-        deep_setting["folder_weights"] = deep_learning_model_folder
-        deep_setting["batch_size"] = 64
-        deep_setting["number_of_layer"] = 3
-        deep_setting["dimension"] = deep_layer
-        deep_setting["callbacks"] = [checkpointer]
-        deep_setting["nepoch"] = nepoch
-        deep_setting["validation_split"] = 0.1
-        deep_setting["class_weight"] = {0: weight, 1: 1}
-
-        model_folder = deep_learning_model_folder
-
-        optional_training_dataset, optional_testing_dataset = [train_X, proba_training, train_X], [test_X, proba_testing, test_X]
-        if kmeans_feature:
-            optional_training_dataset.append([train_advanced_x, train_X])
-            optional_testing_dataset.append([test_advanced_x, test_X])
-
-        results = layer_two_model(models, layer_2_train_x, train_Y, test_id, layer_2_test_x, learning_loss, layer2_model_name,
-                                  "{}/training.csv".format(model_folder), "{}/testing.csv".format(model_folder), "{}/logloss.pickle".format(model_folder),
-                                  deep_setting, optional_training_dataset, optional_testing_dataset)
-    else:
-        results = layer_two_model(models, layer_2_train_x, train_Y, test_id, layer_2_test_x, learning_loss, layer2_model_name,
-                                  "{}/training.csv".format(model_folder), "{}/testing.csv".format(model_folder), "{}/logloss.pickle".format(model_folder),
-                                  deep_setting)
+    results = layer_two_model(models, layer_2_train_x, train_Y, test_id, layer_2_test_x, learning_loss, (layer2_model_name, None),
+                              "{}/training.csv".format(model_folder), "{}/testing.csv".format(model_folder), "{}/logloss.pickle".format(model_folder))
 
     # Save the submission CSV file
     filepath_output = "{}/kaggle_BNP_submission_{}.csv".format(model_folder, layer2_model_name)
