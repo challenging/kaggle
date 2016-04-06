@@ -49,6 +49,7 @@ class KaggleCheckpoint(ModelCheckpoint):
 
     def on_epoch_end(self, epoch, logs={}):
         filepath = self.filepath.format(epoch=epoch+1, **logs)
+
         if self.save_best_only:
             current = logs.get(self.monitor)
             if current is None:
@@ -99,7 +100,7 @@ def get_newest_model(folder):
 
     return newest
 
-def logistic_regression(model_folder, layer, batch_size, dimension, number_of_feature,
+def logistic_regression(model_folder, layer, dimension, number_of_feature,
        learning_rate=1e-6, dropout_rate=0.5, nepoch=10, activate_function="sigmoid"):
 
     model = Sequential()
@@ -128,7 +129,7 @@ def logistic_regression(model_folder, layer, batch_size, dimension, number_of_fe
 
     return model
 
-def logistic_regression_2(model_folder, layer, batch_size, dimension, input_dims,
+def logistic_regression_2(model_folder, layer, dimension, input_dims,
        learning_rate=1e-6, dropout_rate=0.5, nepoch=10, init="uniform", activation="tanh"):
 
     sources = []
