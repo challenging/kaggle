@@ -48,7 +48,7 @@ class KaggleCheckpoint(ModelCheckpoint):
         return base_proba
 
     def on_epoch_end(self, epoch, logs={}):
-        filepath = self.filepath.format(epoch=epoch+1, **logs)
+        filepath = self.folder + "/" + self.filepath.format(epoch=epoch+1, **logs)
 
         if self.save_best_only:
             current = logs.get(self.monitor)

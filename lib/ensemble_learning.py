@@ -79,7 +79,7 @@ def layer_one_model(model_folder, train_x, train_y, test_x, test_id, models, lay
             if learning_queue.is_done_layer_two_training_dataset(test, model_idx):
                 log("fold-{:02d} data to '{}' model is done".format(nfold, model_name))
             else:
-                learning_queue.put(nfold, model_idx, (train, test), m)
+                learning_queue.put(model_folder, nfold, model_idx, (train, test), m)
                 log("Put fold-{:02d} data into this '{}' model".format(nfold, model_name))
 
     learning_queue.starts(number_of_thread=number_of_thread)

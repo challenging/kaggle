@@ -137,6 +137,15 @@ class LearningFactory(object):
             if method.find("kmeans") > -1:
                 model = Learning(method, KMeans(n_clusters=setting["n_clusters"], n_init=setting["n_init"], init="k-means++", random_state=setting["random_state"]))
         elif method.find("deep") > -1:
+            setting["folder"] = "{}/nn_layer={}_neurno={}_{}th".format(setting["folder"], setting["number_of_layer"], setting["dimension"], setting["nfold"])
+            if not os.path.isdir(setting["folder"]):
+                try:
+                    os.makedirs(setting["folder"])
+                except OSError as e:
+                    pass
+
+            log("The folder of deep learning is in {}".format(setting["folder"]), INFO)
+
             model = Learning(method, None)
             model.init_deep_params(**setting)
 
@@ -147,13 +156,16 @@ class Learning(object):
         self.name = name.lower()
         self.model = model
 
-    def init_deep_params(self, folder, input_dims,
+    def init_deep_params(self, nfold, folder, input_dims,
                          number_of_layer, batch_size, dimension,
                          nepoch, validation_split, class_weight, callbacks=[]):
 
         self.batch_size = batch_size
         self.nepoch = nepoch
+
         self.callbacks = callbacks
+        self.callbacks[-1].folder = folder
+
         self.class_weight = class_weight
         self.validation_split = validation_split
 
@@ -216,6 +228,7 @@ class Learning(object):
                 train_x = imp.transform(train_x)
 
             self.model.fit(train_x)
+            labels = self.get_labels()
 
             ratio = {}
             for idx, target in enumerate(train_y):
@@ -299,8 +312,8 @@ class LearningQueue(object):
         self.layer_two_testing_dataset = layer_two_testing_dataset
         self.learning_logloss = learning_logloss
 
-    def put(self, nfold, model_idx, dataset_idxs, model):
-        self.learning_queue.put((nfold, model_idx, dataset_idxs, model))
+    def put(self, folder, nfold, model_idx, dataset_idxs, model):
+        self.learning_queue.put((folder, nfold, model_idx, dataset_idxs, model))
 
     def starts(self, number_of_thread=1):
         for idx in range(0, number_of_thread):
@@ -320,7 +333,6 @@ class LearningQueue(object):
         self.lock.acquire()
 
         try:
-            print len(results), len(layer_two_training_idx)
             self.layer_two_training_dataset[layer_two_training_idx, model_idx] = results
         finally:
             self.lock.release()
@@ -362,11 +374,16 @@ class LearningThread(threading.Thread):
 
     def run(self):
         while True:
-            (nfold, model_idx, (train_x_idx, test_x_idx), pair) = self.obj.learning_queue.get()
+            (model_folder, nfold, model_idx, (train_x_idx, test_x_idx), p) = self.obj.learning_queue.get()
             timestamp_start = time.time()
-            model_name = pair[0]
+            model_name = p[0]
 
             cost = -1
+
+            pair = copy.deepcopy(p)
+            pair[1]["folder"] = model_folder
+            pair[1]["nfold"] = nfold
+
             model = LearningFactory.get_model(pair)
             if not model or not model.model:
                 log("Can't init this model({})".format(model_name), WARN)

@@ -4,6 +4,7 @@ import os
 import sys
 import time
 import pickle
+import operator
 
 import numpy as np
 import pandas as pd
@@ -186,18 +187,23 @@ def load_advanced_data(filepath_training, filepath_testing, drop_fields=[]):
 
     return df_train, df_test
 
-def load_interaction_information(self, filepath, threshold=0.02):
+def load_interaction_information(filepath, count=500):
     results = None
     with open(filepath, "rb") as INPUT:
         results = pickle.load(INPUT)
 
-    wanted = []
+    ranking = {}
     for layer1, info in results.items():
-        for layer2, value in infor.items():
-            if value > threshold:
-                wanted.append((layer1, layer2))
+        for layer2, value in info.items():
+            ranking["{}-{}".format(layer1, layer2)] = value
 
-    return wanted
+    for key, value in sorted(ranking.items(), key=operator.itemgetter(1), reverse=True):
+        yield (key.split("-")), value
+
+        if count < 0:
+            break
+        else:
+            count -= 1
 
 def save_kaggle_submission(test_id, results, filepath, normalization=False):
     if normalization:
@@ -227,3 +233,22 @@ def load_cache(filepath):
         sys.exit(100)
 
     return obj
+
+if __name__ == "__main__":
+    drop_fields = []
+    BASEPATH = "."
+
+    filepath_training = "{}/../input/train.csv".format(BASEPATH)
+    filepath_testing = "{}/../input/test.csv".format(BASEPATH)
+    filepath_cache_1 = "{}/../input/650_training_dataset.cache".format(BASEPATH)
+
+    train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
+
+    filepath_interaction_information = "{}/../input/transform2=True_testing=-1_type=2_binsize=4.pkl".format(BASEPATH)
+    for layer1, layer2 in load_interaction_information(filepath_interaction_information):
+        print train_x[layer1].values[:10]
+        print train_x[layer2].values[:10]
+        train_x["t"] = train_x[layer1].values * train_x[layer2].values
+        print train_x["t"].values[:10]
+
+        break
