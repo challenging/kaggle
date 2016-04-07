@@ -23,7 +23,8 @@ from load import data_load, data_transform_2, save_cache, load_cache
 @click.option("--interaction-information", is_flag=True, help="Calculate the interaction information")
 @click.option("--binsize", default=16, help="bin/bucket size setting")
 @click.option("--testing", default=-1, help="cut off the input file to be the testing dataset")
-def feature_engineer(thread, transform2, feature_importance, interaction_information, binsize, testing):
+@click.option("--combinations-size", default=2, help="size of combinations")
+def feature_engineer(thread, transform2, feature_importance, interaction_information, binsize, testing, combinations_size):
     drop_fields = []
 
     if feature_importance:
@@ -59,15 +60,14 @@ def feature_engineer(thread, transform2, feature_importance, interaction_informa
             train_x, train_y, test_x, test_id = data_load(drop_fields=drop_fields)
 
         filepath_cache = "{}/../input/transform2={}_binsize={}_cache.pkl".format(BASEPATH, transform2, binsize)
-        filepath_couple = "{}/../input/transform2={}_testing={}_type=2_binsize={}.pkl".format(BASEPATH, transform2, testing, binsize)
-        filepath_single = "{}/../input/transform2={}_testing={}_type=1_binsize={}.pkl".format(BASEPATH, transform2, testing, binsize)
+        filepath_couple = "{}/../input/transform2={}_testing={}_type=2_binsize={}_combination={}.pkl".format(BASEPATH, transform2, testing, binsize, combinations_size)
         filepath_series = "{}/../input/transform2={}_testing={}_binsize={}_series.pkl".format(BASEPATH, transform2, testing, binsize)
         filepath_criteria = "{}/../input/transform2={}_testing={}_binsize={}_criteria.pkl".format(BASEPATH, transform2, testing, binsize)
 
-        results_single, results_couple = feature_engineering.calculate_interaction_information(filepath_cache,\
+        results_couple = feature_engineering.calculate_interaction_information(filepath_cache,\
             train_x, train_y,\
-            filepath_couple, filepath_single,filepath_series, filepath_criteria,\
-            binsize=binsize, nthread=thread, threshold=0.01, is_testing=int(testing) if testing != -1 else None)
+            filepath_couple, filepath_series, filepath_criteria,\
+            binsize=binsize, nthread=thread, combinations_size=combinations_size, threshold=0.01, is_testing=int(testing) if testing > 0 else None)
 
 if __name__ == "__main__":
     feature_engineer()

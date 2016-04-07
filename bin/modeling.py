@@ -15,7 +15,7 @@ import numpy as np
 
 sys.path.append("{}/../lib".format(os.path.dirname(os.path.abspath(__file__))))
 from utils import log, INFO
-from load import load_data, load_advanced_data, data_polynomial, save_kaggle_submission, load_interaction_information
+from load import load_data, load_advanced_data, load_cache, save_cache, save_kaggle_submission, load_interaction_information
 from learning import LearningFactory
 from deep_learning import KaggleCheckpoint
 from keras.callbacks import EarlyStopping
@@ -49,7 +49,7 @@ def learning(thread, nfold, estimators, weight, interaction_information, kmeans)
         if os.path.exists(filepath_cache_ii):
             train_x, test_x = load_cache(filepath_cache_ii)
         else:
-            for (layer1, layer2), value in load_interaction_information(filepath_interaction_information, topX):
+            for (layer1, layer2), value in load_interaction_information(filepath_ii, topX):
                 train_x["{}-{}".format(layer1, layer2)] = train_x[layer1].values * train_x[layer2].values * value
                 test_x["{}-{}".format(layer1, layer2)] = test_x[layer1].values * test_x[layer2].values * value
 
@@ -66,7 +66,9 @@ def learning(thread, nfold, estimators, weight, interaction_information, kmeans)
     LearningFactory.set_n_estimators(estimators)
 
     # Init the parameters of cluster
-    cluster_kmeans4_setting = {"n_clusters": 4, "n_init": 10, "random_state": 1201}
+    cluster_kmeans16_setting = {"n_clusters": 16, "n_init": 10, "random_state": 1201}
+    cluster_kmeans64_setting = {"n_clusters": 64, "n_init": 10, "random_state": 1201}
+    cluster_kmeans256_setting = {"n_clusters": 256, "n_init": 10, "random_state": 1201}
 
     # Init the parameters of deep learning
     training_dataset, testing_dataset = [train_X], [test_X]
@@ -99,23 +101,23 @@ def learning(thread, nfold, estimators, weight, interaction_information, kmeans)
 
     models = [\
               ("shallow_gridsearch_extratree_regressor", {}),
-              #"shallow_gridsearch_extratree_classifier",
-              #"shallow_gridsearch_randomforest_regressor",
-              #"shallow_gridsearch_randomforest_classifier",
-              #"shallow_xgboosting_regressor", #The logloss value is always nan, why???
-              #"shallow_xgboosting_classifier",
-              ("cluster_kmeans_16", cluster_kmeans4_setting),
-              #"cluster_kmeans_64",
-              #"cluster_kmeans_256",
-              #("deep_layer3_neuron2000", deep_layer3_neurno2000_setting),
+              ("shallow_gridsearch_extratree_classifier", {}),
+              ("shallow_gridsearch_randomforest_regressor", {}),
+              ("shallow_gridsearch_randomforest_classifier", {}),
+              ("shallow_xgboosting_regressor", {}), #The logloss value is always nan, why???
+              ("shallow_xgboosting_classifier", {}),
+              ("cluster_kmeans_16", cluster_kmeans16_setting),
+              ("cluster_kmeans_64", cluster_kmeans64_setting),
+              ("cluster_kmeans_256", cluster_kmeans256_setting),
+              ("deep_layer3_neuron2000", deep_layer3_neurno2000_setting),
               ("deep_layer5_neuron2000", deep_layer5_neurno2000_setting),
               #"shallow_gradientboosting_regressor",
               #"shallow_gradientboosting_classifier"
               ]
 
     layer2_model_name = "shallow_gridsearch_logistic_regressor"
-    model_folder = "{}/../prediction_model/ensemble_learning/nfold={}_models={}_feature={}_estimators={}_polynomial={}".format(\
-                        BASEPATH, nfold, len(models), number_of_feature, estimators, polynomial)
+    model_folder = "{}/../prediction_model/ensemble_learning/nfold={}_models={}_feature={}_estimators={}_binsize={}_topX={}".format(\
+                        BASEPATH, nfold, len(models), number_of_feature, estimators, binsize, topX)
 
     print "Data Distribution is ({}, {}), and then the number of feature is {}".format(np.sum(train_Y==0), np.sum(train_Y==1), number_of_feature),
 

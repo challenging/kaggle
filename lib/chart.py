@@ -1,10 +1,14 @@
 #!/usr/bin/env python
 
+import sys
+
 import numpy as np
 import matplotlib.pylab as plt
 
 from matplotlib.pyplot import cm 
 from matplotlib.font_manager import FontProperties
+
+from load import load_cache
 
 def barchart(learning_logloss):
     plt.figure(figsize=(13, 7))
@@ -26,14 +30,10 @@ def barchart(learning_logloss):
     fontP.set_size('small')
     plt.legend(loc=8, ncol=3, fancybox=True, shadow=True, prop=fontP)
 
-    plt.ylim((0.45, 0.65))
+    plt.ylim((0.45, 0.52))
     plt.show()
 
 if __name__ == "__main__":
-    import pickle
-
-    learning_logloss = None
-    with open("logloss.pickle") as INPUT:
-        learning_logloss = pickle.load(INPUT)
+    learning_logloss = load_cache(sys.argv[1])
 
     barchart(learning_logloss)

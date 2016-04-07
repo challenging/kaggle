@@ -194,8 +194,11 @@ def load_interaction_information(filepath, count=500):
 
     ranking = {}
     for layer1, info in results.items():
-        for layer2, value in info.items():
-            ranking["{}-{}".format(layer1, layer2)] = value
+        if isinstance(info, dict):
+            for layer2, value in info.items():
+                ranking["{}-{}".format(layer1, layer2)] = value
+        elif isinstance(info, float):
+            ranking[layer1.replace(";", "-")] = info
 
     for key, value in sorted(ranking.items(), key=operator.itemgetter(1), reverse=True):
         yield (key.split("-")), value

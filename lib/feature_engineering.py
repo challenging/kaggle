@@ -1,7 +1,9 @@
 import os
 import sys
+import glob
 import time
 import pprint
+import random
 
 import dit
 import numpy as np
@@ -9,6 +11,7 @@ import pandas as pd
 
 from Queue import Queue
 from threading import Thread, Lock
+from itertools import combinations
 
 from sklearn.datasets import load_boston
 from sklearn.linear_model import LinearRegression, Ridge, Lasso, RandomizedLasso
@@ -17,7 +20,7 @@ from sklearn.preprocessing import MinMaxScaler, Imputer
 from sklearn.ensemble import RandomForestRegressor
 from minepy import MINE
 
-from load import save_cache, load_cache
+from load import save_cache, load_cache, load_interaction_information
 from utils import log, DEBUG, INFO, WARN
 
 class FeatureProfile(object):
@@ -125,19 +128,18 @@ def transform(distribution):
     return keys, values
 
 class InteractionInformation(object):
-    def __init__(self, dataset, train_y, filepath_couple, filepath_single, filepath_series, filepath_criteria, threshold=0.01, save_size=100):
+    def __init__(self, dataset, train_y, filepath_couple, filepath_series, filepath_criteria, combinations_size=2, threshold=0.01, save_size=100):
         self.dataset = dataset
         self.train_y = train_y
 
         self.filepath_couple = filepath_couple
-        self.filepath_single = filepath_single
         self.filepath_series = filepath_series
         self.filepath_criteria = filepath_criteria
 
         self.queue = Queue()
-        self.lock_single = Lock()
         self.lock_couple = Lock()
 
+        self.combinations_size = combinations_size
         self.threshold = threshold
         self.ori_save_size = save_size
         self.save_size = save_size
@@ -145,15 +147,11 @@ class InteractionInformation(object):
         self.cache_series = {}
         self.cache_criteria = {}
 
-        self.results_single = {}
         self.results_couple = {}
 
         self.read_cache()
 
     def read_cache(self):
-        if os.path.exists(self.filepath_single):
-            self.results_single = load_cache(self.filepath_single)
-
         if os.path.exists(self.filepath_couple):
             self.results_couple = load_cache(self.filepath_couple)
 
@@ -165,7 +163,6 @@ class InteractionInformation(object):
 
     def write_cache(self, results=False):
         if results:
-            save_cache(self.results_single, self.filepath_single)
             save_cache(self.results_couple, self.filepath_couple)
         else:
             save_cache(self.cache_series, self.filepath_series)
@@ -184,33 +181,24 @@ class InteractionInformation(object):
 
         return (a, b)
 
-    def add_item(self, column_x, column_y=None):
-        if column_y:
-            if column_x not in self.results_couple or column_y not in self.results_couple[column_x]:
-                self.queue.put((column_x, column_y))
-                log("Put I({};{};target) into the queue".format(column_x, column_y), INFO)
-            else:
-                log("I({};{};target) is done".format(column_x, column_y), INFO)
+    def compose_column_names(self, names):
+        return "{};target".format(";".join(names))
+
+    def decompose_column_names(self, name):
+        return name.split(";")[:-1]
+
+    def add_item(self, column_names):
+        key = self.compose_column_names(column_names)
+
+        if key not in self.results_couple:
+            self.queue.put(key)
+            log("Put I({}) into the queue".format(key), INFO)
         else:
-            if column_x not in self.results_single:
-                self.queue.put((column_x, column_y))
-            else:
-                log("I({};target) is done".format(column_x), INFO)
+            log("I({}) is done".format(key), INFO)
 
-    def add_single(self, x, v):
-        with self.lock_single:
-            self.results_single[x] = v
-
-            if self.save_size < 0:
-                save_cache(self.results_single, self.filepath_single)
-                self.save_size = self.ori_save_size
-            else:
-                self.save_size -= 1
-
-    def add_couple(self, x, y ,v):
+    def add_couple(self, key ,v):
         with self.lock_couple:
-            self.results_couple.setdefault(x, {})
-            self.results_couple[x][y] = v
+            self.results_couple[key] = v
 
             if self.save_size < 0:
                 save_cache(self.results_couple, self.filepath_couple)
@@ -227,64 +215,83 @@ class InteractionInformationThread(Thread):
             setattr(self, key, value)
 
     def run(self):
+        LABELS = ["A", "B", "C", "D", "E"]
         series_target = pd.Series(self.ii.train_y.astype(str))
 
         while True:
             timestamp_start = time.time()
-            (column_x, column_y) = self.ii.queue.get()
+            column_couple = self.ii.queue.get()
+            column_names = self.ii.decompose_column_names(column_couple)
+
+            criteria_index, criteria_value = [], []
+
+            series = {"target": series_target}
+            for name in column_names:
+                series_value, column_criteria = self.ii.get_values_from_cache(name)
+                series[name] = series_value
+
+                criteria_index.append(len(criteria_index))
+                criteria_value.append((name, column_criteria))
+
+            tmp_df = pd.DataFrame(series)
+
+            distribution = {}
+            for idxs in combinations(criteria_index, self.ii.combinations_size):
+                for criteria_target in ["0", "1"]:
+                    if self.ii.combinations_size == 2:
+                        layer1, layer2 = idxs[0], idxs[1]
+                        layer1_name, layer1_values = criteria_value[layer1]
+                        layer2_name, layer2_values = criteria_value[layer2]
+
+                        for layer1_value in layer1_values:
+                            for layer2_value in layer2_values:
+                                key = "{}{}{}".format(layer1_value, layer2_value, criteria_target)
+                                distribution[key] = len(np.where((tmp_df[layer1_name] == layer1_value) & (tmp_df[layer2_name] == layer2_value) & (tmp_df["target"] == criteria_target))[0])
+                    elif self.ii.combinations_size == 3:
+                        layer1, layer2, layer3 = idxs[0], idxs[1], idxs[2]
+                        layer1_name, layer1_values = criteria_value[layer1]
+                        layer2_name, layer2_values = criteria_value[layer2]
+                        layer3_name, layer3_values = criteria_value[layer3]
+
+                        for layer1_value in layer1_values:
+                            for layer2_value in layer2_values:
+                                for layer3_value in layer3_values:
+                                    key = "{}{}{}{}".format(layer1_value, layer2_value, layer3_value, criteria_target)
+                                    distribution[key] = len(np.where((tmp_df[layer1_name] == layer1_value) & (tmp_df[layer2_name] == layer2_value) & (tmp_df[layer3_name] == layer3_value)  & (tmp_df["target"] == criteria_target))[0])
+                    elif self.ii.combinations_size == 4:
+                        layer1, layer2, layer3, layer4 = idxs[0], idxs[1], idxs[2], idxs[3]
+                        layer1_name, layer1_values = criteria_value[layer1]
+                        layer2_name, layer2_values = criteria_value[layer2]
+                        layer3_name, layer3_values = criteria_value[layer3]
+                        layer4_name, layer4_values = criteria_value[layer4]
+
+                        for layer1_value in layer1_values:
+                            for layer2_value in layer2_values:
+                                for layer3_value in layer3_values:
+                                    for layer4_value in layer4_values:
+                                        key = "{}{}{}{}{}".format(layer1_value, layer2_value, layer3_value, layer4_value, criteria_target)
+                                        distribution[key] = len(np.where((tmp_df[layer1_name] == layer1_value) & (tmp_df[layer2_name] == layer2_value) & (tmp_df[layer3_name] == layer3_value) & (tmp_df[layer4_name] == layer4_value) & (tmp_df["target"] == criteria_target))[0])
+                    else:
+                        log("Not support the combination size is greater than 4", WARN)
+                        self.ii.queue_task_done()
+
+                        continue
+
+            keys, values = transform(distribution)
+
+            mi = dit.Distribution(keys, values)
 
             interaction_information = -1
-            if column_y:
-                series_x, column_x_criteria = self.ii.get_values_from_cache(column_x)
-                series_y, column_y_criteria = self.ii.get_values_from_cache(column_y)
 
-                series = {column_x: series_x, column_y: series_y, "target": series_target}
-                tmp_df = pd.DataFrame(series)
+            rv_names = LABELS[:self.ii.combinations_size]
+            mi.set_rv_names(rv_names + ["Z"])
+            interaction_information = dit.shannon.mutual_information(mi, rv_names, ["Z"])
 
-                distribution = {}
-                for criteria_x in column_x_criteria:
-                    for criteria_y in column_y_criteria:
-                        for criteria_z in ["0", "1"]:
-                            key = "{}{}{}".format(criteria_x, criteria_y, criteria_z)
-                            distribution[key] = len(np.where((tmp_df[column_x] == criteria_x) & (tmp_df[column_y] == criteria_y) & (tmp_df["target"] == criteria_z))[0])
-
-                keys, values = transform(distribution)
-
-                mi = dit.Distribution(keys, values)
-                mi.set_rv_names(["X", "Y", "Z"])
-                interaction_information = dit.shannon.mutual_information(mi, ["X", "Y"], ["Z"])
-
-                self.ii.add_couple(column_x, column_y, interaction_information)
-            else:
-                series_x, column_x_criteria = self.ii.get_values_from_cache(column_x)
-                series = {column_x: series_x, "target": series_target}
-                tmp_df = pd.DataFrame(series)
-
-                distribution = {}
-                for criteria_x in column_x_criteria:
-                    for criteria_z in ["0", "1"]:
-                        key = "{}{}".format(criteria_x, criteria_z)
-                        distribution[key] = len(np.where((tmp_df[column_x] == criteria_x) & (tmp_df["target"] == criteria_z))[0])
-
-                keys, values = transform(distribution)
-
-                mi = dit.Distribution(keys, values)
-                mi.set_rv_names(["X", "Z"])
-                interaction_information = dit.shannon.mutual_information(mi, ["X"], ["Z"])
-
-                self.ii.add_single(column_x, interaction_information)
+            self.ii.add_couple(column_couple, interaction_information)
 
             timestamp_end = time.time()
             if interaction_information >= self.ii.threshold:
-                if column_y:
-                    log("Cost {:.2f} secends to calculate I({};{};target) is {}, the remaining size is {}".format(timestamp_end-timestamp_start, column_x, column_y, interaction_information, self.ii.queue.qsize()), INFO)
-                else:
-                    log("Cost {:.2f} secends to calculate I({};target) is {}, and the remaining size is {}".format(timestamp_end-timestamp_start, column_x, interaction_information, self.ii.queue.qsize()), INFO)
-            else:
-                if column_y:
-                    log("Cost {:.2f} secends to calculate I({};{};target) is {}".format(timestamp_end-timestamp_start, column_x, column_y, interaction_information), DEBUG)
-                else:
-                    log("Cost {:.2f} secends to calculate I({};target) is {}".format(timestamp_end-timestamp_start, column_x, interaction_information), DEBUG)
+                log("Cost {:.2f} secends to calculate I({}) is {}, the remaining size is {}".format(timestamp_end-timestamp_start, column_couple, interaction_information, self.ii.queue.qsize()), INFO)
 
             self.ii.queue.task_done()
 
@@ -321,11 +328,11 @@ def load_dataset(filepath_cache, dataset, binsize=2):
 
     return idxs, dataset
 
-def calculate_interaction_information(filepath_cache, dataset, train_y, filepath_couple, filepath_single, filepah_series, filepath_criteria,
+def calculate_interaction_information(filepath_cache, dataset, train_y, filepath_couple, filepah_series, filepath_criteria, combinations_size,
                                       binsize=2, threshold=0.01, nthread=4, is_testing=None):
     idxs, dataset = load_dataset(filepath_cache, dataset, binsize)
 
-    ii = InteractionInformation(dataset, train_y, filepath_couple, filepath_single, filepah_series, filepath_criteria, threshold)
+    ii = InteractionInformation(dataset, train_y, filepath_couple, filepah_series, filepath_criteria, combinations_size, threshold)
 
     # Build Cache File
     timestamp_start = time.time()
@@ -336,19 +343,21 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, filepath
     timestamp_end = time.time()
     log("Cost {:.4f} secends to build cache files".format(timestamp_end-timestamp_start), INFO)
 
-    for column_x_idx in range(0, len(idxs)):
-        column_x = dataset.columns[idxs[column_x_idx]]
+    count_break = 0
+    for pair in combinations(idxs, combinations_size):
+        if is_testing and random.random()*10 > 1:
+            continue
 
-        for column_y_idx in range(column_x_idx+1, len(idxs)):
-            column_y = dataset.columns[idxs[column_y_idx]]
+        column_names = [dataset.columns[idx] for idx in pair]
+        print column_names
 
-            ii.add_item(column_x, column_y)
+        ii.add_item(column_names)
 
-        ii.add_item(column_x, None)
-
-        if is_testing and column_x_idx > is_testing:
+        if is_testing and count_break > is_testing:
             log("Early break due to the is_testing is True", INFO)
             break
+        else:
+            count_break += 1
 
     for idx in range(0, nthread):
         worker = InteractionInformationThread(kwargs={"ii": ii})
@@ -361,4 +370,4 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, filepath
     log("Write the results", INFO)
     ii.write_cache(results=True)
 
-    return ii.results_single, ii.results_couple
+    return ii.results_couple
