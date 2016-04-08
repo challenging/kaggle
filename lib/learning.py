@@ -329,19 +329,27 @@ class LearningQueue(object):
         else:
             return True
 
-    def insert_layer_two_training_dataset(self, layer_two_training_idx, model_idx, results):
+    def insert_layer_two_training_dataset(self, layer_two_training_idx, model_name, model_idx, results, model_folder=None):
         self.lock.acquire()
 
         try:
             self.layer_two_training_dataset[layer_two_training_idx, model_idx] = results
+
+            if model_folder:
+                filepath = "{}/middle_layer/{}.dataset.pkl".format(model_folder, model_name)
+                save_cache(self.layer_two_training_dataset[:,model_idx], filepath)
         finally:
             self.lock.release()
 
-    def insert_layer_two_testing_dataset(self, model_idx, nfold, results):
+    def insert_layer_two_testing_dataset(self, model.name, model_idx, nfold, results, model_folder=None):
         self.lock.acquire()
 
         try:
             self.layer_two_testing_dataset[:, model_idx, nfold] = results
+
+            if model_folder:
+                filepath = "{}/middle_layer/{}.dataset.pkl".format(model_folder, model_name)
+                save_cache(self.layer_two_testing_dataset[:, model_idx], filepath)
         finally:
             self.lock.release()
 
@@ -391,17 +399,17 @@ class LearningThread(threading.Thread):
                 model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])
                 training_results, testing_results = model.get_cluster_results(self.obj.train_x[test_x_idx], self.obj.test_x)
 
-                self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, training_results)
-                self.obj.insert_layer_two_testing_dataset(model_idx, nfold, testing_results)
+                self.obj.insert_layer_two_training_dataset(test_x_idx, model.name, model_idx, training_results, model_folder)
+                self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, testing_results, model_folder)
                 self.obj.learning_logloss.insert_logloss(model_name, nfold, -1)
             else:
                 model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])
 
                 results = model.predict(self.obj.train_x[test_x_idx])
-                self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, results)
+                self.obj.insert_layer_two_training_dataset(test_x_idx, model.name, model_idx, results, model_folder)
 
                 layer_two_testing_dataset = model.predict(self.obj.test_x)
-                self.obj.insert_layer_two_testing_dataset(model_idx, nfold, layer_two_testing_dataset)
+                self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, layer_two_testing_dataset, model_folder)
 
                 cost = model.cost(self.obj.train_x[test_x_idx], self.obj.train_y[test_x_idx])
                 if np.isnan(cost):

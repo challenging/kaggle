@@ -102,6 +102,7 @@ class ParameterTuning(object):
         log("The cost of {}-model is {:.8f} based on {}".format(phase, best_cost, best_params.keys()))
         self.improve(best_cost, best_params)
 
+        gsearch2 = None
         micro_cost, micro_params, micro_scores = np.inf, np.inf, None
         if is_micro_tuning:
             advanced_params = {}
@@ -123,12 +124,14 @@ class ParameterTuning(object):
             micro_cost, micro_params, micro_scores = self.get_best_params(gsearch2, self.train[self.predictors], self.train[self.target])
             self.improve(micro_cost, micro_params, True)
 
-        a, b, c = best_cost, best_params, scores
-        model = gsearch1
+        a, b, c = None, None, None
+        model = None
         if micro_cost > best_cost:
             model = gsearch2
-
             a, b, c = micro_cost, micro_params, micro_scores
+        else:
+            model = gsearch1
+            a, b, c = best_cost, best_params, scores
 
         if self.method == "classifier":
             predicted_proba = model.predict_proba(self.train[self.predictors])[:,1]
@@ -150,7 +153,9 @@ class RandomForestTuning(ParameterTuning):
 
         self.default_criterion, self.criterion = "entropy", None
         self.default_max_features, self.max_features = 0.5, None
-        self.default_max_depth, delf.max_depth = 8, None
+        self.default_max_depth, self.max_depth = 8, None
+        self.default_min_samples_split, self.min_samples_split = 4, None
+        self.default_min_samples_leaf, self.min_samples_leaf = 2, None
         self.default_class_weight, self.class_weight = {"0": 1, "1": 1}, None
 
     def get_model_instance(self):
@@ -161,25 +166,27 @@ class RandomForestTuning(ParameterTuning):
         max_depth = self.get_value("max_depth")
 
         if self.method == "classifier":
-            return RandomForestClassifier(n_estimator=n_estimator,
-                                          criterion=criterion,
+            return RandomForestClassifier(n_estimators=n_estimator,
+                                          #criterion=criterion,
                                           max_features=max_features,
                                           max_depth=max_depth)
         elif self.method == "regressor":
-            return RandomForestRegressor(n_estimator=n_estimator,
-                                         criterion=criterion,
+            return RandomForestRegressor(n_estimators=n_estimator,
+                                         #criterion=criterion,
                                          max_features=max_features,
                                          max_depth=max_depth)
 
     def process(self):
         phase1_cost, phase1_params, phase1_scores = self.phase("phase1", {})
 
-        param2 = {'max_depth': range(3, 11, 2), 'max_features': [ratio for ratio in [0.05, 0.1, 0.15, 0.2]], "criterion": ["gini", "entropy"]}
+        param2 = {'max_depth': range(5, 11, 2), 'max_features': [ratio for ratio in [0.05, 0.1, 0.15, 0.2]], "criterion": ["gini", "entropy"]}
         phase2_cost, phase2_params, phase2_scores = self.phase("phase2", param2)
 
-
-        param3 = {"class_weight": [{"0": 1, "1": 1}, {"0": 1.5, "1": 1}, {"0": 2, "1": 1}, "balanced"]}
+        param3 = {"min_samples_leaf": range(2, 10, 2), "min_sample_split": range(4, 10, 2)}
         phase3_cost, phase3_params, phase3_scores = self.phase("phase3", param3)
+
+        param4 = {"class_weight": [{"0": 1, "1": 1}, {"0": 1.5, "1": 1}, {"0": 2, "1": 1}, "balanced"]}
+        phase4_cost, phase4_params, phase4_scores = self.phase("phase4", param4)
 
 class ExtraTreeTuning(RandomForestTuning):
     pass
@@ -252,44 +259,3 @@ class XGBoostingTuning(ParameterTuning):
 
         param5 = {'reg_alpha':[1e-5, 1e-2, 0.1, 1.0, 100.0]}
         phase5_cost, phase5_params, phase5_scores = self.phase("phase5", param5, True)
-
-if __name__ == "__main__":
-    drop_fields = []
-
-    N = 650 - len(drop_fields)
-    binsize, topX = 4, 500
-    interaction_information = True
-
-    filepath_training = "{}/../input/train.csv".format(BASEPATH)
-    filepath_testing = "{}/../input/test.csv".format(BASEPATH)
-    filepath_cache_1 = "{}/../input/{}_training_dataset.cache".format(BASEPATH, N)
-    filepath_ii = "{}/../input/transform2=True_testing=-1_type=2_binsize={}_combination=2.pkl".format(BASEPATH, binsize)
-    filepath_cache_ii = "{}/../input/transform2=True_testing=-1_type=2_binsize={}_combination=2.cache.pkl".format(BASEPATH, binsize)
-    filepath_tuning = "{}/../parameter_tuning/xgboosting_classifier.pkl".format(BASEPATH)
-
-    xgboosting, train_x = None, None
-    if os.path.exists(filepath_tuning):
-        xgboosting = load_cache(filepath_tuning)
-    else:
-        train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
-
-        if interaction_information:
-            if os.path.exists(filepath_cache_ii):
-                train_x, test_x = load_cache(filepath_cache_ii)
-            else:
-                for (layer1, layer2), value in load_interaction_information(filepath_ii, topX):
-                    train_x["{}-{}".format(layer1, layer2)] = train_x[layer1].values * train_x[layer2].values * value
-                    test_x["{}-{}".format(layer1, layer2)] = test_x[layer1].values * test_x[layer2].values * value
-
-                save_cache((train_x, test_x), filepath_cache_ii)
-
-        train_x["Target"] = train_y.values
-        train_x = train_x.head(int(len(train_x)*0.9))
-
-        xgboosting = XGBoostingTuning("Target", "ID", "classifier")
-        xgboosting.set_train(train_x)
-        xgboosting.set_filepath(filepath_tuning)
-
-    log("{} data records with {} features".format(len(train_x), len(train_x.columns)))
-
-    xgboosting.process()

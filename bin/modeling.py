@@ -116,7 +116,7 @@ def learning(thread, nfold, estimators, weight, interaction_information, kmeans)
               ]
 
     layer2_model_name = "shallow_gridsearch_logistic_regressor"
-    model_folder = "{}/../prediction_model/ensemble_learning/nfold={}_models={}_feature={}_estimators={}_binsize={}_topX={}".format(\
+    model_folder = "{}/../etc/prediction_model/ensemble_learning/nfold={}_models={}_feature={}_estimators={}_binsize={}_topX={}".format(\
                         BASEPATH, nfold, len(models), number_of_feature, estimators, binsize, topX)
 
     print "Data Distribution is ({}, {}), and then the number of feature is {}".format(np.sum(train_Y==0), np.sum(train_Y==1), number_of_feature),
