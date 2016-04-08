@@ -151,6 +151,7 @@ class RandomForestTuning(ParameterTuning):
         self.default_criterion, self.criterion = "entropy", None
         self.default_max_features, self.max_features = 0.5, None
         self.default_max_depth, delf.max_depth = 8, None
+        self.default_class_weight, self.class_weight = {"0": 1, "1": 1}, None
 
     def get_model_instance(self):
         n_estimator = self.get_value("n_estimator")
@@ -174,8 +175,11 @@ class RandomForestTuning(ParameterTuning):
         phase1_cost, phase1_params, phase1_scores = self.phase("phase1", {})
 
         param2 = {'max_depth': range(3, 11, 2), 'max_features': [ratio for ratio in [0.05, 0.1, 0.15, 0.2]], "criterion": ["gini", "entropy"]}
-        phase2_cost, phase2_params, phase2_scores = self.phase("phase2", param2, True)
+        phase2_cost, phase2_params, phase2_scores = self.phase("phase2", param2)
 
+
+        param3 = {"class_weight": [{"0": 1, "1": 1}, {"0": 1.5, "1": 1}, {"0": 2, "1": 1}, "balanced"]}
+        phase3_cost, phase3_params, phase3_scores = self.phase("phase3", param3)
 
 class ExtraTreeTuning(RandomForestTuning):
     pass
