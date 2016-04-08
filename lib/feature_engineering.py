@@ -5,6 +5,7 @@ import time
 import pprint
 import random
 
+import re
 import dit
 import numpy as np
 import pandas as pd
@@ -201,7 +202,8 @@ class InteractionInformation(object):
             self.results_couple[key] = v
 
             if self.save_size < 0:
-                save_cache(self.results_couple, self.filepath_couple)
+                self.write_cache(True)
+
                 self.save_size = self.ori_save_size
             else:
                 self.save_size -= 1
@@ -349,7 +351,6 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, filepath
             continue
 
         column_names = [dataset.columns[idx] for idx in pair]
-        print column_names
 
         ii.add_item(column_names)
 
@@ -371,3 +372,26 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, filepath
     ii.write_cache(results=True)
 
     return ii.results_couple
+
+def merge_binsize(filepath_output, pattern, topX=500):
+    dfs = []
+
+    for filepath in glob.glob(pattern):
+        if filepath.find("cache") == -1:
+            filename = os.path.basename(filepath)
+            binsize = re.search("(binsize=(\d+))", filename).groups()[0]
+
+            index, series = [], {"{}_value".format(binsize): [], "{}_rank".format(binsize): []}
+            for key, value in load_interaction_information(filepath, topX):
+                index.append(";".join(key))
+                series["{}_value".format(binsize)].append(value)
+                series["{}_rank".format(binsize)].append(len(index))
+
+            dfs.append(pd.DataFrame(series, index=index))
+
+    # Merge
+    results = pd.concat(dfs, axis=1)
+    results.to_csv(filepath_output)
+
+if __name__ == "__main__":
+    merge_binsize("../input/merge_binsize.csv", "../input/transform2*testing=-1*type=2*binsize=*pkl", 1000)

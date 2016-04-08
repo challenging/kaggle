@@ -40,12 +40,12 @@ def learning(thread, nfold, estimators, weight, interaction_information, kmeans)
     filepath_training = "{}/../input/train.csv".format(BASEPATH)
     filepath_testing = "{}/../input/test.csv".format(BASEPATH)
     filepath_cache_1 = "{}/../input/{}_training_dataset.cache".format(BASEPATH, N)
-    filepath_ii = "{}/../input/transform2=True_testing=-1_type=2_binsize={}.pkl".format(BASEPATH, binsize)
-    filepath_cache_ii = "{}/../input/transform2=True_testing=-1_type=2_binsize={}.cache.pkl".format(BASEPATH, binsize)
+    filepath_ii = "{}/../input/transform2=True_testing=-1_type=2_binsize={}_combination=2.pkl".format(BASEPATH, binsize)
+    filepath_cache_ii = "{}/../input/transform2=True_testing=-1_type=2_binsize={}_combination=2.cache.pkl".format(BASEPATH, binsize)
 
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
-    if interaction_information > -1:
+    if interaction_information:
         if os.path.exists(filepath_cache_ii):
             train_x, test_x = load_cache(filepath_cache_ii)
         else:
@@ -108,9 +108,9 @@ def learning(thread, nfold, estimators, weight, interaction_information, kmeans)
               ("shallow_xgboosting_classifier", {}),
               ("cluster_kmeans_16", cluster_kmeans16_setting),
               ("cluster_kmeans_64", cluster_kmeans64_setting),
-              ("cluster_kmeans_256", cluster_kmeans256_setting),
+              #("cluster_kmeans_256", cluster_kmeans256_setting),
               ("deep_layer3_neuron2000", deep_layer3_neurno2000_setting),
-              ("deep_layer5_neuron2000", deep_layer5_neurno2000_setting),
+              #("deep_layer5_neuron2000", deep_layer5_neurno2000_setting),
               #"shallow_gradientboosting_regressor",
               #"shallow_gradientboosting_classifier"
               ]

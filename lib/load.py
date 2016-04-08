@@ -203,7 +203,7 @@ def load_interaction_information(filepath, count=500):
     for key, value in sorted(ranking.items(), key=operator.itemgetter(1), reverse=True):
         yield (key.split("-")), value
 
-        if count < 0:
+        if count < 2:
             break
         else:
             count -= 1
@@ -230,7 +230,7 @@ def load_cache(filepath):
 
         log("Load {} from cache, {}".format(obj.__class__, filepath), INFO)
     except ValueError as e:
-        log("Error when loading pickle file so removing it", WARN)
+        log("Error when loading pickle file so removing {}".format(filepath), WARN)
 
         os.remove(filepath)
         sys.exit(100)
