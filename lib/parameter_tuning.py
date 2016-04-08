@@ -177,7 +177,7 @@ class RandomForestTuning(ParameterTuning):
         phase2_cost, phase2_params, phase2_scores = self.phase("phase2", param2, True)
 
 
-class ExtraTreeTuning(ParameterTuning):
+class ExtraTreeTuning(RandomForestTuning):
     pass
 
 class XGBoostingTuning(ParameterTuning):
