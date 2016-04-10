@@ -18,11 +18,12 @@ from load import load_data, data_transform_2, load_interaction_information, save
 from parameter_tuning import XGBoostingTuning, RandomForestTuning, ExtraTreeTuning
 
 @click.command()
+@click.option("--thread", default=1, help="Number of thread")
 @click.option("--is-testing", is_flag=True, help="Testing mode")
 @click.option("--methodology", required=True, help="Tune parameters of which methodology")
 @click.option("--binsize", default=16, help="bin/bucket size setting")
 @click.option("--combinations-size", default=2, help="size of combinations")
-def tuning(methodology, binsize, combinations_size, is_testing):
+def tuning(methodology, binsize, combinations_size, is_testing, thread):
     drop_fields = []
 
     N = 650 - len(drop_fields)
@@ -57,19 +58,19 @@ def tuning(methodology, binsize, combinations_size, is_testing):
 
         if methodology.find("xg") > -1:
             if methodology[-1] == "c":
-                algorithm = XGBoostingTuning("Target", "ID", "classifier", n_jobs=4)
+                algorithm = XGBoostingTuning("Target", "ID", "classifier", n_jobs=thread)
             elif methodology[-1] == "r":
-                algorithm = XGBoostingTuning("Target", "ID", "regressor", n_jobs=4))
+                algorithm = XGBoostingTuning("Target", "ID", "regressor", n_jobs=thread)
         elif methodology.find("rf") > -1:
             if methodology[-1] == "c":
-                algorithm = RandomForestTuning("Target", "ID", "classifier", n_jobs=4))
+                algorithm = RandomForestTuning("Target", "ID", "classifier", n_jobs=thread)
             elif methodology[-1] == "r":
-                algorithm = RandomForestTuning("Target", "ID", "regressor", n_jobs=4))
+                algorithm = RandomForestTuning("Target", "ID", "regressor", n_jobs=thread)
         elif methodology.find("et") > -1:
             if methodology[-1] == "c":
-                algorithm = ExtraTreeTuning("Target", "ID", "classifier", n_jobs=4))
+                algorithm = ExtraTreeTuning("Target", "ID", "classifier", n_jobs=thread)
             elif methodology[-1] == "r":
-                algorithm = ExtraTreeTuning("Target", "ID", "regressor", n_jobs=4))
+                algorithm = ExtraTreeTuning("Target", "ID", "regressor", n_jobs=thread)
 
         algorithm.set_train(train_x)
         algorithm.set_filepath(filepath_tuning)
