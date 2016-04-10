@@ -6,7 +6,6 @@ import sys
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-import matplotlib.pylab as plt
 
 from sklearn import cross_validation, metrics   #Additional scklearn functions
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
