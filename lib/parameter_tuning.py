@@ -80,7 +80,7 @@ class ParameterTuning(object):
             if not micro_tuning:
                 log("Fail so terminate due to the cost of phase2-model is {}(> {}), and the params is {}".format(cost, old_cost, params), WARN)
 
-                sys.exit(1)
+                sys.exit(0)
 
     def get_value(self, name):
         return getattr(self, name) if getattr(self, name) else getattr(self, "default_{}".format(name))
@@ -131,7 +131,7 @@ class ParameterTuning(object):
 
                 gsearch2 = GridSearchCV(estimator=self.get_model_instance(),
                                         param_grid=advanced_params,
-                                        scoring=self.cost,
+                                        scoring=make_scorer(log_loss),
                                         n_jobs=self.n_jobs,
                                         iid=False,
                                         cv=self.cv,
@@ -246,7 +246,7 @@ class XGBoostingTuning(ParameterTuning):
                                      colsample_bytree=colsample_bytree,
                                      reg_alpha=reg_alpha,
                                      objective=self.objective,
-                                     nthread=self.n_jobs,
+                                     nthread=4,
                                      scale_pos_weight=1,
                                      seed=self.random_state)
 
@@ -260,7 +260,7 @@ class XGBoostingTuning(ParameterTuning):
                                     colsample_bytree=colsample_bytree,
                                     reg_alpha=reg_alpha,
                                     objective=self.objective,
-                                    nthread=self.n_jobs,
+                                    nthread=4,
                                     scale_pos_weight=1,
                                     seed=self.random_state)
 
