@@ -27,6 +27,7 @@ def tuning(methodology, binsize, combinations_size, is_testing):
 
     N = 650 - len(drop_fields)
     binsize, topX = 4, 500
+    n_jobs = 4
 
     filepath_training = "{}/../input/train.csv".format(BASEPATH)
     filepath_testing = "{}/../input/test.csv".format(BASEPATH)
@@ -56,19 +57,19 @@ def tuning(methodology, binsize, combinations_size, is_testing):
 
         if methodology.find("xg") > -1:
             if methodology[-1] == "c":
-                algorithm = XGBoostingTuning("Target", "ID", "classifier")
+                algorithm = XGBoostingTuning("Target", "ID", "classifier", n_jobs=4)
             elif methodology[-1] == "r":
-                algorithm = XGBoostingTuning("Target", "ID", "regressor")
+                algorithm = XGBoostingTuning("Target", "ID", "regressor", n_jobs=4))
         elif methodology.find("rf") > -1:
             if methodology[-1] == "c":
-                algorithm = RandomForestTuning("Target", "ID", "classifier")
+                algorithm = RandomForestTuning("Target", "ID", "classifier", n_jobs=4))
             elif methodology[-1] == "r":
-                algorithm = RandomForestTuning("Target", "ID", "regressor")
+                algorithm = RandomForestTuning("Target", "ID", "regressor", n_jobs=4))
         elif methodology.find("et") > -1:
             if methodology[-1] == "c":
-                algorithm = ExtraTreeTuning("Target", "ID", "classifier")
+                algorithm = ExtraTreeTuning("Target", "ID", "classifier", n_jobs=4))
             elif methodology[-1] == "r":
-                algorithm = ExtraTreeTuning("Target", "ID", "regressor")
+                algorithm = ExtraTreeTuning("Target", "ID", "regressor", n_jobs=4))
 
         algorithm.set_train(train_x)
         algorithm.set_filepath(filepath_tuning)
