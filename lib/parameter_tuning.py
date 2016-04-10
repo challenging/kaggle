@@ -267,7 +267,7 @@ class XGBoostingTuning(ParameterTuning):
     def process(self):
         phase1_cost, phase1_params, phase1_scores = self.phase("phase1", {})
 
-        param2 = {'max_depth':range(3,16,2), 'min_child_weight':range(1, 10, 2)}
+        param2 = {'max_depth':range(5, 12, 2), 'min_child_weight':range(1, 8, 2)}
         phase2_cost, phase2_params, phase2_scores = self.phase("phase2", param2, True)
 
         param3 = {'gamma':[i/10.0 for i in range(0,5)]}
