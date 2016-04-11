@@ -5,17 +5,17 @@ import sys
 import numpy as np
 import matplotlib.pylab as plt
 
-from matplotlib.pyplot import cm 
+from matplotlib.pyplot import cm
 from matplotlib.font_manager import FontProperties
 
 from load import load_cache
 
-def barchart(learning_logloss):
+def barchart(learning_cost):
     plt.figure(figsize=(13, 7))
 
-    colors = cm.rainbow(np.linspace(0, 1, len(learning_logloss.logloss.keys())))
-    for model_name, color in zip(learning_logloss.logloss.keys(), colors):
-        values = learning_logloss.logloss[model_name]
+    colors = cm.rainbow(np.linspace(0, 1, len(learning_cost.cost.keys())))
+    for model_name, color in zip(learning_cost.cost.keys(), colors):
+        values = learning_cost.cost[model_name]
         plt.plot([idx for idx in range(0, len(values))], values, color=color, label=model_name)
 
         for idx in range(0, len(values)):
@@ -34,6 +34,6 @@ def barchart(learning_logloss):
     plt.show()
 
 if __name__ == "__main__":
-    learning_logloss = load_cache(sys.argv[1])
+    learning_cost = load_cache(sys.argv[1])
 
-    barchart(learning_logloss)
+    barchart(learning_cost)

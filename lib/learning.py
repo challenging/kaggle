@@ -22,7 +22,7 @@ from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, Gradien
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.grid_search import GridSearchCV
-from sklearn.metrics import log_loss, make_scorer
+from sklearn.metrics import auc, log_loss, make_scorer
 
 # For Cluster
 from sklearn.cluster import KMeans, DBSCAN, AffinityPropagation, AgglomerativeClustering, SpectralClustering
@@ -44,54 +44,41 @@ class LearningFactory(object):
         LearningFactory.ensemble_params["ne"] = n_estimators
 
     @staticmethod
-    def cost_function(y, y_hat):
-        flog_loss_ = log_loss(y, y_hat) #, eps=1e-15, normalize=True, sample_weight=None)
-        return flog_loss_
-
-    @staticmethod
-    def get_model(pair):
+    def get_model(pair, cost_function=log_loss):
         model = None
         method, setting = pair
 
-        LL = make_scorer(LearningFactory.cost_function, greater_is_better=False)
+        LL = make_scorer(cost_function)
 
         if method.find("shallow") > -1:
             if method.find("linear_regressor") > -1:
-                gs = GridSearchCV(estimator=LinearRegression(), param_grid={}, n_jobs=LearningFactory.n_jobs, cv=2, verbose=0, scoring=LL)
-
-                model = Learning(method, gs)
+                model = Learning(method, LinearRegression(), cost_function)
             elif method.find("logistic_regressor") > -1:
-                params = {"C": [1e-04, 1e-02, 1e-01, 1, 1e+01, 1e+02, 1e+04], "solver": ["newton-cg", "lbfgs", "liblinear"]}
-
-                model = Learning(method, GridSearchCV(LogisticRegression(), params, verbose=1))#, scoring=LL))
+                model = Learning(method, LogisticRegression())
             elif method.find("regressor") > -1:
                 if method.find("extratree") > -1:
-                    gs = GridSearchCV(ExtraTreesRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                          max_depth=LearningFactory.ensemble_params["md"],
-                                                          max_features=LearningFactory.ensemble_params["mf"],
-                                                          random_state=LearningFactory.ensemble_params["rs"],
-                                                          n_jobs=-1),
-                                      param_grid={}, n_jobs=LearningFactory.n_jobs, cv=2, verbose=0, scoring=LL)
+                    gs = ExtraTreesRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
+                                             max_depth=LearningFactory.ensemble_params["md"],
+                                             max_features=LearningFactory.ensemble_params["mf"],
+                                             random_state=LearningFactory.ensemble_params["rs"],
+                                             n_jobs=-1)
                     model = Learning(method, gs)
                 elif method.find("randomforest") > -1:
-                    gs = GridSearchCV(RandomForestRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                            max_depth=LearningFactory.ensemble_params["md"],
-                                                            max_features=LearningFactory.ensemble_params["mf"],
-                                                            random_state=LearningFactory.ensemble_params["rs"],
-                                                            min_samples_split=4,
-                                                            min_samples_leaf=2,
-                                                            verbose=0,
-                                                            n_jobs=-1),
-                                      param_grid={}, n_jobs=LearningFactory.n_jobs, cv=2, verbose=0, scoring=LL)
+                    gs = RandomForestRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
+                                               max_depth=LearningFactory.ensemble_params["md"],
+                                               max_features=LearningFactory.ensemble_params["mf"],
+                                               random_state=LearningFactory.ensemble_params["rs"],
+                                               min_samples_split=4,
+                                               min_samples_leaf=2,
+                                               verbose=0,
+                                               n_jobs=-1)
                     model = Learning(method, gs)
                 elif method.find("gradientboosting") > -1:
-                    gs = GridSearchCV(GradientBoostingRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                                max_depth=LearningFactory.ensemble_params["md"],
-                                                                max_features=LearningFactory.ensemble_params["mf"],
-                                                                random_state=LearningFactory.ensemble_params["rs"],
-                                                                learning_rate=1e-01),
-                                      param_grid={}, n_jobs=LearningFactory.n_jobs, cv=2, verbose=0, scoring=LL)
-
+                    gs = GradientBoostingRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
+                                                   max_depth=LearningFactory.ensemble_params["md"],
+                                                   max_features=LearningFactory.ensemble_params["mf"],
+                                                   random_state=LearningFactory.ensemble_params["rs"],
+                                                   learning_rate=1e-01),
                     model = Learning(method, gs)
                 elif method.find("xgboosting") > -1:
                     model = Learning(method, xgb.XGBRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
@@ -100,37 +87,32 @@ class LearningFactory(object):
                                                               missing=np.nan, learning_rate=1e-02, subsample=0.9, colsample_bytree=0.85, objective="reg:linear"))
             elif method.find("classifier") > -1:
                 if method.find("extratree") > -1:
-                    gs = GridSearchCV(ExtraTreesClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                           max_depth=LearningFactory.ensemble_params["md"],
-                                                           max_features=LearningFactory.ensemble_params["mf"],
-                                                           random_state=LearningFactory.ensemble_params["rs"],
-                                                           n_jobs=-1),
-                                      param_grid={}, n_jobs=LearningFactory.n_jobs, cv=2, verbose=0, scoring=LL)
+                    gs = ExtraTreesClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
+                                              max_depth=LearningFactory.ensemble_params["md"],
+                                              max_features=LearningFactory.ensemble_params["mf"],
+                                              random_state=LearningFactory.ensemble_params["rs"],
+                                              n_jobs=-1)
                     model = Learning(method, gs)
                 elif method.find("randomforest") > -1:
-                    gs = GridSearchCV(RandomForestClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                             max_depth=LearningFactory.ensemble_params["md"],
-                                                             max_features=LearningFactory.ensemble_params["mf"],
-                                                             random_state=LearningFactory.ensemble_params["rs"],
-                                                             criterion="entropy",
-                                                             min_samples_split=4, min_samples_leaf=2, verbose=0, n_jobs=-1),
-                                      param_grid={}, n_jobs=LearningFactory.n_jobs, cv=2, verbose=0, scoring=LL)
+                    gs = RandomForestClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
+                                                max_depth=LearningFactory.ensemble_params["md"],
+                                                max_features=LearningFactory.ensemble_params["mf"],
+                                                random_state=LearningFactory.ensemble_params["rs"],
+                                                criterion="entropy",
+                                                min_samples_split=4, min_samples_leaf=2, verbose=0, n_jobs=-1)
                     model = Learning(method, gs)
                 elif method.find("gradientboosting") > -1:
-                    gs = GridSearchCV(GradientBoostingClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
+                    gs = GradientBoostingClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
                                                                  max_depth=LearningFactory.ensemble_params["md"],
                                                                  max_features=LearningFactory.ensemble_params["mf"],
                                                                  random_state=LearningFactory.ensemble_params["rs"],
-                                                                 learning_rate=1e-01),
-                                      param_grid={}, n_jobs=LearningFactory.n_jobs, cv=2, verbose=0, scoring=LL)
+                                                                 learning_rate=1e-01)
                     model = Learning(method, gs)
                 elif method.find("xgboosting") > -1:
                     model = Learning(method, xgb.XGBClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
                                                                max_depth=LearningFactory.ensemble_params["md"],
                                                                seed=LearningFactory.ensemble_params["rs"],
                                                                missing=np.nan, learning_rate=1e-02, subsample=0.9, colsample_bytree=0.85, objective="binary:logistic"))
-            elif method.find("svm") > -1:
-                    model = Learning(method, SVC(probability=True, random_state=LearningFactory.ensemble_params["rs"]))
             else:
                 log("Error model naming - {}".format(method), WARN)
         elif method.find("cluster") > -1:
@@ -152,9 +134,10 @@ class LearningFactory(object):
         return model
 
 class Learning(object):
-    def __init__(self, name, model):
+    def __init__(self, name, model, cost_function=log_loss):
         self.name = name.lower()
         self.model = model
+        self.cost_function = cost_function
 
     def init_deep_params(self, nfold, folder, input_dims,
                          number_of_layer, batch_size, dimension,
@@ -243,7 +226,7 @@ class Learning(object):
             self.ratio = ratio
         elif self.is_shallow_learning():
             if self.is_xgb():
-                self.model.fit(train_x, train_y, eval_metric="logloss")
+                self.model.fit(train_x, train_y)
             else:
                 self.model.fit(train_x, train_y)
         elif self.is_deep_learning():
@@ -273,7 +256,7 @@ class Learning(object):
             return None
 
     def cost(self, data, y_true):
-        return log_loss(y_true, self.predict(data))
+        return self.cost_function(y_true, self.predict(data))
 
     def coef(self):
         if self.is_shallow_learning():
@@ -284,18 +267,18 @@ class Learning(object):
         else:
             return self.model.get_weights()
 
-class LearningLogLoss(object):
+class LearningCost(object):
     def __init__(self, models, nfold):
-        self.logloss = {}
+        self.cost = {}
         for model in models:
-            self.logloss.setdefault(model, np.zeros(nfold).astype(float))
+            self.cost.setdefault(model, np.zeros(nfold).astype(float))
 
-    def insert_logloss(self, model_name, nfold, cost):
-        if model_name not in self.logloss:
-            self.logloss.setdefault(model_name, np.zeros(len(self.logloss.values()[0])))
-            log("Not Found {} in self.logloss, so creating it".format(model_name), WARN)
+    def insert_cost(self, model_name, nfold, cost):
+        if model_name not in self.cost:
+            self.cost.setdefault(model_name, np.zeros(len(self.cost.values()[0])))
+            log("Not Found {} in self.cost, so creating it".format(model_name), WARN)
 
-        self.logloss[model_name][nfold] += cost
+        self.cost[model_name][nfold] += cost
 
 class LearningQueue(object):
     def __init__(self, train_x, train_y, test_x, filepath=None):
@@ -307,10 +290,10 @@ class LearningQueue(object):
         self.test_x = test_x
         self.filepath = filepath
 
-    def setup_layer_info(self, layer_two_training_dataset, layer_two_testing_dataset, learning_logloss):
+    def setup_layer_info(self, layer_two_training_dataset, layer_two_testing_dataset, learning_cost):
         self.layer_two_training_dataset = layer_two_training_dataset
         self.layer_two_testing_dataset = layer_two_testing_dataset
-        self.learning_logloss = learning_logloss
+        self.learning_cost = learning_cost
 
     def put(self, folder, nfold, model_idx, dataset_idxs, model):
         self.learning_queue.put((folder, nfold, model_idx, dataset_idxs, model))
@@ -362,7 +345,7 @@ class LearningQueue(object):
                 if not os.path.isdir(folder):
                     os.makedirs(folder)
 
-                objs = (self.layer_two_training_dataset, self.layer_two_testing_dataset, self.learning_logloss)
+                objs = (self.layer_two_training_dataset, self.layer_two_testing_dataset, self.learning_cost)
                 save_cache(objs, self.filepath)
 
                 log("Save queue in {}".format(self.filepath), DEBUG)
@@ -401,7 +384,7 @@ class LearningThread(threading.Thread):
 
                 self.obj.insert_layer_two_training_dataset(test_x_idx, model.name, model_idx, training_results, model_folder)
                 self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, testing_results, model_folder)
-                self.obj.learning_logloss.insert_logloss(model_name, nfold, -1)
+                self.obj.learning_cost.insert_cost(model_name, nfold, -1)
             else:
                 model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])
 
@@ -415,12 +398,12 @@ class LearningThread(threading.Thread):
                 if np.isnan(cost):
                     log("The cost of '{}' model for {}th fold is NaN".format(model_name, nfold), WARN)
                 else:
-                    self.obj.learning_logloss.insert_logloss(model_name, nfold, cost)
+                    self.obj.learning_cost.insert_cost(model_name, nfold, cost)
 
                 log("The grid score is {}".format(model.grid_scores()), DEBUG)
 
             timestamp_end = time.time()
-            log("Cost {:02f} secends to train '{}' model for fold-{:02d}, and the logloss is {:.8f}".format(\
+            log("Cost {:02f} secends to train '{}' model for fold-{:02d}, and cost is {:.8f}".format(\
                     timestamp_end-timestamp_start, model.name, nfold, cost), INFO)
 
             self.obj.learning_queue.task_done()

@@ -24,18 +24,20 @@ from ensemble_learning import layer_one_model, layer_two_model, get_max_mean_min
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
 @click.command()
+@click.option("--cost", default="logloss", help="Cost function when modeling")
 @click.option("--nfold", default=10, help="Number of fold")
 @click.option("--estimators", default=100, help="Number of estimator")
 @click.option("--thread", default=1, help="Number of thread")
 @click.option("--weight", default=1, help="Weight of Class 0")
 @click.option("--interaction-information", required=False, type=(int, int), help="'binsize', 'topX'")
 @click.option("--kmeans", is_flag=True, help="Use the features of Kmeans")
-def learning(thread, nfold, estimators, weight, interaction_information, kmeans):
+def learning(thread, nfold, estimators, weight, interaction_information, kmeans, cost):
     drop_fields = []
     #drop_fields = ['v8','v23','v25','v36','v37','v46','v51','v53','v54','v63','v73','v75','v79','v81','v82','v89','v92','v95','v105','v107','v108','v109','v110','v116','v117','v118','v119','v123','v124','v128']
 
     N = 650 - len(drop_fields)
     binsize, topX = interaction_information
+    nn_dimension, nn_batchsize, nn_nepoch = 2048, 128, 3000
 
     filepath_training = "{}/../input/train.csv".format(BASEPATH)
     filepath_testing = "{}/../input/test.csv".format(BASEPATH)
@@ -77,25 +79,26 @@ def learning(thread, nfold, estimators, weight, interaction_information, kmeans)
                                     training_set=(training_dataset, train_Y),
                                     testing_set=(testing_dataset, test_id),
                                     folder=None,
+                                    cost_string=cost,
                                     verbose=0, save_best_only=False)
 
     deep_layer3_neurno2000_setting = {"folder": None, # will change it after folding
                                       "input_dims": number_of_feature,
-                                      "batch_size": 128,
+                                      "batch_size": nn_batchsize,
                                       "number_of_layer": 3,
-                                      "dimension": 2000,
+                                      "dimension": nn_dimension,
                                       "callbacks": [checkpointer],
-                                      "nepoch": 3000,
+                                      "nepoch": nn_nepoch,
                                       "validation_split": 0,
                                       "class_weight": {0: weight, 1: 1}}
 
     deep_layer5_neurno2000_setting = {"folder": None, # will change it after folding
                                       "input_dims": number_of_feature,
-                                      "batch_size": 128,
+                                      "batch_size": nn_batchsize,
                                       "number_of_layer": 5,
-                                      "dimension": 2000,
+                                      "dimension": nn_dimension,
                                       "callbacks": [copy.deepcopy(checkpointer)],
-                                      "nepoch": 3000,
+                                      "nepoch": nn_nepoch,
                                       "validation_split": 0,
                                       "class_weight": {0: weight, 1: 1}}
 
@@ -111,8 +114,6 @@ def learning(thread, nfold, estimators, weight, interaction_information, kmeans)
               #("cluster_kmeans_256", cluster_kmeans256_setting),
               ("deep_layer3_neuron2000", deep_layer3_neurno2000_setting),
               #("deep_layer5_neuron2000", deep_layer5_neurno2000_setting),
-              #"shallow_gradientboosting_regressor",
-              #"shallow_gradientboosting_classifier"
               ]
 
     layer2_model_name = "shallow_gridsearch_logistic_regressor"
@@ -126,12 +127,12 @@ def learning(thread, nfold, estimators, weight, interaction_information, kmeans)
     print "prepare to save data in {}".format(model_folder)
 
     # Phase 1. --> Model Training
-    layer_2_train_x, layer_2_test_x, learning_loss = layer_one_model(model_folder, train_X, train_Y, test_X, test_id, models, layer2_model_name, n_folds=nfold, number_of_thread=thread,
+    layer_2_train_x, layer_2_test_x, learning_loss = layer_one_model(model_folder, train_X, train_Y, test_X, test_id, models, layer2_model_name, cost_string=cost, n_folds=nfold, number_of_thread=thread,
                              filepath_queue="{}/queue.pickle".format(model_folder), filepath_nfold="{}/nfold.pickle".format(model_folder))
 
     # Phase 2. --> Model Training
     results = layer_two_model(models, layer_2_train_x, train_Y, test_id, layer_2_test_x, learning_loss, (layer2_model_name, None),
-                              "{}/training.csv".format(model_folder), "{}/testing.csv".format(model_folder), "{}/logloss.pickle".format(model_folder))
+                              "{}/training.csv".format(model_folder), "{}/testing.csv".format(model_folder), "{}/logloss.pickle".format(model_folder), cost_string=cost)
 
     # Save the submission CSV file
     filepath_output = "{}/kaggle_BNP_submission_{}.csv".format(model_folder, layer2_model_name)

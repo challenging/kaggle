@@ -10,15 +10,12 @@ import xgboost as xgb
 from sklearn import cross_validation, metrics   #Additional scklearn functions
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.grid_search import GridSearchCV   #Perforing grid search
-from sklearn.metrics import log_loss, make_scorer
+from sklearn.metrics import auc, log_loss, make_scorer
 
 from utils import log, INFO, WARN
 from load import load_data, data_transform_2, load_cache, save_cache, load_interaction_information
 
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
-
-def score_function(y, y_hat):
-    flog_loss_ = log_loss(y, y_hat)
 
 class ParameterTuning(object):
     def __init__(self, target, data_id, method, n_estimator, cost, objective, cv, n_jobs):
@@ -28,6 +25,11 @@ class ParameterTuning(object):
 
         self.n_estimator = n_estimator
         self.cost = cost
+        if self.cost == "logloss":
+            self.cost_function = log_loss
+        elif self.cost == "auc":
+            self.cost_function = auc
+
         self.objective = objective
         self.cv = cv
         self.n_jobs = n_jobs
@@ -111,7 +113,7 @@ class ParameterTuning(object):
         else:
             gsearch1 = GridSearchCV(estimator=self.get_model_instance(),
                                     param_grid=params,
-                                    scoring=make_scorer(log_loss),
+                                    scoring=make_scorer(self.cost_function),
                                     n_jobs=self.n_jobs,
                                     iid=False,
                                     cv=self.cv,
@@ -145,7 +147,7 @@ class ParameterTuning(object):
 
                 gsearch2 = GridSearchCV(estimator=self.get_model_instance(),
                                         param_grid=advanced_params,
-                                        scoring=make_scorer(log_loss),
+                                        scoring=make_scorer(self.cost_function),
                                         n_jobs=self.n_jobs,
                                         iid=False,
                                         cv=self.cv,
@@ -174,12 +176,12 @@ class ParameterTuning(object):
     def get_training_score(self, model):
         if self.method == "classifier":
             predicted_proba = model.predict_proba(self.train[self.predictors])[:,1]
-            logloss = log_loss(self.train[self.target], predicted_proba)
-            log("The {} of training dataset is {:.8f}".format(self.cost, logloss))
+            cost = self.cost_function(self.train[self.target], predicted_proba)
+            log("The {} of training dataset is {:.8f}".format(self.cost, cost))
         elif self.method == "regressor":
             predicted_proba = model.predict(self.train[self.predictors])
-            logloss = log_loss(self.train[self.target], predicted_proba)
-            log("The {} of training dataset is {:.8f}".format(self.cost, logloss))
+            cost = self.cost_function(self.train[self.target], predicted_proba)
+            log("The {} of training dataset is {:.8f}".format(self.cost, cost))
         else:
             log("???? {}".format(self.method))
 
@@ -187,7 +189,7 @@ class ParameterTuning(object):
         raise NotImplementError
 
 class RandomForestTuning(ParameterTuning):
-    def __init__(self, target, data_id, method, n_estimator=200, cost="log_loss", objective="entropy", cv=5, n_jobs=-1):
+    def __init__(self, target, data_id, method, n_estimator=200, cost="logloss", objective="entropy", cv=5, n_jobs=-1):
         ParameterTuning.__init__(self, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
 
         self.default_criterion, self.criterion = "entropy", None
@@ -237,7 +239,7 @@ class ExtraTreeTuning(RandomForestTuning):
     pass
 
 class XGBoostingTuning(ParameterTuning):
-    def __init__(self, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=5, n_jobs=-1):
+    def __init__(self, target, data_id, method, n_estimator=200, cost="logloss", objective="binary:logistic", cv=5, n_jobs=-1):
         ParameterTuning.__init__(self, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
 
         self.default_learning_rate, self.learning_rate = 0.1, None

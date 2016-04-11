@@ -10,7 +10,7 @@ from sklearn.cross_validation import StratifiedKFold
 from sklearn.metrics import log_loss
 from sklearn.utils import shuffle
 
-from learning import LearningFactory, Learning, LearningQueue, LearningLogLoss
+from learning import LearningFactory, Learning, LearningQueue, LearningCost
 from utils import log, INFO
 from load import load_cache, save_cache
 
@@ -38,23 +38,23 @@ def store_layer_output(models, dataset, filepath, targets=[]):
     pd.DataFrame(results_of_layer).to_csv(filepath, index=False)
 
 def layer_one_model(model_folder, train_x, train_y, test_x, test_id, models, layer2_model_name,
-                    n_folds=10, number_of_thread=1, filepath_queue=None, filepath_nfold=None):
+                    cost_string="logloss", n_folds=10, number_of_thread=1, filepath_queue=None, filepath_nfold=None):
 
     layer_two_training_dataset = np.zeros((train_x.shape[0], len(models)))
     layer_two_testing_dataset = np.zeros((test_x.shape[0], len(models), n_folds))
 
-    learning_logloss, learning_queue = None, LearningQueue(train_x, train_y, test_x, filepath_queue)
+    learning_cost, learning_queue = None, LearningQueue(train_x, train_y, test_x, filepath_queue)
     if filepath_queue and os.path.exists(filepath_queue):
-        (layer_two_training_dataset, layer_two_testing_dataset, learning_logloss) = load_cache(filepath_queue)
-        learning_queue.setup_layer_info(layer_two_training_dataset, layer_two_testing_dataset, learning_logloss)
+        (layer_two_training_dataset, layer_two_testing_dataset, learning_cost) = load_cache(filepath_queue)
+        learning_queue.setup_layer_info(layer_two_training_dataset, layer_two_testing_dataset, learning_cost)
 
-        learning_logloss = learning_queue.learning_logloss
+        learning_cost = learning_queue.learning_cost
     else:
         only_models = [model[0] for model in models]
         only_models += [layer2_model_name]
 
-        learning_logloss = LearningLogLoss(only_models, n_folds)
-        learning_queue.setup_layer_info(layer_two_training_dataset, layer_two_testing_dataset, learning_logloss)
+        learning_cost = LearningCost(only_models, n_folds)
+        learning_queue.setup_layer_info(layer_two_training_dataset, layer_two_testing_dataset, learning_cost)
 
         learning_queue.dump()
 
@@ -88,10 +88,16 @@ def layer_one_model(model_folder, train_x, train_y, test_x, test_id, models, lay
     for idx in range(0, len(learning_queue.layer_two_testing_dataset)):
         layer_two_testing_dataset[idx] = learning_queue.layer_two_testing_dataset[idx].mean(axis=1)
 
-    return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_logloss
+    return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_cost
 
-def layer_two_model(models, train_x, train_y, test_id, test_x, learning_logloss, model_name, filepath_training, filepath_testing, filepath_logloss,
-                    deep_setting={}, optional_train_x=[], optional_test_x=[]):
+def layer_two_model(models, train_x, train_y, test_id, test_x, learning_cost, model_name, filepath_training, filepath_testing, filepath_cost,
+                    cost_string="logloss"):
+
+    cost_function = None
+    if cost_string == "logloss":
+        cost_function = log_loss
+    elif cost_string == "auc":
+        cost_function = auc
 
     only_models = [model[0] for model in models]
 
@@ -103,12 +109,12 @@ def layer_two_model(models, train_x, train_y, test_id, test_x, learning_logloss,
     log("The decision function is {}".format(model.coef()), INFO)
 
     min_probabilities, max_probabilities, mean_probabilities = get_max_mean_min_probabilities(train_x)
-    cost_min = log_loss(train_y, min_probabilities)
-    cost_mean = log_loss(train_y, mean_probabilities)
-    cost_max = log_loss(train_y, max_probabilities)
+    cost_min = cost_function(train_y, min_probabilities)
+    cost_mean = cost_function(train_y, mean_probabilities)
+    cost_max = cost_function(train_y, max_probabilities)
 
-    # If use average, the logloss will be ...
-    log("The logloss of min/mean/max-model is {:.8f}/{:.8f}/{:.8f}".format(cost_min, cost_mean, cost_max), INFO)
+    # If use average, the cost will be ...
+    log("The cost of min/mean/max-model is {:.8f}/{:.8f}/{:.8f}".format(cost_min, cost_mean, cost_max), INFO)
 
     targets = []
     for key, values in {"Target": train_y, "Probability of Layer 2": training_prediction_results, "min.": min_probabilities, "max.": max_probabilities, "avg.": mean_probabilities}.items():
@@ -123,16 +129,16 @@ def layer_two_model(models, train_x, train_y, test_id, test_x, learning_logloss,
 
     store_layer_output(only_models, test_x, filepath_testing, targets=targets)
 
-    cost = log_loss(train_y, training_prediction_results)
+    cost = cost_function(train_y, training_prediction_results)
 
     max_proba = np.max(training_prediction_results, axis=0)
     norm_training_prediction_results = training_prediction_results / max_proba
-    norm_cost = log_loss(train_y, norm_training_prediction_results)
+    norm_cost = cost_function(train_y, norm_training_prediction_results)
 
-    log("The logloss of layer2 model is {:.8f}/{:8f}".format(cost, norm_cost), INFO)
+    log("The cost of layer2 model is {:.8f}/{:8f}".format(cost, norm_cost), INFO)
 
     # Hardcode to set nfold to be ZERO, and then save it
-    learning_logloss.insert_logloss(model.name, 0, cost)
-    save_cache(learning_logloss, filepath_logloss)
+    learning_cost.insert_cost(model.name, 0, cost)
+    save_cache(learning_cost, filepath_cost)
 
     return model.predict(test_x)

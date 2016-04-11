@@ -7,7 +7,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from sklearn.metrics import log_loss
+from sklearn.metrics import log_loss, auc
 
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Merge
@@ -17,12 +17,17 @@ from keras.callbacks import ModelCheckpoint
 from utils import log, DEBUG, INFO
 
 class KaggleCheckpoint(ModelCheckpoint):
-    def __init__(self, filepath, save_best_only=True, training_set=(None, None), testing_set=(None, None), folder=None, verbose=1):
+    def __init__(self, filepath, save_best_only=True, training_set=(None, None), testing_set=(None, None), folder=None, cost_string="logloss", verbose=1):
         ModelCheckpoint.__init__(self, filepath=filepath, save_best_only=save_best_only, verbose=1)
 
         self.training_x, self.training_y = training_set
         self.testing_x, self.testing_id, = testing_set
         self.folder = folder
+
+        if cost_string == "logloss":
+            self.cost_function = cost_string
+        elif cost_string == "auc":
+            self.cost_function = auc
 
     def save_results(self, filepath, proba, base_proba=None, is_testing=False):
         probas = [prob[0] if prob[0] else 0.0 for prob in proba]
@@ -77,9 +82,9 @@ class KaggleCheckpoint(ModelCheckpoint):
                         proba = self.model.predict_proba(self.testing_x)
                         self.save_results(filepath_testing, proba, base_proba, is_testing=True)
 
-                        logloss = log_loss(self.training_y, proba_training)
-                        norm_logloss = log_loss(self.training_y, norm_proba_training)
-                        log("Epoch {:05d}: current logloss is {:.8f}/{:.8f}".format(epoch+1, logloss, norm_logloss), INFO)
+                        cost = self.cost_function(self.training_y, proba_training)
+                        norm_cost = self.cost_function(self.training_y, norm_proba_training)
+                        log("Epoch {:05d}: current cost is {:.8f}/{:.8f}".format(epoch+1, cost, norm_cost), INFO)
                 else:
                     if self.verbose > 0:
                         log('Epoch %05d: %s did not improve' %(epoch, self.monitor), DEBUG)
