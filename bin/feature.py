@@ -16,6 +16,8 @@ import feature_engineering
 from utils import log, INFO
 from load import data_load, data_transform_2, save_cache, load_cache
 
+BASEPATH = "/Users/RungChiChen/Documents/kaggle/Santander Customer Satisfaction/input"
+
 @click.command()
 @click.option("--thread", default=1, help="Number of thread")
 @click.option("--transform2", is_flag=True, help="Transform source data by style-2")

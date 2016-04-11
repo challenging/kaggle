@@ -1,3 +1,5 @@
+# coding=UTF-8
+
 import os
 import sys
 import glob
@@ -10,9 +12,13 @@ import dit
 import numpy as np
 import pandas as pd
 
+import pandas.core.algorithms as algos
+
 from Queue import Queue
 from threading import Thread, Lock
+
 from itertools import combinations
+from scipy.stats import mode
 
 from sklearn.datasets import load_boston
 from sklearn.linear_model import LinearRegression, Ridge, Lasso, RandomizedLasso
@@ -300,11 +306,15 @@ class InteractionInformationThread(Thread):
 def load_dataset(filepath_cache, dataset, binsize=2):
     LABELS = "abcdefghijklmnopqrstuvwxyABCDEFGHIJKLMNOPQRSTUVWXY0123456789!@#$%^&*()_+~"
 
+    def less_replace(df, c, unique_values, labels):
+        for i, unique_value in enumerate(unique_values):
+            df[c][df[c] == unique_value] == labels[i]
+
     idxs = []
     if os.path.exists(filepath_cache):
         idxs, dataset = load_cache(filepath_cache)
     else:
-        count_raw = len(dataset[0].values)
+        count_raw = len(dataset[dataset.columns[0]].values)
         for idx, column in enumerate(dataset.columns):
             data_type = dataset.dtypes[idx]
             unique_values = dataset[column].unique()
@@ -313,19 +323,23 @@ def load_dataset(filepath_cache, dataset, binsize=2):
                 if column != "target":
                     if data_type == "object":
                         if len(unique_values) < len(LABELS):
-                            for i, unique_value in enumerate(unique_values):
-                                dataset[column][dataset[column] == unique_value] = LABELS[i]
-                            log("Change {} by unique type".format(column), INFO)
+                            less_replace(dataset, column, unique_values, LABELS)
+                            log("Change {} by unique type(size={})".format(column, len(unique_values)), INFO)
                         else:
                             log("The size of {} is too large({})".format(column, len(unique_values)), WARN)
-                            continue
                     else:
-                        count_nonzero = np.count_nonzero(dataset[column].values)
-                        if float(count_nonzero) / count_raw < 0.6:
-                            idx_nonzero = np.nonzero(dataset[column].values)
-                            dataset[column][idx_nonzero] = pd.qcut(dataset[column][idx_nonzero].values, binsize, labels=[c for c in LABELS[:binsize]])
+                        most_commons = mode(dataset[column].values, axis=None)
+                        most_common_value, most_common_count = most_commons[0][0], most_commons[1][0]
 
-                            dataset[column][~idx_nonzero] = "z"
+                        if float(most_common_count) / count_raw >= 0.3:
+                            dataset[column][dataset[column] == most_common_value] = "z"
+                            idxs_most_common = np.where(dataset[column][dataset[column] == most_common_value])[0]
+                            non_common_unique_values = np.unique(dataset[column][~idxs_most_common])
+                            if len(non_common_unique_values) < len(LABELS):
+                                for ii, unique_value in enumerate(non_common_unique_values):
+                                    dataset[column][dataset[column] == unique_value] = LABELS[ii]
+                            else:
+                                dataset[column][~idxs_most_common] = pd.qcut(dataset[column].values[~idx_most_common], binsize, labels=[c for c in LABELS[:binsize]])
                         else:
                             dataset[column] = pd.qcut(dataset[column].values, binsize, labels=[c for c in LABELS[:binsize]])
 
