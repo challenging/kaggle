@@ -103,7 +103,7 @@ class ParameterTuning(object):
         if phase in self.done:
             log("The {} is done so we skip it".format(phase))
             for key in params.keys():
-                log("The {} is {} based on {}".format(key, getattr(self, key)), phase)
+                log("The {} is {} based on {}".format(key, getattr(self, key), phase))
 
             infos = self.done[phase]
             if infos:
@@ -130,7 +130,7 @@ class ParameterTuning(object):
             if key in self.done:
                 log("The {} is done so we skip it".format(key))
                 for name in params.keys():
-                    log("The {} is {} based on {}".format(name, getattr(self, name)), key)
+                    log("The {} is {} based on {}".format(name, getattr(self, name), key))
 
                 infos = self.done[key]
                 if infos:
