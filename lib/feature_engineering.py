@@ -309,8 +309,8 @@ def load_dataset(filepath_cache, dataset, binsize=2):
             unique_values = dataset[column].unique()
 
             try:
-                if data_type != "object" and column != "target":
-                    if len(unique_values) < len(LABELS):
+                if column != "target":
+                    if data_type == "object" and len(unique_values) < len(LABELS):
                         for i, unique_value in enumerate(unique_values):
                             dataset[column][dataset[column] == unique_value] = LABELS[i]
                         log("Change {} by unique type".format(column), INFO)
