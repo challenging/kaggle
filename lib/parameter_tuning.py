@@ -224,14 +224,14 @@ class RandomForestTuning(ParameterTuning):
                                          max_depth=max_depth)
 
     def process(self):
-        phase1_cost, phase1_params, phase1_scores = self.phase("phase1", {})
+        self.phase("phase1", {})
 
         param2 = {'max_depth': range(6, 16, 2), 'max_features': [ratio for ratio in [0.25, 0.5, 0.75]], "min_samples_leaf": range(2, 10, 2), "min_samples_split": range(4, 10, 2)}
 
         if self.method == "classifier":
             param2["class_weight"] = [{0: 1, 1: 1}, {0: 1.5, 1: 1}, {0: 2, 1: 1}, "balanced"]
 
-        phase2_cost, phase2_params, phase2_scores = self.phase("phase2", param2)
+        self.phase("phase2", param2)
 
 class ExtraTreeTuning(RandomForestTuning):
     pass
