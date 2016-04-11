@@ -316,6 +316,8 @@ def load_dataset(filepath_cache, dataset, binsize=2):
     else:
         count_raw = len(dataset[dataset.columns[0]].values)
         for idx, column in enumerate(dataset.columns):
+            log("Try to process {}".format(column))
+
             data_type = dataset.dtypes[idx]
             unique_values = dataset[column].unique()
 
@@ -331,7 +333,8 @@ def load_dataset(filepath_cache, dataset, binsize=2):
                         most_commons = mode(dataset[column].values, axis=None)
                         most_common_value, most_common_count = most_commons[0][0], most_commons[1][0]
 
-                        if float(most_common_count) / count_raw >= 0.3:
+                        log("The ratio of common value is {} for {}".format(float(most_common_count) / count_raw, column), INFO)
+                        if float(most_common_count) / count_raw > 0.25:
                             dataset[column][dataset[column] == most_common_value] = "z"
                             idxs_most_common = np.where(dataset[column][dataset[column] == most_common_value])[0]
                             non_common_unique_values = np.unique(dataset[column][~idxs_most_common])
@@ -351,7 +354,7 @@ def load_dataset(filepath_cache, dataset, binsize=2):
                 else:
                     log("The type of {} is already categorical".format(column), INFO)
             except ValueError as e:
-                log("The size of unique values of {} is {}, greater than {}".format(column, len(unique_values), len(LABELS)), INFO)
+                log("The size of unique values of {} is {}, greater than {}".format(column, len(unique_values), binsize), INFO)
                 raise
 
         save_cache((idxs, dataset), filepath_cache)
