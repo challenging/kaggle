@@ -36,46 +36,50 @@ def tuning(methodology, binsize, combinations_size, is_testing, thread):
     filepath_ii = "{}/../input/transform2=True_testing=-1_type=2_binsize={}_combination={}.pkl".format(BASEPATH, binsize, combinations_size)
     filepath_tuning = "{}/../etc/parameter_tuning/{}_testing={}_binsize={}_combination={}.pkl".format(BASEPATH, methodology, is_testing, binsize, combinations_size)
 
-    algorithm, train_x = None, None
+    train_x = None
+    train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
+
+    for (layer1, layer2), value in load_interaction_information(filepath_ii, topX):
+        train_x["{}-{}".format(layer1, layer2)] = train_x[layer1].values * train_x[layer2].values * value
+        test_x["{}-{}".format(layer1, layer2)] = test_x[layer1].values * test_x[layer2].values * value
+
+    train_x["Target"] = train_y.values
+    train_x = train_x.head(int(len(train_x)*0.9))
+
+    if is_testing:
+        train_x = train_x.head(1000)
+
+    log("{} data records with {} features".format(len(train_x), len(train_x.columns)))
+
+    algorithm = None
+    if methodology.find("xg") > -1:
+        if methodology[-1] == "c":
+            algorithm = XGBoostingTuning("Target", "ID", "classifier", n_jobs=thread)
+        elif methodology[-1] == "r":
+            algorithm = XGBoostingTuning("Target", "ID", "regressor", n_jobs=thread)
+    elif methodology.find("rf") > -1:
+        if methodology[-1] == "c":
+            algorithm = RandomForestTuning("Target", "ID", "classifier", n_jobs=thread)
+        elif methodology[-1] == "r":
+            algorithm = RandomForestTuning("Target", "ID", "regressor", n_jobs=thread)
+    elif methodology.find("et") > -1:
+        if methodology[-1] == "c":
+            algorithm = ExtraTreeTuning("Target", "ID", "classifier", n_jobs=thread)
+        elif methodology[-1] == "r":
+            algorithm = ExtraTreeTuning("Target", "ID", "regressor", n_jobs=thread)
+
+    algorithm.set_train(train_x)
+    algorithm.set_filepath(filepath_tuning)
+
     if os.path.exists(filepath_tuning):
-        algorithm = load_cache(filepath_tuning)
-
-        log("{} data records with {} features".format(len(algorithm.train), len(algorithm.train.columns)))
+        params, done = load_cache(filepath_tuning)
+    '''
     else:
-        train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
-
-        for (layer1, layer2), value in load_interaction_information(filepath_ii, topX):
-            train_x["{}-{}".format(layer1, layer2)] = train_x[layer1].values * train_x[layer2].values * value
-            test_x["{}-{}".format(layer1, layer2)] = test_x[layer1].values * test_x[layer2].values * value
-
-        train_x["Target"] = train_y.values
-        train_x = train_x.head(int(len(train_x)*0.9))
-
-        if is_testing:
-            train_x = train_x.head(1000)
-
-        log("{} data records with {} features".format(len(train_x), len(train_x.columns)))
-
-        if methodology.find("xg") > -1:
-            if methodology[-1] == "c":
-                algorithm = XGBoostingTuning("Target", "ID", "classifier", n_jobs=thread)
-            elif methodology[-1] == "r":
-                algorithm = XGBoostingTuning("Target", "ID", "regressor", n_jobs=thread)
-        elif methodology.find("rf") > -1:
-            if methodology[-1] == "c":
-                algorithm = RandomForestTuning("Target", "ID", "classifier", n_jobs=thread)
-            elif methodology[-1] == "r":
-                algorithm = RandomForestTuning("Target", "ID", "regressor", n_jobs=thread)
-        elif methodology.find("et") > -1:
-            if methodology[-1] == "c":
-                algorithm = ExtraTreeTuning("Target", "ID", "classifier", n_jobs=thread)
-            elif methodology[-1] == "r":
-                algorithm = ExtraTreeTuning("Target", "ID", "regressor", n_jobs=thread)
-
-        algorithm.set_train(train_x)
-        algorithm.set_filepath(filepath_tuning)
-
-        save_cache(algorithm, filepath_tuning)
+        algorithm.done = {"phase1": None, "phase2": None, "micro-phase2": None, "phase3": None}
+        algorithm.max_depth = 11
+        algorithm.min_child_weight = 1
+        algorithm.gamma = 0
+    '''
 
     algorithm.process()
 

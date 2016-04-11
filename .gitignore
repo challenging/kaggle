@@ -3,4 +3,5 @@
 *.pyc
 *.csv
 *.pickle
+*.pkl
 *.twb

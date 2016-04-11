@@ -37,7 +37,9 @@ class ParameterTuning(object):
         self.best_cost = -np.inf
 
         self.train = None
+
         self.done = {}
+        self.params = {}
 
     def set_filepath(self, filepath):
         self.filepath = filepath
@@ -47,6 +49,12 @@ class ParameterTuning(object):
 
         predictors = [x for x in self.train.columns if x not in [self.target, self.data_id]]
         self.predictors = predictors
+
+    def save(self):
+        save_cache((self.params, self.done), self.filepath)
+
+    def load(self):
+        self.params, self.done = load_cache(self.filepath)
 
     def compare(self, cost):
         if cost > self.best_cost:
@@ -74,12 +82,14 @@ class ParameterTuning(object):
                 setattr(self, key, value)
                 log("Set {} to be {}".format(key, getattr(self, key)))
 
-            save_cache(self, self.filepath)
+            self.save()
         else:
             if not micro_tuning:
                 log("Fail so terminate due to the cost of phase2-model is {}(> {}), and the params is {}".format(cost, old_cost, params), WARN)
 
-                sys.exit(0)
+                for key, value in params.items():
+                    setattr(self, key, getattr(self, "default_{}".format(key)))
+
 
     def get_value(self, name):
         return getattr(self, name) if getattr(self, name) else getattr(self, "default_{}".format(name))
@@ -89,12 +99,15 @@ class ParameterTuning(object):
 
     def phase(self, phase, params, is_micro_tuning=False):
         gsearch1 = None
+        best_cost, best_params, scores = -np.inf, -np.inf, None
         if phase in self.done:
             log("The {} is done so we skip it".format(phase))
             for key in params.keys():
                 log("The {} is {} based on {}".format(key, getattr(self, key)), phase)
 
-            best_cost, best_params, scores, gsearch1 = self.done[phase]
+            infos = self.done[phase]
+            if infos:
+                best_cost, best_params, scores, gsearch1 = infos
         else:
             gsearch1 = GridSearchCV(estimator=self.get_model_instance(),
                                     param_grid=params,
@@ -119,7 +132,9 @@ class ParameterTuning(object):
                 for name in params.keys():
                     log("The {} is {} based on {}".format(name, getattr(self, name)), key)
 
-                micro_cost, micro_params, micro_scores, gsearch2 = self.done[key]
+                infos = self.done[key]
+                if infos:
+                    micro_cost, micro_params, micro_scores, gsearch2 = infos
             else:
                 advanced_params = {}
                 for name, value in best_params.items():
@@ -151,6 +166,12 @@ class ParameterTuning(object):
             model = gsearch1
             a, b, c = best_cost, best_params, scores
 
+        if model:
+            self.get_training_score(model)
+
+        return a, b, c, model
+
+    def get_training_score(self, model):
         if self.method == "classifier":
             predicted_proba = model.predict_proba(self.train[self.predictors])[:,1]
             logloss = log_loss(self.train[self.target], predicted_proba)
@@ -161,8 +182,6 @@ class ParameterTuning(object):
             log("The {} of training dataset is {:.8f}".format(self.cost, logloss))
         else:
             log("???? {}".format(self.method))
-
-        return a, b, c
 
     def process(self):
         raise NotImplementError
@@ -177,6 +196,14 @@ class RandomForestTuning(ParameterTuning):
         self.default_min_samples_split, self.min_samples_split = 4, None
         self.default_min_samples_leaf, self.min_samples_leaf = 2, None
         self.default_class_weight, self.class_weight = {0: 1, 1: 1}, None
+
+    def set_params(self):
+        self.params = {"criterion": self.criterion,
+                       "max_features": self.max_features,
+                       "max_depth": self.max_depth,
+                       "min_samples_split": self.min_samples_split,
+                       "min_samples_leaf": self.min_samples_leaf,
+                       "class_weight": self.class_weight}
 
     def get_model_instance(self):
         n_estimator = self.get_value("n_estimator")
@@ -223,6 +250,14 @@ class XGBoostingTuning(ParameterTuning):
 
         self.default_reg_alpha, self.reg_alpha = 0, None
 
+    def set_params(self):
+        self.params = {"max_depth": self.max_depth,
+                       "min_child_weight": self.min_child_weight,
+                       "gamma": self.gamma,
+                       "subsample": self.sub_sample,
+                       "colsample_bytree": self.colsample_bytree,
+                       "reg_alpha": self.reg_alpha}
+
     def get_model_instance(self):
         learning_rate = self.get_value("learning_rate")
         n_estimator = self.get_value("n_estimator")
@@ -264,16 +299,16 @@ class XGBoostingTuning(ParameterTuning):
                                     seed=self.random_state)
 
     def process(self):
-        phase1_cost, phase1_params, phase1_scores = self.phase("phase1", {})
+        self.phase("phase1", {})
 
-        param2 = {'max_depth':range(5, 12, 2), 'min_child_weight':range(1, 8, 2)}
-        phase2_cost, phase2_params, phase2_scores = self.phase("phase2", param2, True)
+        param2 = {'max_depth':range(7, 14, 2), 'min_child_weight':range(1, 4, 2)}
+        self.phase("phase2", param2, True)
 
-        param3 = {'gamma':[i/10.0 for i in range(0,5)]}
-        phase3_cost, phase3_params, phase3_scores = self.phase("phase3", param3)
+        param3 = {'gamma':[i/10.0 for i in range(0, 5)]}
+        self.phase("phase3", param3)
 
         param4 = {'subsample':[i/10.0 for i in range(6, 10)], 'colsample_bytree':[i/10.0 for i in range(6, 10)]}
-        phase4_cost, phase4_params, phase4_scores = self.phase("phase4", param4)
+        self.phase("phase4", param4)
 
         param5 = {'reg_alpha':[1e-5, 1e-2, 0.1, 1.0, 100.0]}
-        phase5_cost, phase5_params, phase5_scores = self.phase("phase5", param5, True)
+        self.phase("phase5", param5, True)

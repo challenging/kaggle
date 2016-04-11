@@ -230,7 +230,7 @@ def load_cache(filepath):
 
         log("Load {} from cache, {}".format(obj.__class__, filepath), INFO)
     except ValueError as e:
-        log("Error when loading pickle file so removing {}".format(filepath), WARN)
+        log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
 
         os.remove(filepath)
         sys.exit(100)
