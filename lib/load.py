@@ -201,7 +201,7 @@ def load_interaction_information(filepath, count=500):
             ranking[layer1.replace(";", "-")] = info
 
     for key, value in sorted(ranking.items(), key=operator.itemgetter(1), reverse=True):
-        yield (key.split("-")), value
+        yield (key.split("-")[:-1]), value
 
         if count < 2:
             break
@@ -247,11 +247,8 @@ if __name__ == "__main__":
 
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
-    filepath_interaction_information = "{}/../input/transform2=True_testing=-1_type=2_binsize=4.pkl".format(BASEPATH)
-    for layer1, layer2 in load_interaction_information(filepath_interaction_information):
-        print train_x[layer1].values[:10]
-        print train_x[layer2].values[:10]
-        train_x["t"] = train_x[layer1].values * train_x[layer2].values
-        print train_x["t"].values[:10]
+    filepath_interaction_information = "{}/../input/transform2=True_testing=-1_type=2_binsize=4_combination=2.pkl".format(BASEPATH)
+    for layers, value in load_interaction_information(filepath_interaction_information):
+        print layers, value
 
         break
