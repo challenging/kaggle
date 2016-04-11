@@ -103,7 +103,11 @@ def data_transform_2(filepath_training, filepath_testing, drop_fields=[], keep_n
     d_col_drops = []
 
     for i in range(len(df_data_types)):
-        df_all[str(df_data_types.index[i])+'_nan_'] = df_all[str(df_data_types.index[i])].map(lambda x:fill_nan_null(pd.isnull(x)))
+        key = str(df_data_types.index[i])+'_nan_'
+        tmp_column = df_all[str(df_data_types.index[i])].map(lambda x:fill_nan_null(pd.isnull(x)))
+
+        if len(tmp_column.unique()) > 1:
+            df_all[key] = tmp_column
 
     if not keep_nan:
         df_all = df_all.fillna(-9999)
@@ -125,7 +129,7 @@ def data_transform_2(filepath_training, filepath_testing, drop_fields=[], keep_n
                 dummies = pd.get_dummies(df_all[str(df_data_types.index[i])]).rename(columns=lambda x: str(df_data_types.index[i]) + '_' + str(x))
                 df_all_temp = pd.concat([df_all_temp, dummies], axis=1)
 
-    if isinstance(df_all_temp, pd.Series):
+    if isinstance(df_all_temp, pd.DataFrame):
         df_all_temp = df_all_temp.drop(['ID'],axis=1)
         df_all = pd.concat([df_all, df_all_temp], axis=1)
 
@@ -234,15 +238,15 @@ def load_cache(filepath):
 
 if __name__ == "__main__":
     drop_fields = []
-    BASEPATH = "."
+    BASEPATH = "/Users/RungChiChen/Documents/kaggle/Santander Customer Satisfaction"
 
-    filepath_training = "{}/../input/train.csv".format(BASEPATH)
-    filepath_testing = "{}/../input/test.csv".format(BASEPATH)
-    filepath_cache_1 = "{}/../input/650_training_dataset.cache".format(BASEPATH)
+    filepath_training = "{}/input/train.csv".format(BASEPATH)
+    filepath_testing = "{}/input/test.csv".format(BASEPATH)
+    filepath_cache_1 = "{}/input/training_dataset.cache".format(BASEPATH)
 
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
-    filepath_interaction_information = "{}/../input/transform2=True_testing=-1_type=2_binsize=4_combination=2.pkl".format(BASEPATH)
+    filepath_interaction_information = "{}/input/transform2=True_testing=-1_type=2_binsize=4_combination=2.pkl".format(BASEPATH)
     for layers, value in load_interaction_information(filepath_interaction_information):
         print layers, value
 

@@ -298,24 +298,37 @@ class InteractionInformationThread(Thread):
             self.ii.queue.task_done()
 
 def load_dataset(filepath_cache, dataset, binsize=2):
-    LABELS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXY0123456789!@#$%^&*()_+~"
+    LABELS = "abcdefghijklmnopqrstuvwxyABCDEFGHIJKLMNOPQRSTUVWXY0123456789!@#$%^&*()_+~"
 
     idxs = []
     if os.path.exists(filepath_cache):
         idxs, dataset = load_cache(filepath_cache)
     else:
+        count_raw = len(dataset[0].values)
         for idx, column in enumerate(dataset.columns):
             data_type = dataset.dtypes[idx]
             unique_values = dataset[column].unique()
 
             try:
                 if column != "target":
-                    if data_type == "object" and len(unique_values) < len(LABELS):
-                        for i, unique_value in enumerate(unique_values):
-                            dataset[column][dataset[column] == unique_value] = LABELS[i]
-                        log("Change {} by unique type".format(column), INFO)
+                    if data_type == "object":
+                        if len(unique_values) < len(LABELS):
+                            for i, unique_value in enumerate(unique_values):
+                                dataset[column][dataset[column] == unique_value] = LABELS[i]
+                            log("Change {} by unique type".format(column), INFO)
+                        else:
+                            log("The size of {} is too large({})".format(column, len(unique_values)), WARN)
+                            continue
                     else:
-                        dataset[column] = pd.qcut(dataset[column].values, binsize, labels=[c for c in LABELS[:binsize]])
+                        count_nonzero = np.count_nonzero(dataset[column].values)
+                        if float(count_nonzero) / count_raw < 0.6:
+                            idx_nonzero = np.nonzero(dataset[column].values)
+                            dataset[column][idx_nonzero] = pd.qcut(dataset[column][idx_nonzero].values, binsize, labels=[c for c in LABELS[:binsize]])
+
+                            dataset[column][~idx_nonzero] = "z"
+                        else:
+                            dataset[column] = pd.qcut(dataset[column].values, binsize, labels=[c for c in LABELS[:binsize]])
+
                         log("Change {} by bucket type".format(column), INFO)
 
                     dataset[column] = ["Z" if str(value) == "nan" else value for value in dataset[column]]
@@ -325,6 +338,7 @@ def load_dataset(filepath_cache, dataset, binsize=2):
                     log("The type of {} is already categorical".format(column), INFO)
             except ValueError as e:
                 log("The size of unique values of {} is {}, greater than {}".format(column, len(unique_values), len(LABELS)), INFO)
+                raise
 
         save_cache((idxs, dataset), filepath_cache)
 
