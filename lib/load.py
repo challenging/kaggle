@@ -82,7 +82,6 @@ def data_transform_2(filepath_training, filepath_testing, drop_fields=[], keep_n
 
     y_train = train['target']
     train = train.drop(['target'], axis=1)
-    #test["target"] = [-9999 for idx in range(0, len(test.values))]
     id_test = test['ID']
 
     def fill_nan_null(val):
@@ -96,9 +95,6 @@ def data_transform_2(filepath_training, filepath_testing, drop_fields=[], keep_n
 
     df_all = pd.concat((train, test), axis=0, ignore_index=True)
     df_all['null_count'] = df_all.isnull().sum(axis=1).tolist()
-    #df_all["class"] = ["Training" if idx < num_train else "Testing" for idx in range(0, len(df_all.values))]
-    #df_all.to_csv("../input/all.csv")
-    #df_all.drop(["class"], axis=1)
 
     df_all_temp = df_all['ID']
 
@@ -129,10 +125,9 @@ def data_transform_2(filepath_training, filepath_testing, drop_fields=[], keep_n
                 dummies = pd.get_dummies(df_all[str(df_data_types.index[i])]).rename(columns=lambda x: str(df_data_types.index[i]) + '_' + str(x))
                 df_all_temp = pd.concat([df_all_temp, dummies], axis=1)
 
-    df_all_temp = df_all_temp.drop(['ID'],axis=1)
-    df_all = pd.concat([df_all, df_all_temp], axis=1)
-    #df_all["class"] = ["Training" if idx < num_train else "Testing" for idx in range(0, len(df_all.values))]
-    #df_all.to_csv("../input/all_transform.csv")
+    if isinstance(df_all_temp, pd.Series):
+        df_all_temp = df_all_temp.drop(['ID'],axis=1)
+        df_all = pd.concat([df_all, df_all_temp], axis=1)
 
     train = df_all.iloc[:num_train]
     test = df_all.iloc[num_train:]
