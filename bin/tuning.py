@@ -25,7 +25,8 @@ from configuration import ModelConfParser
 @click.option("--methodology", required=True, help="Tune parameters of which methodology")
 @click.option("--binsize", default=16, help="bin/bucket size setting")
 @click.option("--combinations-size", default=2, help="size of combinations")
-def tuning(methodology, binsize, combinations_size, is_testing, thread, conf):
+@click.option("--top", default=300, help="Extract how many interaction information we extract")
+def tuning(methodology, binsize, combinations_size, top, is_testing, thread, conf):
     drop_fields = []
     N = 650 - len(drop_fields)
 
@@ -42,7 +43,7 @@ def tuning(methodology, binsize, combinations_size, is_testing, thread, conf):
     train_x = None
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
-    for (layer1, layer2), value in load_interaction_information(filepath_ii, topX):
+    for (layer1, layer2), value in load_interaction_information(filepath_ii, top):
         train_x["{}-{}".format(layer1, layer2)] = train_x[layer1].values * train_x[layer2].values * value
         test_x["{}-{}".format(layer1, layer2)] = test_x[layer1].values * test_x[layer2].values * value
 
