@@ -73,11 +73,6 @@ def tuning(methodology, binsize, combinations_size, is_testing, thread):
 
     if os.path.exists(filepath_tuning):
         params, done = load_cache(filepath_tuning)
-    else:
-        algorithm.done = {"phase1": None, "phase2": None, "micro-phase2": None, "phase3": None}
-        algorithm.max_depth = 11
-        algorithm.min_child_weight = 1
-        algorithm.gamma = 0
 
     algorithm.process()
 

@@ -18,7 +18,7 @@ from Queue import Queue
 from threading import Thread, Lock
 
 from itertools import combinations
-from scipy.stats import mode
+from collections import Counter
 
 from sklearn.datasets import load_boston
 from sklearn.linear_model import LinearRegression, Ridge, Lasso, RandomizedLasso
@@ -170,6 +170,7 @@ class InteractionInformation(object):
 
     def write_cache(self, results=False):
         if results:
+            print self.results_couple
             save_cache(self.results_couple, self.filepath_couple)
         else:
             save_cache(self.cache_series, self.filepath_series)
@@ -286,6 +287,7 @@ class InteractionInformationThread(Thread):
                         continue
 
             keys, values = transform(distribution)
+            log("{} - {}".format(len(keys), len(values)))
 
             mi = dit.Distribution(keys, values)
 
@@ -303,21 +305,20 @@ class InteractionInformationThread(Thread):
 
             self.ii.queue.task_done()
 
-def load_dataset(filepath_cache, dataset, binsize=2):
-    LABELS = "abcdefghijklmnopqrstuvwxyABCDEFGHIJKLMNOPQRSTUVWXY0123456789!@#$%^&*()_+~"
+def load_dataset(filepath_cache, dataset, binsize=2, threshold=0.1):
+    LABELS = "abcdefghijklmnopqrstuvwxABCDEFGHIJKLMNOPQRSTUVWX0123456789!@#$%^&*()_+~"
+    FIXED_LABELS = "yYz"
 
     def less_replace(df, c, unique_values, labels):
         for i, unique_value in enumerate(unique_values):
             df[c][df[c] == unique_value] == labels[i]
 
-    idxs = []
+    drop_columns = []
     if os.path.exists(filepath_cache):
-        idxs, dataset = load_cache(filepath_cache)
+        dataset = load_cache(filepath_cache)
     else:
         count_raw = len(dataset[dataset.columns[0]].values)
         for idx, column in enumerate(dataset.columns):
-            log("Try to process {}".format(column))
-
             data_type = dataset.dtypes[idx]
             unique_values = dataset[column].unique()
 
@@ -330,60 +331,95 @@ def load_dataset(filepath_cache, dataset, binsize=2):
                         else:
                             log("The size of {} is too large({})".format(column, len(unique_values)), WARN)
                     else:
-                        most_commons = mode(dataset[column].values, axis=None)
-                        most_common_value, most_common_count = most_commons[0][0], most_commons[1][0]
+                        is_break = False
+                        deleted_idxs = np.array([])
+                        counter = Counter(dataset[column].values).most_common(len(FIXED_LABELS))
+                        for idx_label, (name, value) in enumerate(counter):
+                            ratio = float(value) / count_raw
 
-                        log("The ratio of common value is {} for {}".format(float(most_common_count) / count_raw, column), INFO)
-                        if float(most_common_count) / count_raw > 0.25:
-                            dataset[column][dataset[column] == most_common_value] = "z"
-                            idxs_most_common = np.where(dataset[column][dataset[column] == most_common_value])[0]
-                            non_common_unique_values = np.unique(dataset[column][~idxs_most_common])
-                            if len(non_common_unique_values) < len(LABELS):
+                            if ratio == 1:
+                                drop_columns.append(column)
+                                log("The size of most common value of {} is 1 so skipping it".format(column), INFO)
+
+                                is_break = True
+                                break
+                            elif ratio > threshold:
+                                log("The ratio of common value({}, {}) of {} is {}, greater".format(data_type, name, column, ratio), INFO)
+
+                                idxs_most_common = np.where(dataset[column] == name)[0]
+                                deleted_idxs = np.concatenate((deleted_idxs, idxs_most_common), axis=0)
+
+                                dataset[column][idxs_most_common] = FIXED_LABELS[idx_label]
+                            else:
+                                log("The ratio of common value({}, {}) of {} is {}, less".format(data_type, name, column, ratio), INFO)
+
+                                break
+
+                        if is_break:
+                            continue
+                        else:
+                            ori_idxs = np.array([tmp_i for tmp_i in range(0, count_raw)])
+                            idxs_non_most_common = np.delete(ori_idxs, deleted_idxs)
+
+                            non_common_unique_values = dataset[column][idxs_non_most_common].unique()
+
+                            if len(non_common_unique_values) < binsize:
                                 for ii, unique_value in enumerate(non_common_unique_values):
                                     dataset[column][dataset[column] == unique_value] = LABELS[ii]
                             else:
-                                dataset[column][~idxs_most_common] = pd.qcut(dataset[column].values[~idx_most_common], binsize, labels=[c for c in LABELS[:binsize]])
-                        else:
-                            dataset[column] = pd.qcut(dataset[column].values, binsize, labels=[c for c in LABELS[:binsize]])
+                                for tmp_binsize in [t for t in range(len(LABELS)-1, 0, -4)]:
+                                    try:
+                                        tmp = pd.qcut(dataset[column][idxs_non_most_common].values, tmp_binsize, labels=[c for c in LABELS[:tmp_binsize]])
+                                        dataset[column][idxs_non_most_common] = tmp
 
-                        log("Change {} by bucket type".format(column), INFO)
+                                        break
+                                    except ValueError as e:
+                                        if e.message.find("Bin edges must be unique") > -1:
+                                            log("Descrease binsize from {} to {} for {} again due to {}".format(column, tmp_binsize, tmp_binsize-4, str(e)), DEBUG)
+                                        else:
+                                            raise
+
+                                log("The final binsize of {} is {}".format(column, tmp_binsize), INFO)
+
+                            log("Change {} by bucket type".format(column), INFO)
 
                     dataset[column] = ["Z" if str(value) == "nan" else value for value in dataset[column]]
-
-                    idxs.append(idx)
                 else:
                     log("The type of {} is already categorical".format(column), INFO)
             except ValueError as e:
                 log("The size of unique values of {} is {}, greater than {}".format(column, len(unique_values), binsize), INFO)
                 raise
 
-        save_cache((idxs, dataset), filepath_cache)
+        dataset = dataset.drop(drop_columns, axis=1)
 
-    return idxs, dataset
+        dataset.to_csv("{}.csv".format(filepath_cache))
+        save_cache(dataset, filepath_cache)
+
+    return dataset
 
 def calculate_interaction_information(filepath_cache, dataset, train_y, filepath_couple, filepah_series, filepath_criteria, combinations_size,
                                       binsize=2, threshold=0.01, nthread=4, is_testing=None):
-    idxs, dataset = load_dataset(filepath_cache, dataset, binsize)
+    dataset = load_dataset(filepath_cache, dataset, binsize)
 
     ii = InteractionInformation(dataset, train_y, filepath_couple, filepah_series, filepath_criteria, combinations_size, threshold)
 
     # Build Cache File
     timestamp_start = time.time()
-    for column_x_idx in range(0, len(idxs)):
-        column_x = dataset.columns[idxs[column_x_idx]]
-        ii.get_values_from_cache(column_x)
+    for column in dataset.columns:
+        if column:
+            ii.get_values_from_cache(column)
     ii.write_cache()
     timestamp_end = time.time()
     log("Cost {:.4f} secends to build cache files".format(timestamp_end-timestamp_start), INFO)
 
     count_break = 0
-    for pair in combinations(idxs, combinations_size):
+    for pair_column in combinations([column for column in dataset.columns], combinations_size):
         if is_testing and random.random()*10 > 1:
             continue
 
-        column_names = [dataset.columns[idx] for idx in pair]
+        #column_names = [dataset.columns[idx] for idx in pair]
 
-        ii.add_item(column_names)
+        ii.add_item(pair_column)
 
         if is_testing and count_break > is_testing:
             log("Early break due to the is_testing is True", INFO)

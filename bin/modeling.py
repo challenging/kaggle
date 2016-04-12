@@ -8,9 +8,9 @@
 
 import os
 import sys
-import copy
-
 import click
+import ConfigParser
+
 import numpy as np
 
 sys.path.append("{}/../lib".format(os.path.dirname(os.path.abspath(__file__))))
@@ -24,16 +24,11 @@ from ensemble_learning import layer_one_model, layer_two_model, get_max_mean_min
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
 @click.command()
-@click.option("--cost", default="logloss", help="Cost function when modeling")
-@click.option("--nfold", default=10, help="Number of fold")
-@click.option("--estimators", default=100, help="Number of estimator")
+@click.option("--conf", is_require=True, help="Configureation File to this model")
 @click.option("--thread", default=1, help="Number of thread")
-@click.option("--weight", default=1, help="Weight of Class 0")
 @click.option("--interaction-information", required=False, type=(int, int), help="'binsize', 'topX'")
-@click.option("--kmeans", is_flag=True, help="Use the features of Kmeans")
-def learning(thread, nfold, estimators, weight, interaction_information, kmeans, cost):
+def learning(conf, thread):
     drop_fields = []
-    #drop_fields = ['v8','v23','v25','v36','v37','v46','v51','v53','v54','v63','v73','v75','v79','v81','v82','v89','v92','v95','v105','v107','v108','v109','v110','v116','v117','v118','v119','v123','v124','v128']
 
     N = 650 - len(drop_fields)
     binsize, topX = interaction_information
@@ -92,28 +87,23 @@ def learning(thread, nfold, estimators, weight, interaction_information, kmeans,
                                       "validation_split": 0,
                                       "class_weight": {0: weight, 1: 1}}
 
-    deep_layer5_neurno2000_setting = {"folder": None, # will change it after folding
-                                      "input_dims": number_of_feature,
-                                      "batch_size": nn_batchsize,
-                                      "number_of_layer": 5,
-                                      "dimension": nn_dimension,
-                                      "callbacks": [copy.deepcopy(checkpointer)],
-                                      "nepoch": nn_nepoch,
-                                      "validation_split": 0,
-                                      "class_weight": {0: weight, 1: 1}}
+    xgboosting_setting = {"max_depth": 11,
+                          "min_child_weight": 1,
+                          "gamma": 0,
+                          "subsample": 0.6,
+                          "colsample_bytrees": 0.9,
+                          "reg_alpha": 1}
 
     models = [\
               ("shallow_gridsearch_extratree_regressor", {}),
               ("shallow_gridsearch_extratree_classifier", {}),
               ("shallow_gridsearch_randomforest_regressor", {}),
               ("shallow_gridsearch_randomforest_classifier", {}),
-              ("shallow_xgboosting_regressor", {}), #The logloss value is always nan, why???
-              ("shallow_xgboosting_classifier", {}),
+              ("shallow_xgboosting_regressor", xgboosting_setting), #The logloss value is always nan, why???
+              ("shallow_xgboosting_classifier", xgboosting_setting),
               ("cluster_kmeans_16", cluster_kmeans16_setting),
               ("cluster_kmeans_64", cluster_kmeans64_setting),
-              #("cluster_kmeans_256", cluster_kmeans256_setting),
               ("deep_layer3_neuron2000", deep_layer3_neurno2000_setting),
-              #("deep_layer5_neuron2000", deep_layer5_neurno2000_setting),
               ]
 
     layer2_model_name = "shallow_gridsearch_logistic_regressor"

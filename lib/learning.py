@@ -61,7 +61,7 @@ class LearningFactory(object):
                                              max_depth=LearningFactory.ensemble_params["md"],
                                              max_features=LearningFactory.ensemble_params["mf"],
                                              random_state=LearningFactory.ensemble_params["rs"],
-                                             n_jobs=-1)
+                                             n_jobs=LearningFactory.n_jobs)
                     model = Learning(method, gs)
                 elif method.find("randomforest") > -1:
                     gs = RandomForestRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
@@ -71,7 +71,7 @@ class LearningFactory(object):
                                                min_samples_split=4,
                                                min_samples_leaf=2,
                                                verbose=0,
-                                               n_jobs=-1)
+                                               n_jobs=LearningFactory.n_jobs)
                     model = Learning(method, gs)
                 elif method.find("gradientboosting") > -1:
                     gs = GradientBoostingRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
@@ -84,14 +84,18 @@ class LearningFactory(object):
                     model = Learning(method, xgb.XGBRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
                                                               max_depth=LearningFactory.ensemble_params["md"],
                                                               seed=LearningFactory.ensemble_params["rs"],
-                                                              missing=np.nan, learning_rate=1e-02, subsample=0.9, colsample_bytree=0.85, objective="reg:linear"))
+                                                              missing=np.nan,
+                                                              learning_rate=1e-02,
+                                                              subsample=0.9,
+                                                              colsample_bytree=0.85,
+                                                              objective="binary:logistic"))
             elif method.find("classifier") > -1:
                 if method.find("extratree") > -1:
                     gs = ExtraTreesClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
                                               max_depth=LearningFactory.ensemble_params["md"],
                                               max_features=LearningFactory.ensemble_params["mf"],
                                               random_state=LearningFactory.ensemble_params["rs"],
-                                              n_jobs=-1)
+                                              n_jobs=LearningFactory.n_jobs)
                     model = Learning(method, gs)
                 elif method.find("randomforest") > -1:
                     gs = RandomForestClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
@@ -109,10 +113,17 @@ class LearningFactory(object):
                                                                  learning_rate=1e-01)
                     model = Learning(method, gs)
                 elif method.find("xgboosting") > -1:
+                    # max_depth=11, min_child_weight=1, gamma=0, subsample=0.6, colsample_bytree=0.9, reg_alpha=1
                     model = Learning(method, xgb.XGBClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                               max_depth=LearningFactory.ensemble_params["md"],
+                                                               max_depth=setting["max_depth"],
                                                                seed=LearningFactory.ensemble_params["rs"],
-                                                               missing=np.nan, learning_rate=1e-02, subsample=0.9, colsample_bytree=0.85, objective="binary:logistic"))
+                                                               missing=np.nan,
+                                                               learning_rate=1e-04,
+                                                               subsample=setting["subsample"],
+                                                               colsample_bytree=setting["colsample_bytree"],
+                                                               gamma=setting["gamma"],
+                                                               reg_alpha=setting["reg_alpha"],
+                                                               objective="binary:logistic"))
             else:
                 log("Error model naming - {}".format(method), WARN)
         elif method.find("cluster") > -1:
