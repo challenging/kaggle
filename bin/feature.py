@@ -18,7 +18,7 @@ from load import data_load, data_transform_2, save_cache, load_cache
 from configuration import ModelConfParser
 
 @click.command()
-@click.option("--conf", is_required=True, help="Filepath of Configuration")
+@click.option("--conf", required=True, help="Filepath of Configuration")
 @click.option("--thread", default=1, help="Number of thread")
 @click.option("--feature-importance", is_flag=True, help="Calculate the feature importance")
 @click.option("--interaction-information", is_flag=True, help="Calculate the interaction information")
