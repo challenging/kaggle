@@ -7,6 +7,9 @@ class ModelConfParser(object):
         self.config = ConfigParser.RawConfigParser()
         self.config.read(filepath)
 
+    def get_basepath(self):
+        return self.config.get("MAIN", "workspace")
+
     def get_global_setting(self):
         workspace, nfold, cost_string = self.config.get("MAIN", "workspace"), self.config.get("MAIN", "nfold"), self.config.get("MAIN", "cost")
 

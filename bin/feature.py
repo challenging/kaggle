@@ -15,19 +15,22 @@ import feature_engineering
 
 from utils import log, INFO
 from load import data_load, data_transform_2, save_cache, load_cache
-
-BASEPATH = "/Users/RungChiChen/Documents/kaggle/Santander Customer Satisfaction/input"
+from configuration import ModelConfParser
 
 @click.command()
+@click.option("--conf", is_required=True, help="Filepath of Configuration")
 @click.option("--thread", default=1, help="Number of thread")
-@click.option("--transform2", is_flag=True, help="Transform source data by style-2")
 @click.option("--feature-importance", is_flag=True, help="Calculate the feature importance")
 @click.option("--interaction-information", is_flag=True, help="Calculate the interaction information")
 @click.option("--binsize", default=16, help="bin/bucket size setting")
 @click.option("--testing", default=-1, help="cut off the input file to be the testing dataset")
 @click.option("--combinations-size", default=2, help="size of combinations")
-def feature_engineer(thread, transform2, feature_importance, interaction_information, binsize, testing, combinations_size):
+def feature_engineer(conf, thread, feature_importance, interaction_information, binsize, testing, combinations_size):
     drop_fields = []
+    transform2 = True
+
+    cfg_parser = ModelConfParser(conf)
+    BASEPATH = cfg_parser.get_workspace()
 
     if feature_importance:
         log("Try to calculate the feature ranking/score/importance", INFO)
