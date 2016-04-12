@@ -170,7 +170,6 @@ class InteractionInformation(object):
 
     def write_cache(self, results=False):
         if results:
-            print self.results_couple
             save_cache(self.results_couple, self.filepath_couple)
         else:
             save_cache(self.cache_series, self.filepath_series)
@@ -287,7 +286,6 @@ class InteractionInformationThread(Thread):
                         continue
 
             keys, values = transform(distribution)
-            log("{} - {}".format(len(keys), len(values)))
 
             mi = dit.Distribution(keys, values)
 
@@ -319,6 +317,10 @@ def load_dataset(filepath_cache, dataset, binsize=2, threshold=0.1):
     else:
         count_raw = len(dataset[dataset.columns[0]].values)
         for idx, column in enumerate(dataset.columns):
+            if column != "delta_imp_aport_var13_1y3":
+                drop_columns.append(column)
+                continue
+
             data_type = dataset.dtypes[idx]
             unique_values = dataset[column].unique()
 
@@ -369,13 +371,16 @@ def load_dataset(filepath_cache, dataset, binsize=2, threshold=0.1):
                             else:
                                 for tmp_binsize in [t for t in range(len(LABELS)-1, 0, -4)]:
                                     try:
+                                        print "(((((((("
                                         tmp = pd.qcut(dataset[column][idxs_non_most_common].values, tmp_binsize, labels=[c for c in LABELS[:tmp_binsize]])
                                         dataset[column][idxs_non_most_common] = tmp
+                                        print "))))))))"
+                                        print tmp
 
                                         break
                                     except ValueError as e:
                                         if e.message.find("Bin edges must be unique") > -1:
-                                            log("Descrease binsize from {} to {} for {} again due to {}".format(column, tmp_binsize, tmp_binsize-4, str(e)), DEBUG)
+                                            log("Descrease binsize from {} to {} for {} again due to {}".format(column, tmp_binsize, tmp_binsize-4, str(e)), INFO)
                                         else:
                                             raise
 
@@ -414,10 +419,8 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, filepath
 
     count_break = 0
     for pair_column in combinations([column for column in dataset.columns], combinations_size):
-        if is_testing and random.random()*10 > 1:
+        if is_testing and random.random()*10 > 1: # Random Sampling when is_testing = True
             continue
-
-        #column_names = [dataset.columns[idx] for idx in pair]
 
         ii.add_item(pair_column)
 

@@ -17,6 +17,7 @@ sys.path.append("{}/../lib".format(os.path.dirname(os.path.abspath(__file__))))
 from utils import log, INFO
 from load import load_data, load_advanced_data, load_cache, save_cache, save_kaggle_submission, load_interaction_information
 from learning import LearningFactory
+from configuration import ModelConfParser
 from deep_learning import KaggleCheckpoint
 from keras.callbacks import EarlyStopping
 from ensemble_learning import layer_one_model, layer_two_model, get_max_mean_min_probabilities
@@ -26,19 +27,20 @@ BASEPATH = os.path.dirname(os.path.abspath(__file__))
 @click.command()
 @click.option("--conf", is_require=True, help="Configureation File to this model")
 @click.option("--thread", default=1, help="Number of thread")
-@click.option("--interaction-information", required=False, type=(int, int), help="'binsize', 'topX'")
 def learning(conf, thread):
     drop_fields = []
-
     N = 650 - len(drop_fields)
-    binsize, topX = interaction_information
-    nn_dimension, nn_batchsize, nn_nepoch = 2048, 128, 3000
 
-    filepath_training = "{}/../input/train.csv".format(BASEPATH)
-    filepath_testing = "{}/../input/test.csv".format(BASEPATH)
-    filepath_cache_1 = "{}/../input/{}_training_dataset.cache".format(BASEPATH, N)
-    filepath_ii = "{}/../input/transform2=True_testing=-1_type=2_binsize={}_combination=2.pkl".format(BASEPATH, binsize)
-    filepath_cache_ii = "{}/../input/transform2=True_testing=-1_type=2_binsize={}_combination=2.cache.pkl".format(BASEPATH, binsize)
+    parser = ModelConfParser(conf)
+
+    BASEPATH = parser.get_workspace()
+    binsize, topX = parser.get_interaction_information()
+
+    filepath_training = "{}/train.csv".format(BASEPATH)
+    filepath_testing = "{}/test.csv".format(BASEPATH)
+    filepath_cache_1 = "{}/{}_training_dataset.cache".format(BASEPATH, N)
+    filepath_ii = "{}/transform2=True_testing=-1_type=2_binsize={}_combination=2.pkl".format(BASEPATH, binsize)
+    filepath_cache_ii = "{}/transform2=True_testing=-1_type=2_binsize={}_combination=2.cache.pkl".format(BASEPATH, binsize)
 
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
@@ -60,16 +62,10 @@ def learning(conf, thread):
     number_of_feature = len(train_X[0])
 
     # Init the parameters
-    LearningFactory.set_n_estimators(estimators)
-
-    # Init the parameters of cluster
-    cluster_kmeans16_setting = {"n_clusters": 16, "n_init": 10, "random_state": 1201}
-    cluster_kmeans64_setting = {"n_clusters": 64, "n_init": 10, "random_state": 1201}
-    cluster_kmeans256_setting = {"n_clusters": 256, "n_init": 10, "random_state": 1201}
+    models = []
 
     # Init the parameters of deep learning
     training_dataset, testing_dataset = [train_X], [test_X]
-
     checkpointer = KaggleCheckpoint(filepath="{epoch}.weights.hdf5",
                                     training_set=(training_dataset, train_Y),
                                     testing_set=(testing_dataset, test_id),
@@ -77,44 +73,33 @@ def learning(conf, thread):
                                     cost_string=cost,
                                     verbose=0, save_best_only=False)
 
-    deep_layer3_neurno2000_setting = {"folder": None, # will change it after folding
-                                      "input_dims": number_of_feature,
-                                      "batch_size": nn_batchsize,
-                                      "number_of_layer": 3,
-                                      "dimension": nn_dimension,
-                                      "callbacks": [checkpointer],
-                                      "nepoch": nn_nepoch,
-                                      "validation_split": 0,
-                                      "class_weight": {0: weight, 1: 1}}
+    # Init the parameters of cluster
+    for model_section in parser.get_layer_models():
+        setting = parser.get_model_setting(model_setting)
 
-    xgboosting_setting = {"max_depth": 11,
-                          "min_child_weight": 1,
-                          "gamma": 0,
-                          "subsample": 0.6,
-                          "colsample_bytrees": 0.9,
-                          "reg_alpha": 1}
+        method = setting["method"]
+        del setting["method"]
 
-    models = [\
-              ("shallow_gridsearch_extratree_regressor", {}),
-              ("shallow_gridsearch_extratree_classifier", {}),
-              ("shallow_gridsearch_randomforest_regressor", {}),
-              ("shallow_gridsearch_randomforest_classifier", {}),
-              ("shallow_xgboosting_regressor", xgboosting_setting), #The logloss value is always nan, why???
-              ("shallow_xgboosting_classifier", xgboosting_setting),
-              ("cluster_kmeans_16", cluster_kmeans16_setting),
-              ("cluster_kmeans_64", cluster_kmeans64_setting),
-              ("deep_layer3_neuron2000", deep_layer3_neurno2000_setting),
-              ]
+        if "class_weight" in setting:
+            setting["class_weight"] = {0: setting["class_weight"], 1: 1}
+
+        if method.find("deep") > -1:
+            setting["folder"] = None
+            setting["input_dims"] = number_of_feature
+            setting["callbacks"] = [checkpointer]
+            setting["number_of_layer"] = setting.pop("layer_number")
+            setting["dimension"] = setting.pop("layer_dimension")
+
+        models.append((method, setting))
 
     layer2_model_name = "shallow_gridsearch_logistic_regressor"
-    model_folder = "{}/../etc/prediction_model/ensemble_learning/nfold={}_models={}_feature={}_estimators={}_binsize={}_topX={}".format(\
+    model_folder = "{}/prediction_model/ensemble_learning/nfold={}_models={}_feature={}_estimators={}_binsize={}_topX={}".format(\
                         BASEPATH, nfold, len(models), number_of_feature, estimators, binsize, topX)
 
-    print "Data Distribution is ({}, {}), and then the number of feature is {}".format(np.sum(train_Y==0), np.sum(train_Y==1), number_of_feature),
+    print "Data Distribution is ({}, {}), and then the number of feature is {}, and then prepare to save data in {}".format(np.sum(train_Y==0), np.sum(train_Y==1), number_of_feature, model_folder),
 
     if not os.path.exists(model_folder):
         os.makedirs(model_folder)
-    print "prepare to save data in {}".format(model_folder)
 
     # Phase 1. --> Model Training
     layer_2_train_x, layer_2_test_x, learning_loss = layer_one_model(model_folder, train_X, train_Y, test_X, test_id, models, layer2_model_name, cost_string=cost, n_folds=nfold, number_of_thread=thread,

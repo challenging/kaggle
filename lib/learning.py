@@ -37,11 +37,6 @@ BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
 class LearningFactory(object):
     n_jobs = -1
-    ensemble_params = {"ne": 200,"md": 6,"mf": 80,"rs": 1201}
-
-    @staticmethod
-    def set_n_estimators(n_estimators):
-        LearningFactory.ensemble_params["ne"] = n_estimators
 
     @staticmethod
     def get_model(pair, cost_function=log_loss):
@@ -57,78 +52,29 @@ class LearningFactory(object):
                 model = Learning(method, LogisticRegression())
             elif method.find("regressor") > -1:
                 if method.find("extratree") > -1:
-                    gs = ExtraTreesRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
-                                             max_depth=LearningFactory.ensemble_params["md"],
-                                             max_features=LearningFactory.ensemble_params["mf"],
-                                             random_state=LearningFactory.ensemble_params["rs"],
-                                             n_jobs=LearningFactory.n_jobs)
-                    model = Learning(method, gs)
+                    model = Learning(method, ExtraTreesRegressor(**setting, n_jobs=LearningFactory.n_jobs))
                 elif method.find("randomforest") > -1:
-                    gs = RandomForestRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
-                                               max_depth=LearningFactory.ensemble_params["md"],
-                                               max_features=LearningFactory.ensemble_params["mf"],
-                                               random_state=LearningFactory.ensemble_params["rs"],
-                                               min_samples_split=4,
-                                               min_samples_leaf=2,
-                                               verbose=0,
-                                               n_jobs=LearningFactory.n_jobs)
-                    model = Learning(method, gs)
+                    model = Learning(method, RandomForestRegressor(**setting, n_jobs=LearningFactory.n_jobs))
                 elif method.find("gradientboosting") > -1:
-                    gs = GradientBoostingRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                   max_depth=LearningFactory.ensemble_params["md"],
-                                                   max_features=LearningFactory.ensemble_params["mf"],
-                                                   random_state=LearningFactory.ensemble_params["rs"],
-                                                   learning_rate=1e-01),
-                    model = Learning(method, gs)
+                    model = Learning(method, GradientBoostingRegressor(**setting))
                 elif method.find("xgboosting") > -1:
-                    model = Learning(method, xgb.XGBRegressor(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                              max_depth=LearningFactory.ensemble_params["md"],
-                                                              seed=LearningFactory.ensemble_params["rs"],
-                                                              missing=np.nan,
-                                                              learning_rate=1e-02,
-                                                              subsample=0.9,
-                                                              colsample_bytree=0.85,
-                                                              objective="binary:logistic"))
+                    model = Learning(method, xgb.XGBRegressor(**setting, missing=np.nan))
             elif method.find("classifier") > -1:
                 if method.find("extratree") > -1:
-                    gs = ExtraTreesClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
-                                              max_depth=LearningFactory.ensemble_params["md"],
-                                              max_features=LearningFactory.ensemble_params["mf"],
-                                              random_state=LearningFactory.ensemble_params["rs"],
-                                              n_jobs=LearningFactory.n_jobs)
-                    model = Learning(method, gs)
+                    model = Learning(method, ExtraTreesClassifier(**setting, n_jobs=LearningFactory.n_jobs))
                 elif method.find("randomforest") > -1:
-                    gs = RandomForestClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                max_depth=LearningFactory.ensemble_params["md"],
-                                                max_features=LearningFactory.ensemble_params["mf"],
-                                                random_state=LearningFactory.ensemble_params["rs"],
-                                                criterion="entropy",
-                                                min_samples_split=4, min_samples_leaf=2, verbose=0, n_jobs=-1)
+                    gs = RandomForestClassifier(**setting, verbose=0, n_jobs=LearningFactory.n_jobs)
                     model = Learning(method, gs)
                 elif method.find("gradientboosting") > -1:
-                    gs = GradientBoostingClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                                 max_depth=LearningFactory.ensemble_params["md"],
-                                                                 max_features=LearningFactory.ensemble_params["mf"],
-                                                                 random_state=LearningFactory.ensemble_params["rs"],
-                                                                 learning_rate=1e-01)
-                    model = Learning(method, gs)
+                    model = Learning(method, GradientBoostingClassifier(**setting))
                 elif method.find("xgboosting") > -1:
                     # max_depth=11, min_child_weight=1, gamma=0, subsample=0.6, colsample_bytree=0.9, reg_alpha=1
-                    model = Learning(method, xgb.XGBClassifier(n_estimators=LearningFactory.ensemble_params["ne"],
-                                                               max_depth=setting["max_depth"],
-                                                               seed=LearningFactory.ensemble_params["rs"],
-                                                               missing=np.nan,
-                                                               learning_rate=1e-04,
-                                                               subsample=setting["subsample"],
-                                                               colsample_bytree=setting["colsample_bytree"],
-                                                               gamma=setting["gamma"],
-                                                               reg_alpha=setting["reg_alpha"],
-                                                               objective="binary:logistic"))
+                    model = Learning(method, xgb.XGBClassifier(**setting, missing=np.nan))
             else:
                 log("Error model naming - {}".format(method), WARN)
         elif method.find("cluster") > -1:
             if method.find("kmeans") > -1:
-                model = Learning(method, KMeans(n_clusters=setting["n_clusters"], n_init=setting["n_init"], init="k-means++", random_state=setting["random_state"]))
+                model = Learning(method, KMeans(**setting, init="k-means++"))
         elif method.find("deep") > -1:
             setting["folder"] = "{}/nn_layer={}_neurno={}_{}th".format(setting["folder"], setting["number_of_layer"], setting["dimension"], setting["nfold"])
             if not os.path.isdir(setting["folder"]):
