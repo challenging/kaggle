@@ -317,9 +317,11 @@ def load_dataset(filepath_cache, dataset, binsize=2, threshold=0.1):
     else:
         count_raw = len(dataset[dataset.columns[0]].values)
         for idx, column in enumerate(dataset.columns):
+            '''
             if column != "delta_imp_aport_var13_1y3":
                 drop_columns.append(column)
                 continue
+            '''
 
             data_type = dataset.dtypes[idx]
             unique_values = dataset[column].unique()
@@ -365,26 +367,31 @@ def load_dataset(filepath_cache, dataset, binsize=2, threshold=0.1):
 
                             non_common_unique_values = dataset[column][idxs_non_most_common].unique()
 
-                            if len(non_common_unique_values) < binsize:
+                            if len(non_common_unique_values) < len(LABELS):
                                 for ii, unique_value in enumerate(non_common_unique_values):
                                     dataset[column][dataset[column] == unique_value] = LABELS[ii]
                             else:
+                                is_success = False
                                 for tmp_binsize in [t for t in range(len(LABELS)-1, 0, -4)]:
                                     try:
-                                        print "(((((((("
                                         tmp = pd.qcut(dataset[column][idxs_non_most_common].values, tmp_binsize, labels=[c for c in LABELS[:tmp_binsize]])
                                         dataset[column][idxs_non_most_common] = tmp
-                                        print "))))))))"
-                                        print tmp
+                                        is_success = True
 
                                         break
                                     except ValueError as e:
                                         if e.message.find("Bin edges must be unique") > -1:
-                                            log("Descrease binsize from {} to {} for {} again due to {}".format(column, tmp_binsize, tmp_binsize-4, str(e)), INFO)
+                                            log("Descrease binsize from {} to {} for {} again due to {}".format(column, tmp_binsize, tmp_binsize-4, str(e)), DEBUG)
                                         else:
                                             raise
 
-                                log("The final binsize of {} is {}".format(column, tmp_binsize), INFO)
+                                if is_success:
+                                    log("The final binsize of {} is {}".format(column, tmp_binsize), INFO)
+                                else:
+                                    log("Fail in transforming {}".format(column), WARN)
+                                    drop_columns.append(column)
+
+                                    continue
 
                             log("Change {} by bucket type".format(column), INFO)
 
