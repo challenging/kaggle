@@ -16,25 +16,28 @@ import feature_engineering
 from utils import log, INFO
 from load import load_data, data_transform_2, load_interaction_information, save_cache, load_cache
 from parameter_tuning import XGBoostingTuning, RandomForestTuning, ExtraTreeTuning
+from configuration import ModelConfParser
 
 @click.command()
+@click.option("--conf", required=True, help="Filepath of Configuration")
 @click.option("--thread", default=1, help="Number of thread")
 @click.option("--is-testing", is_flag=True, help="Testing mode")
 @click.option("--methodology", required=True, help="Tune parameters of which methodology")
 @click.option("--binsize", default=16, help="bin/bucket size setting")
 @click.option("--combinations-size", default=2, help="size of combinations")
-def tuning(methodology, binsize, combinations_size, is_testing, thread):
+def tuning(methodology, binsize, combinations_size, is_testing, thread, conf):
     drop_fields = []
-
     N = 650 - len(drop_fields)
-    binsize, topX = 4, 500
-    n_jobs = 4
 
-    filepath_training = "{}/../input/train.csv".format(BASEPATH)
-    filepath_testing = "{}/../input/test.csv".format(BASEPATH)
-    filepath_cache_1 = "{}/../input/{}_training_dataset.cache".format(BASEPATH, N)
-    filepath_ii = "{}/../input/transform2=True_testing=-1_type=2_binsize={}_combination={}.pkl".format(BASEPATH, binsize, combinations_size)
-    filepath_tuning = "{}/../etc/parameter_tuning/{}_testing={}_binsize={}_combination={}.pkl".format(BASEPATH, methodology, is_testing, binsize, combinations_size)
+    parser = ModelConfParser(conf)
+    BASEPATH = parser.get_workspace()
+    n_jobs = parser.get_n_jobs()
+
+    filepath_training = "{}/input/train.csv".format(BASEPATH)
+    filepath_testing = "{}/input/test.csv".format(BASEPATH)
+    filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
+    filepath_ii = "{}/input/transform2=True_testing=-1_type=2_binsize={}_combination={}.pkl".format(BASEPATH, binsize, combinations_size)
+    filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_binsize={}_combination={}.pkl".format(BASEPATH, methodology, is_testing, binsize, combinations_size)
 
     train_x = None
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)

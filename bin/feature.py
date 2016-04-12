@@ -64,10 +64,10 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
         else:
             train_x, train_y, test_x, test_id = data_load(drop_fields=drop_fields)
 
-        filepath_cache = "{}/transform2={}_binsize={}_cache.pkl".format(BASEPATH, transform2, binsize)
-        filepath_couple = "{}/transform2={}_testing={}_type=2_binsize={}_combination={}.pkl".format(BASEPATH, transform2, testing, binsize, combinations_size)
-        filepath_series = "{}/transform2={}_testing={}_binsize={}_series.pkl".format(BASEPATH, transform2, testing, binsize)
-        filepath_criteria = "{}/transform2={}_testing={}_binsize={}_criteria.pkl".format(BASEPATH, transform2, testing, binsize)
+        filepath_cache = "{}/input/transform2={}_binsize={}_cache.pkl".format(BASEPATH, transform2, binsize)
+        filepath_couple = "{}/input/transform2={}_testing={}_type=2_binsize={}_combination={}.pkl".format(BASEPATH, transform2, testing, binsize, combinations_size)
+        filepath_series = "{}/input/transform2={}_testing={}_binsize={}_series.pkl".format(BASEPATH, transform2, testing, binsize)
+        filepath_criteria = "{}/input/transform2={}_testing={}_binsize={}_criteria.pkl".format(BASEPATH, transform2, testing, binsize)
 
         results_couple = feature_engineering.calculate_interaction_information(filepath_cache,\
             train_x, train_y,\

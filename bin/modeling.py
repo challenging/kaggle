@@ -36,11 +36,11 @@ def learning(conf, thread):
     BASEPATH = parser.get_workspace()
     binsize, topX = parser.get_interaction_information()
 
-    filepath_training = "{}/train.csv".format(BASEPATH)
-    filepath_testing = "{}/test.csv".format(BASEPATH)
-    filepath_cache_1 = "{}/{}_training_dataset.cache".format(BASEPATH, N)
-    filepath_ii = "{}/transform2=True_testing=-1_type=2_binsize={}_combination=2.pkl".format(BASEPATH, binsize)
-    filepath_cache_ii = "{}/transform2=True_testing=-1_type=2_binsize={}_combination=2.cache.pkl".format(BASEPATH, binsize)
+    filepath_training = "{}/input/train.csv".format(BASEPATH)
+    filepath_testing = "{}/input/test.csv".format(BASEPATH)
+    filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
+    filepath_ii = "{}/input/transform2=True_testing=-1_type=2_binsize={}_combination=2.pkl".format(BASEPATH, binsize)
+    filepath_cache_ii = "{}/input/transform2=True_testing=-1_type=2_binsize={}_combination=2.cache.pkl".format(BASEPATH, binsize)
 
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 

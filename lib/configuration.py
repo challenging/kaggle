@@ -10,6 +10,9 @@ class ModelConfParser(object):
     def get_workspace(self):
         return self.config.get("MAIN", "workspace")
 
+    def get_n_jobs(self):
+        return self.config.getint("MAIN", "n_jobs")
+
     def get_interaction_information(self):
         binsize, topX = self.config.get("INTERACTION_INFORMATION", "binsize"), self.config.get("INTERACTION_INFORMATION", "topX")
 
