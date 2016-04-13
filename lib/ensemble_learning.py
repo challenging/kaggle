@@ -37,10 +37,7 @@ def store_layer_output(models, dataset, filepath, targets=[]):
 
     pd.DataFrame(results_of_layer).to_csv(filepath, index=False)
 
-def layer_one_model(model_folder, train_x, train_y, test_x, models,
-                    cost_string="logloss", n_folds=10, number_of_thread=1, filepath_queue=None, filepath_nfold=None):
-    log("The phase 1 starts...", INFO)
-
+def get_learning_queue(models, n_folds, train_x, train_y, test_x, filepath_queue):
     layer_two_training_dataset = np.zeros((train_x.shape[0], len(models)))
     layer_two_testing_dataset = np.zeros((test_x.shape[0], len(models), n_folds))
 
@@ -58,6 +55,9 @@ def layer_one_model(model_folder, train_x, train_y, test_x, models,
 
         learning_queue.dump()
 
+    return learning_queue
+
+def start_learning(model_folder, train_x, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, number_of_thread=4, random_state=1201):
     skf = None
     if filepath_nfold and os.path.exists(filepath_nfold):
         skf = load_cache(filepath_nfold)
@@ -88,23 +88,33 @@ def layer_one_model(model_folder, train_x, train_y, test_x, models,
     for idx in range(0, len(learning_queue.layer_two_testing_dataset)):
         layer_two_testing_dataset[idx] = learning_queue.layer_two_testing_dataset[idx].mean(axis=1)
 
-    return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_cost
+    return layer_two_testing_dataset
 
-def layer_two_model(previous_models, train_x, train_y, test_x, learning_cost, models, filepath_layer2,
-                    cost_string="logloss"):
+def layer_one_model(model_folder, train_x, train_y, test_x, models,
+                    filepath_training, filepath_queue, filepath_nfold,
+                    n_folds=10, number_of_thread=1,
+                    random_state=1201):
+
+    log("The phase 1 starts...", INFO)
+
+    number_of_feature = len(train_x[0])
+    log("Data Distribution is ({}, {}), and then the number of feature is {}, and then prepare to save data in {}".format(np.sum(train_y==0), np.sum(train_y==1), number_of_feature, model_folder), INFO)
+
+    learning_queue = get_learning_queue(models, n_folds, train_x, train_y, test_x, filepath_queue)
+    layer_two_testing_dataset = start_learning(model_folder, train_x, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, number_of_thread, random_state)
+
+    # Save the results of layer1
+    targets = [{"Target": train_y}]
+    store_layer_output([m[0] for m in models], learning_queue.layer_two_training_dataset, filepath_training, targets=targets)
+
+    return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_queue.learning_cost
+
+def layer_two_model(model_folder, train_x, train_y, test_x, models,
+                    filepath_training, filepath_queue, filepath_nfold,
+                    n_folds=10, number_of_thread=1,
+                    random_state=1201):
+
     log("The phase 2 starts...")
-
-    cost_function = None
-    if cost_string == "logloss":
-        cost_function = log_loss
-    elif cost_string == "auc":
-        cost_function = auc
-    else:
-        log("Please set the cost function", ERROR)
-        sys.exit(1)
-
-    training_prediction_results = np.zeros((len(train_x), len(models)))
-    testing_prediction_results = np.zeros((len(test_x), len(models)))
 
     zero_train_x = 1 - train_x
     train_X = np.insert(train_x, range(0, len(train_x[0])), zero_train_x, axis=1)
@@ -112,29 +122,16 @@ def layer_two_model(previous_models, train_x, train_y, test_x, learning_cost, mo
     zero_test_x = 1 - test_x
     test_X = np.insert(test_x, range(0, len(test_x[0])), zero_test_x, axis=1)
 
-    targets = []
-    for idx, (model_name, model_setting) in enumerate(models):
-        model = LearningFactory.get_model(model_name, model_setting)
-        model.train(train_X, train_y)
+    number_of_feature = len(train_X[0])
+    log("Data Distribution is ({}, {}), and then the number of feature is {}, and then prepare to save data in {}".format(np.sum(train_y==0), np.sum(train_y==1), number_of_feature, model_folder), INFO)
 
-        results = model.predict(train_x)
-        training_prediction_results[:, idx] = results
-        training_cost = cost_function(train_y, results)
+    learning_queue = get_learning_queue(models, n_folds, train_X, train_y, test_X, filepath_queue)
+    layer_two_testing_dataset = start_learning(model_folder, train_X, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, number_of_thread, random_state)
 
-        log("The cost of {} model is {:.8f}".format(model_name, training_cost), INFO)
-        targets.append({"Probability of Layer2({})".format(model_name): results})
+    targets.append[{"Target": train_y}]
+    store_layer_output([m[0] for m in models], train_X, filepath_training, targets=targets)
 
-        # For Testing dataset
-        testing_prediction_results[:, idx] = model.predict(test_X)
-
-        # Hardcode to save cost information for Layer 2
-        for i in range(0, 10):
-            learning_cost.insert_cost(model.name, i, training_cost)
-
-    targets.append({"Target": train_y})
-    store_layer_output([m[0] for m in previous_models], train_x, filepath_layer2, targets=targets)
-
-    return training_prediction_results, testing_prediction_results
+    return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_queue.learning_cost
 
 def layer_three_model(train_x, train_y, test_x, cost_string="logloss"):
     log("The phase 3 starts...", INFO)

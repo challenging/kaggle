@@ -104,21 +104,31 @@ def learning(conf, thread):
 
     model_folder = "{}/prediction_model/ensemble_learning/nfold={}_layer1={}_layer2={}_feature={}_binsize={}_topX={}".format(\
                         BASEPATH, nfold, len(layer1_models), len(layer2_models), number_of_feature, binsize, topX)
-
-    print "Data Distribution is ({}, {}), and then the number of feature is {}, and then prepare to save data in {}".format(np.sum(train_Y==0), np.sum(train_Y==1), number_of_feature, model_folder),
-
     if not os.path.exists(model_folder):
         os.makedirs(model_folder)
 
     # Phase 1. --> Model Training
-    layer_2_train_x, layer_2_test_x, learning_loss = layer_one_model(model_folder, train_X, train_Y, test_X, layer1_models, cost_string=cost, n_folds=nfold, number_of_thread=thread,
-                             filepath_queue="{}/queue.pickle".format(model_folder), filepath_nfold="{}/nfold.pickle".format(model_folder))
+    filepath_training = "{}/layer1_training.csv".format(model_folder)
+    filepath_queue = "{}/layer1_queue.pkl".format(model_folder)
+    filepath_nfold = "{}/layer1_nfold.pkl".format(model_folder)
+    log("Data Distribution is ({}, {}), and then the number of feature is {}, and then prepare to save data in {}".format(np.sum(train_Y==0), np.sum(train_Y==1), number_of_feature, model_folder), INFO)
+    layer2_train_x, layer2_test_x, learning_loss = layer_one_model(model_folder, train_X, train_Y, test_X, layer1_models,
+                             filepath_training, filepath_queue, filepath_nfold,
+                             n_folds=nfold, number_of_thread=thread)
 
     # Phase 2. --> Model Training
-    layer3_train_x, layer3_test_x = layer_two_model(layer1_models, layer_2_train_x, train_Y, layer_2_test_x, learning_loss, layer2_models,
-                              "{}/training.csv".format(model_folder), cost_string=cost)
+    number_of_feature = len(layer2_train_x[0])
+    filepath_training = "{}/layer1_training.csv".format(model_folder)
+    filepath_queue = "{}/layer2_queue.pkl".format(model_folder)
+    filepath_nfold = "{}/layer2_nfold.pkl".format(model_folder)
+    log("Data Distribution is ({}, {}), and then the number of feature is {}, and then prepare to save data in {}".format(np.sum(train_Y==0), np.sum(train_Y==1), number_of_feature, model_folder), INFO)
+    layer3_train_x, layer3_test_x, learning_loss = layer_two_model(model_folder, layer2_train_x, train_Y, layer2_test_x, layer2_models,
+                             filepath_training, filepath_queue, filepath_nfold,
+                             n_folds=nfold, number_of_thread=thread)
 
     # Phase 3. --> Model Training
+    number_of_feature = len(layer3_train_x[0])
+    log("Data Distribution is ({}, {}), and then the number of feature is {}, and then prepare to save data in {}".format(np.sum(train_Y==0), np.sum(train_Y==1), number_of_feature, model_folder), INFO)
     submission_results = layer_three_model(layer3_train_x, train_Y, layer3_test_x, cost_string=cost)
 
     '''
