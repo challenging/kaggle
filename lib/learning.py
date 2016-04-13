@@ -32,12 +32,11 @@ from sklearn.preprocessing import MinMaxScaler, Imputer, StandardScaler
 from load import load_advanced_data, save_cache
 from utils import log, DEBUG, INFO, WARN, ERROR
 from deep_learning import logistic_regression, logistic_regression_2, KaggleCheckpoint
+from customized_estimators import CustomizedClassEstimator, CustomizedProbaEstimator
 
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
 class LearningFactory(object):
-    n_jobs = -1
-
     @staticmethod
     def get_model(pair, cost_function=log_loss):
         model = None
@@ -45,6 +44,7 @@ class LearningFactory(object):
 
         LL = make_scorer(cost_function)
 
+        log("Try to create model based on {}".format(method), INFO)
         if method.find("shallow") > -1:
             if method.find("linear_regressor") > -1:
                 model = Learning(method, LinearRegression(), cost_function)
@@ -52,29 +52,33 @@ class LearningFactory(object):
                 model = Learning(method, LogisticRegression())
             elif method.find("regressor") > -1:
                 if method.find("extratree") > -1:
-                    model = Learning(method, ExtraTreesRegressor(**setting, n_jobs=LearningFactory.n_jobs))
+                    model = Learning(method, ExtraTreesRegressor(**setting), cost_function)
                 elif method.find("randomforest") > -1:
-                    model = Learning(method, RandomForestRegressor(**setting, n_jobs=LearningFactory.n_jobs))
+                    model = Learning(method, RandomForestRegressor(**setting), cost_function)
                 elif method.find("gradientboosting") > -1:
-                    model = Learning(method, GradientBoostingRegressor(**setting))
+                    model = Learning(method, GradientBoostingRegressor(**setting), cost_function)
                 elif method.find("xgboosting") > -1:
-                    model = Learning(method, xgb.XGBRegressor(**setting, missing=np.nan))
+                    model = Learning(method, xgb.XGBRegressor(**setting), cost_function)
+                else:
+                    log("1. Can't create model based on {}".format(method), ERROR)
             elif method.find("classifier") > -1:
                 if method.find("extratree") > -1:
-                    model = Learning(method, ExtraTreesClassifier(**setting, n_jobs=LearningFactory.n_jobs))
+                    model = Learning(method, ExtraTreesClassifier(**setting), cost_function)
                 elif method.find("randomforest") > -1:
-                    gs = RandomForestClassifier(**setting, verbose=0, n_jobs=LearningFactory.n_jobs)
-                    model = Learning(method, gs)
+                    model = Learning(method, RandomForestClassifier(**setting), cost_function)
                 elif method.find("gradientboosting") > -1:
-                    model = Learning(method, GradientBoostingClassifier(**setting))
+                    model = Learning(method, GradientBoostingClassifier(**setting), cost_function)
                 elif method.find("xgboosting") > -1:
-                    # max_depth=11, min_child_weight=1, gamma=0, subsample=0.6, colsample_bytree=0.9, reg_alpha=1
-                    model = Learning(method, xgb.XGBClassifier(**setting, missing=np.nan))
+                    model = Learning(method, xgb.XGBClassifier(**setting), cost_function)
+                else:
+                   log("2. Can't create model based on {}".format(method), ERROR)
             else:
-                log("Error model naming - {}".format(method), WARN)
+                log("3. Can't create model based on {}".format(method), ERROR)
         elif method.find("cluster") > -1:
             if method.find("kmeans") > -1:
-                model = Learning(method, KMeans(**setting, init="k-means++"))
+                model = Learning(method, KMeans(**setting))
+            else:
+                log("4. Can't create model based on {}".format(method), ERROR)
         elif method.find("deep") > -1:
             setting["folder"] = "{}/nn_layer={}_neurno={}_{}th".format(setting["folder"], setting["number_of_layer"], setting["dimension"], setting["nfold"])
             if not os.path.isdir(setting["folder"]):
@@ -85,8 +89,17 @@ class LearningFactory(object):
 
             log("The folder of deep learning is in {}".format(setting["folder"]), INFO)
 
-            model = Learning(method, None)
+            model = Learning(method, None, cost_function)
             model.init_deep_params(**setting)
+        elif method.find("customized") > -1:
+            if method.find("class") > -1:
+                model = Learning(method, CustomizedClassEstimator(**setting), cost_function)
+            elif method.find("proba") > -1:
+                model = Learning(method, CustomizedProbaEstimator(**setting), cost_function)
+            else:
+                log("5. Can't create model based on {}".format(method), ERROR)
+        else:
+            log("6. Can't create model based on {}".format(method), ERROR)
 
         return model
 
@@ -182,10 +195,8 @@ class Learning(object):
                 ratio[label] = float(target_1) / (target_0 + target_1)
             self.ratio = ratio
         elif self.is_shallow_learning():
-            if self.is_xgb():
-                self.model.fit(train_x, train_y)
-            else:
-                self.model.fit(train_x, train_y)
+            log("The parameters of {} are {}".format(self.name, self.model.get_params()), DEBUG)
+            self.model.fit(train_x, train_y)
         elif self.is_deep_learning():
             self.model.fit(train_x, train_y, nb_epoch=self.nepoch, batch_size=self.batch_size, validation_split=self.validation_split, class_weight=self.class_weight, callbacks=self.callbacks)
 
@@ -281,7 +292,7 @@ class LearningQueue(object):
         finally:
             self.lock.release()
 
-    def insert_layer_two_testing_dataset(self, model.name, model_idx, nfold, results, model_folder=None):
+    def insert_layer_two_testing_dataset(self, model_name, model_idx, nfold, results, model_folder=None):
         self.lock.acquire()
 
         try:
@@ -321,19 +332,21 @@ class LearningThread(threading.Thread):
             setattr(self, key, value)
 
     def run(self):
+        log("{} starts...".format(threading.current_thread().name), INFO)
+
         while True:
-            (model_folder, nfold, model_idx, (train_x_idx, test_x_idx), p) = self.obj.learning_queue.get()
+            (model_folder, nfold, model_idx, (train_x_idx, test_x_idx), pair) = self.obj.learning_queue.get()
             timestamp_start = time.time()
-            model_name = p[0]
 
             cost = -1
+            model_name = pair[0]
 
-            pair = copy.deepcopy(p)
-            pair[1]["folder"] = model_folder
-            pair[1]["nfold"] = nfold
+            if model_name.find("deep") > -1:
+                pair[1]["folder"] = model_folder
+                pair[1]["nfold"] = nfold
 
             model = LearningFactory.get_model(pair)
-            if not model or not model.model:
+            if model == None or model.model == None:
                 log("Can't init this model({})".format(model_name), WARN)
             elif model.is_cluster():
                 model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])

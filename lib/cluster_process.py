@@ -20,14 +20,7 @@ def layer1_tag_labels(model_folder, n_features, methodology, train_x, test_x, se
     if os.path.exists(filepath_model):
         model = load_cache(filepath_model)
 
-        # Backward Support
-        if type(model).__name__ == "KaggleKMeans":
-            cluster_model = Cluster(methodology, model.model)
-
-            os.rename(filepath_model, "{}.kaggle".format(filepath_model))
-            save_cache(model.model, filepath_model)
-        else:
-            cluster_model = Cluster(methodology, model)
+        cluster_model = Cluster(methodology, model)
     else:
         log("Not Found cache file, {}".format(filepath_model), INFO)
 

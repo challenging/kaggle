@@ -214,6 +214,10 @@ def save_kaggle_submission(test_id, results, filepath, normalization=False):
     pd.DataFrame({"ID": test_id, "PredictedProb": results}).to_csv(filepath, index=False)
 
 def save_cache(obj, filepath):
+    parent_folder = os.path.dirname(filepath)
+    if not os.path.isdir(parent_folder):
+        os.makedirs(parent_folder)
+
     with open(filepath, "wb") as OUTPUT:
         pickle.dump(obj, OUTPUT)
 

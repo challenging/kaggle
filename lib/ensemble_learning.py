@@ -11,7 +11,7 @@ from sklearn.metrics import log_loss
 from sklearn.utils import shuffle
 
 from learning import LearningFactory, Learning, LearningQueue, LearningCost
-from utils import log, INFO
+from utils import log, INFO, ERROR
 from load import load_cache, save_cache
 
 def get_max_mean_min_probabilities(x):
@@ -37,8 +37,9 @@ def store_layer_output(models, dataset, filepath, targets=[]):
 
     pd.DataFrame(results_of_layer).to_csv(filepath, index=False)
 
-def layer_one_model(model_folder, train_x, train_y, test_x, test_id, models, layer2_model_name,
+def layer_one_model(model_folder, train_x, train_y, test_x, models,
                     cost_string="logloss", n_folds=10, number_of_thread=1, filepath_queue=None, filepath_nfold=None):
+    log("The phase 1 starts...", INFO)
 
     layer_two_training_dataset = np.zeros((train_x.shape[0], len(models)))
     layer_two_testing_dataset = np.zeros((test_x.shape[0], len(models), n_folds))
@@ -51,7 +52,6 @@ def layer_one_model(model_folder, train_x, train_y, test_x, test_id, models, lay
         learning_cost = learning_queue.learning_cost
     else:
         only_models = [model[0] for model in models]
-        only_models += [layer2_model_name]
 
         learning_cost = LearningCost(only_models, n_folds)
         learning_queue.setup_layer_info(layer_two_training_dataset, layer_two_testing_dataset, learning_cost)
@@ -90,55 +90,65 @@ def layer_one_model(model_folder, train_x, train_y, test_x, test_id, models, lay
 
     return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_cost
 
-def layer_two_model(models, train_x, train_y, test_id, test_x, learning_cost, model_name, filepath_training, filepath_testing, filepath_cost,
+def layer_two_model(previous_models, train_x, train_y, test_x, learning_cost, models, filepath_layer2,
                     cost_string="logloss"):
+    log("The phase 2 starts...")
 
     cost_function = None
     if cost_string == "logloss":
         cost_function = log_loss
     elif cost_string == "auc":
         cost_function = auc
+    else:
+        log("Please set the cost function", ERROR)
+        sys.exit(1)
 
-    only_models = [model[0] for model in models]
+    training_prediction_results = np.zeros((len(train_x), len(models)))
+    testing_prediction_results = np.zeros((len(test_x), len(models)))
 
-    model = LearningFactory.get_model(model_name)
+    zero_train_x = 1 - train_x
+    train_X = np.insert(train_x, range(0, len(train_x[0])), zero_train_x, axis=1)
 
-    model.train(train_x, train_y)
-    training_prediction_results = model.predict(train_x)
-
-    log("The decision function is {}".format(model.coef()), INFO)
-
-    min_probabilities, max_probabilities, mean_probabilities = get_max_mean_min_probabilities(train_x)
-    cost_min = cost_function(train_y, min_probabilities)
-    cost_mean = cost_function(train_y, mean_probabilities)
-    cost_max = cost_function(train_y, max_probabilities)
-
-    # If use average, the cost will be ...
-    log("The cost of min/mean/max-model is {:.8f}/{:.8f}/{:.8f}".format(cost_min, cost_mean, cost_max), INFO)
+    zero_test_x = 1 - test_x
+    test_X = np.insert(test_x, range(0, len(test_x[0])), zero_test_x, axis=1)
 
     targets = []
-    for key, values in {"Target": train_y, "Probability of Layer 2": training_prediction_results, "min.": min_probabilities, "max.": max_probabilities, "avg.": mean_probabilities}.items():
-        targets.append({key: values})
+    for idx, (model_name, model_setting) in enumerate(models):
+        model = LearningFactory.get_model(model_name, model_setting)
+        model.train(train_X, train_y)
 
-    store_layer_output(only_models, train_x, filepath_training, targets=targets)
+        results = model.predict(train_x)
+        training_prediction_results[:, idx] = results
+        training_cost = cost_function(train_y, results)
 
-    min_probabilities, max_probabilities, mean_probabilities = get_max_mean_min_probabilities(test_x)
-    targets = []
-    for key, values in {"ID":test_id ,"min.": min_probabilities, "max.": max_probabilities, "avg.": mean_probabilities}.items():
-        targets.append({key: values})
+        log("The cost of {} model is {:.8f}".format(model_name, training_cost), INFO)
+        targets.append({"Probability of Layer2({})".format(model_name): results})
 
-    store_layer_output(only_models, test_x, filepath_testing, targets=targets)
+        # For Testing dataset
+        testing_prediction_results[:, idx] = model.predict(test_X)
 
-    cost = cost_function(train_y, training_prediction_results)
+        # Hardcode to save cost information for Layer 2
+        for i in range(0, 10):
+            learning_cost.insert_cost(model.name, i, training_cost)
 
-    max_proba = np.max(training_prediction_results, axis=0)
-    norm_training_prediction_results = training_prediction_results / max_proba
-    norm_cost = cost_function(train_y, norm_training_prediction_results)
+    targets.append({"Target": train_y})
+    store_layer_output([m[0] for m in previous_models], train_x, filepath_layer2, targets=targets)
 
-    log("The cost of layer2 model is {:.8f}/{:8f}".format(cost, norm_cost), INFO)
+    return training_prediction_results, testing_prediction_results
 
-    # Hardcode to set nfold to be ZERO, and then save it
-    learning_cost.insert_cost(model.name, 0, cost)
-    save_cache(learning_cost, filepath_cost)
+def layer_three_model(train_x, train_y, test_x, cost_string="logloss"):
+    log("The phase 3 starts...", INFO)
 
-    return model.predict(test_x)
+    cost_function = None
+    if cost_string == "logloss":
+        cost_function = log_loss
+    elif cost_string == "auc":
+        cost_function = auc
+    else:
+        log("Please set the cost function", ERROR)
+        sys.exit(1)
+
+    prediction_results_training = np.zeros((len(train_x)))
+    prediction_results_training[:] += prediction_results_training[:, 0]*4./9 + prediction_results_training[:, 1]*5./9
+
+    log("The cost of layer-3 model is {}".format(cost_function(train_y, prediction_results_training)))

@@ -2,6 +2,8 @@
 
 import ConfigParser
 
+import numpy as np
+
 class ModelConfParser(object):
     def __init__(self, filepath):
         self.config = ConfigParser.RawConfigParser()
@@ -10,11 +12,25 @@ class ModelConfParser(object):
     def get_workspace(self):
         return self.config.get("MAIN", "workspace")
 
+    def get_cost(self):
+        return self.config.get("MAIN", "cost")
+
+    def get_nfold(self):
+        nfold = 10
+
+        if self.config.has_option("MAIN", "nfold"):
+            nfold = self.config.getint("MAIN", "nfold")
+
+        return nfold
+
     def get_n_jobs(self):
-        return self.config.getint("MAIN", "n_jobs")
+        if self.config.has_option("MAIN", "n_jobs"):
+            return self.config.getint("MAIN", "n_jobs")
+        else:
+            return -1
 
     def get_interaction_information(self):
-        binsize, topX = self.config.get("INTERACTION_INFORMATION", "binsize"), self.config.get("INTERACTION_INFORMATION", "topX")
+        binsize, topX = self.config.getint("INTERACTION_INFORMATION", "binsize"), self.config.getint("INTERACTION_INFORMATION", "topX")
 
         return binsize, topX
 
@@ -29,21 +45,25 @@ class ModelConfParser(object):
             v = self.config.get(model_section, option)
             if v.isdigit():
                 d[option.lower()] = int(v)
+            elif v == "nan":
+                d[option.lower()] = np.nan
             else:
                 try:
                     d[option.lower()] = float(v)
                 except:
                     d[option.lower()] = v
 
-        return d
+        d.setdefault("n_jobs", self.get_n_jobs())
 
-    def get_layer_models(self):
+        return d.pop("method"), d
+
+    def get_layer_models(self, layer_number):
         for section in self.config.sections():
-            if section.find("LAYER1_") > -1:
+            if section.find("LAYER{}_".format(layer_number)) > -1:
                 yield section
 
 if __name__ == "__main__":
-    parser = ModelConfParser("../etc/conf/BNP.cfg")
-    for model_section in parser.get_layer_models():
+    parser = ModelConfParser("../etc/conf/BNP_model.cfg")
+    for model_section in parser.get_layer_models(1):
         cfg = parser.get_model_setting(model_section)
         print cfg
