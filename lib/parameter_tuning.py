@@ -143,7 +143,7 @@ class ParameterTuning(object):
                     if isinstance(value, int):
                         advanced_params[name] = [i for i in range(max(0, value-1), value+1)]
                     elif isinstance(value, float):
-                        advanced_params[name] = [value*i for i in [0.5, 1, 5, 0]]
+                        advanced_params[name] = [value*i for i in [0.25, 1, 1.25]]
 
                 gsearch2 = GridSearchCV(estimator=self.get_model_instance(),
                                         param_grid=advanced_params,
@@ -228,12 +228,12 @@ class RandomForestTuning(ParameterTuning):
     def process(self):
         self.phase("phase1", {})
 
-        param2 = {'max_depth': range(8, 13, 2), 'max_features': [ratio for ratio in [0.1, 0.25, 0.5]]}
+        param2 = {'max_depth': range(6, 11, 2), 'max_features': [ratio for ratio in [0.75, 0.1, 0.25]]}
 
         if self.method == "classifier":
             param2["class_weight"] = [{0: 1, 1: 1}, {0: 1.5, 1: 1}, {0: 2, 1: 1}, "balanced"]
 
-        self.phase("phase2", param2)
+        self.phase("phase2", param2, True)
 
         param3 = {"min_samples_leaf": range(2, 5, 2), "min_samples_split": range(4, 9, 2)}
         self.phase("phase3", param3)

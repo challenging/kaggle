@@ -26,7 +26,7 @@ class CustomizedClassEstimator(BaseEstimator):
         for idx, wi in enumerate(w):
             sol += xs[idx] * wi
 
-        score = cust_func(y, sol)
+        score = cost_func(y, sol)
 
         return score
 
@@ -37,11 +37,11 @@ class CustomizedClassEstimator(BaseEstimator):
         bounds = [(0, 1)]*len(x0)   # weight should be bounded in (0, 1)
         cons = ({"type": "eq", "fun": lambda w: 1-sum(w)})  # the sum of weight should be 1
 
-        res = minimize(CustomizedClassClassifier.function,
+        res = minimize(CustomizedClassEstimator.function,
                        x0,
                        args=(xs, y, self.cost_func, self.n_class),
                        bounds=bounds,
-                       contraints=cons)
+                       constraints=cons)
 
         self.w = res.x
 
@@ -70,7 +70,7 @@ class CustomizedProbaEstimator(BaseEstimator):
         for i, wi in enumerate(w):
             sol[:, i%n_class] += xs[int(i/n_class)][:, i%n_class]*wi
 
-        score = cust_func(y, sol)
+        score = cost_func(y, sol)
         return score
 
     def fit(self, x, y):
@@ -79,7 +79,7 @@ class CustomizedProbaEstimator(BaseEstimator):
 
         bounds = [(0, 1)]*len(x0)
 
-        res = minimize(CustomizedProbaClassifier.function,
+        res = minimize(CustomizedProbaEstimator.function,
                        x0,
                        args=(xs, y, self.cost_func, self.n_class),
                        bounds=bounds)

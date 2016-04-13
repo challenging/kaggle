@@ -128,7 +128,7 @@ def layer_two_model(model_folder, train_x, train_y, test_x, models,
     learning_queue = get_learning_queue(models, n_folds, train_X, train_y, test_X, filepath_queue)
     layer_two_testing_dataset = start_learning(model_folder, train_X, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, number_of_thread, random_state)
 
-    targets.append[{"Target": train_y}]
+    targets = [{"Target": train_y}]
     store_layer_output([m[0] for m in models], train_X, filepath_training, targets=targets)
 
     return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_queue.learning_cost

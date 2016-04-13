@@ -22,7 +22,7 @@ from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, Gradien
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.grid_search import GridSearchCV
-from sklearn.metrics import auc, log_loss, make_scorer
+from sklearn.metrics import auc, log_loss
 
 # For Cluster
 from sklearn.cluster import KMeans, DBSCAN, AffinityPropagation, AgglomerativeClustering, SpectralClustering
@@ -41,8 +41,6 @@ class LearningFactory(object):
     def get_model(pair, cost_function=log_loss):
         model = None
         method, setting = pair
-
-        LL = make_scorer(cost_function)
 
         log("Try to create model based on {}".format(method), INFO)
         if method.find("shallow") > -1:
@@ -92,6 +90,11 @@ class LearningFactory(object):
             model = Learning(method, None, cost_function)
             model.init_deep_params(**setting)
         elif method.find("customized") > -1:
+            if "n_jobs" in setting:
+                del setting["n_jobs"]
+
+            setting["cost_func"] = cost_function
+
             if method.find("class") > -1:
                 model = Learning(method, CustomizedClassEstimator(**setting), cost_function)
             elif method.find("proba") > -1:
@@ -129,6 +132,9 @@ class Learning(object):
 
     def is_deep_learning(self):
         return self.name.find("deep") > -1
+
+    def is_customized(self):
+        return self.name.find("customized") > -1
 
     def is_xgb(self):
         return self.name.find("xgb") > -1
@@ -199,6 +205,11 @@ class Learning(object):
             self.model.fit(train_x, train_y)
         elif self.is_deep_learning():
             self.model.fit(train_x, train_y, nb_epoch=self.nepoch, batch_size=self.batch_size, validation_split=self.validation_split, class_weight=self.class_weight, callbacks=self.callbacks)
+        elif self.is_customized():
+            self.model.fit(train_x, train_y)
+        else:
+            log("Not implement the training method of {}".format(self.name), ERROR)
+            raise NotImplementError
 
     def predict(self, data):
         if self.is_shallow_learning():
@@ -212,10 +223,15 @@ class Learning(object):
                 return self.model.predict_proba(data)[:,1]
             elif self.is_svm():
                 return self.model.predict_proba(data)[:,1]
+        elif self.is_customized():
+            return self.model.predict_proba(data)[:,1]
         elif self.is_cluster():
             return self.model.predict(data)
         elif self.is_deep_learning():
             return [prob[0] if prob else 0.0 for prob in self.model.predict_proba(data)]
+        else:
+            log("Not implement the training method of {}".format(self.name), ERROR)
+            raise NotImplementError
 
     def grid_scores(self):
         if self.is_grid_search():
@@ -224,6 +240,9 @@ class Learning(object):
             return None
 
     def cost(self, data, y_true):
+        log(data[:10])
+        log(self.predict(data)[:10])
+
         return self.cost_function(y_true, self.predict(data))
 
     def coef(self):
