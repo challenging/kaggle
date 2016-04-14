@@ -98,8 +98,9 @@ def learning(conf, thread):
     for model_section in parser.get_layer_models(2):
         method, setting = parser.get_model_setting(model_section)
 
-        if method.find("customized") > -1:
-            setting["cost"] = parser.get_cost()
+        setting["cost"] = parser.get_cost()
+
+        log(setting)
 
         layer2_models.append((method, setting))
 

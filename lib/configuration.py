@@ -42,13 +42,13 @@ class ModelConfParser(object):
     def get_model_setting(self, model_section):
         d = {}
         for option in self.config.options(model_section):
-            v = self.config.get(model_section, option)
+            v = self.config.get(model_section, option).strip("\"")
             if v.isdigit():
                 d[option.lower()] = int(v)
             elif v == "nan":
                 d[option.lower()] = np.nan
             elif v.lower() in ["true", "false"]:
-                d[option.lower()] = bool(v)
+                d[option.lower()] = (v.lower() == "true")
             else:
                 try:
                     d[option.lower()] = float(v)

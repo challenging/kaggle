@@ -47,9 +47,7 @@ def get_learning_queue(models, n_folds, train_x, train_y, test_x, filepath_queue
 
         learning_cost = learning_queue.learning_cost
     else:
-        only_models = [model[0] for model in models]
-
-        learning_cost = LearningCost(only_models, n_folds)
+        learning_cost = LearningCost(n_folds)
         learning_queue.setup_layer_info(layer_two_training_dataset, layer_two_testing_dataset, learning_cost)
 
         learning_queue.dump()
@@ -82,8 +80,8 @@ def start_learning(model_folder, train_x, train_y, test_x, models, n_folds, lear
                     learning_queue.put(model_folder, nfold, model_idx, (train, test), m)
                 else:
                     if nfold == 0:
-                        train, test = [idx for idx in range(0, len(train_x))], [idx for idx in range(0, len(test_x))]
-                        learning_queue.put(model_folder, nfold, model_idx, (train, test), m)
+                        idxs = [idx for idx in range(0, len(train_x))]
+                        learning_queue.put(model_folder, nfold, model_idx, (idxs, idxs), m)
                     else:
                         continue
 
@@ -124,6 +122,9 @@ def final_model(pair, train_x, train_y, test_x, cost_string="logloss"):
 
     model = LearningFactory.get_model(pair)
     model.train(train_x, train_y)
+
+    log("The weights of {} are {}".format(model.name, model.coef()), INFO)
+
     prediction_results_training = model.predict(train_x)
     log("The cost of layer-3 model is {}".format(cost_function(train_y, prediction_results_training)))
 

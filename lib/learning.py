@@ -20,7 +20,7 @@ from keras.callbacks import ModelCheckpoint
 # For Shadow Learning
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, GradientBoostingRegressor
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier
-from sklearn.linear_model import LogisticRegression, LogisticRegressionCV
+from sklearn.linear_model import LogisticRegression, LogisticRegressionCV, LinearRegression
 from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import auc, log_loss
 
@@ -46,18 +46,23 @@ class LearningFactory(object):
         if method.find("shallow") > -1:
             if method.find("logistic_regressor") > -1:
                 if "cost" in setting:
+                    '''
                     if setting["cost"] == "logloss":
                         setting["scoring"] = log_loss
                     else:
                         raise NotImplementError
+                    '''
 
                     del setting["cost"]
+
+                if "extend_class_proba" in setting:
+                    del setting["extend_class_proba"]
 
                 lr = LogisticRegressionCV(**setting)
 
                 model = Learning(method, lr, cost_function)
             elif method.find("linear_regressor") > -1:
-                model = Learning(method, LinearRegression())
+                model = Learning(method, LinearRegression(), cost_function)
             elif method.find("regressor") > -1:
                 if method.find("extratree") > -1:
                     model = Learning(method, ExtraTreesRegressor(**setting), cost_function)
@@ -141,6 +146,10 @@ class Learning(object):
     def __init__(self, name, model, cost_function=log_loss, extend_class_proba=False):
         self.name = name.lower()
         self.model = model
+
+        if self.model:
+            log("The parameters of {} are {}".format(self.name, self.model.get_params()), INFO)
+
         self.cost_function = cost_function
         self.extend_class_proba = extend_class_proba
 
@@ -250,7 +259,6 @@ class Learning(object):
                 ratio[label] = float(target_1) / (target_0 + target_1)
             self.ratio = ratio
         elif self.is_shallow_learning():
-            log("The parameters of {} are {}".format(self.name, self.model.get_params()), DEBUG)
             self.model.fit(train_x, train_y)
         elif self.is_deep_learning():
             self.model.fit(train_x, train_y, nb_epoch=self.nepoch, batch_size=self.batch_size, validation_split=self.validation_split, class_weight=self.class_weight, callbacks=self.callbacks)
@@ -261,8 +269,6 @@ class Learning(object):
             raise NotImplementError
 
     def predict(self, data):
-        log("The weights of {} are {}".format(self.name, self.coef()), INFO)
-
         data = self.preprocess_data(data)
         if self.is_shallow_learning():
             if self.is_regressor():
@@ -306,11 +312,14 @@ class Learning(object):
 class LearningCost(object):
     def __init__(self, nfold):
         self.cost = {}
+        self.nfold = nfold
 
     def insert_cost(self, model_name, nfold, cost):
         if model_name not in self.cost:
-            self.cost.setdefault(model_name, np.zeros(len(self.cost.values()[0]).astype(float)))
-            log("Not Found {} in self.cost, so creating it".format(model_name), WARN)
+            self.cost.setdefault(model_name, np.zeros(self.nfold).astype(float))
+            log("Not Found {} in self.cost, so creating it".format(model_name), INFO)
+        else:
+            log("Found {} in self.cost, so just inserting it".format(model_name), INFO)
 
         self.cost[model_name][nfold] += cost
 
@@ -403,7 +412,7 @@ class LearningThread(threading.Thread):
                 pair[1]["folder"] = model_folder
                 pair[1]["nfold"] = nfold
 
-            model = LearningFactory.get_model(pair)
+            model = LearningFactory.get_model(copy.deepcopy(pair))
             if model == None or model.model == None:
                 log("Can't init this model({})".format(model_name), WARN)
             elif model.is_cluster():
