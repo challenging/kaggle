@@ -21,6 +21,7 @@ from keras.callbacks import ModelCheckpoint
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, GradientBoostingRegressor
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression, LogisticRegressionCV, LinearRegression
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import auc, log_loss
 
@@ -45,18 +46,10 @@ class LearningFactory(object):
         log("Try to create model based on {}".format(method), INFO)
         if method.find("shallow") > -1:
             if method.find("logistic_regressor") > -1:
-                if "cost" in setting:
-                    '''
-                    if setting["cost"] == "logloss":
-                        setting["scoring"] = log_loss
-                    else:
-                        raise NotImplementError
-                    '''
-
-                    del setting["cost"]
-
                 if "extend_class_proba" in setting:
                     del setting["extend_class_proba"]
+
+                setting["scoring"] = cost_function
 
                 lr = LogisticRegressionCV(**setting)
 
@@ -117,24 +110,12 @@ class LearningFactory(object):
 
                 del setting["extend_class_proba"]
 
-            if "cost" in setting:
-                if setting["cost"] == "logloss":
-                    setting["cost_func"] = log_loss
-                elif setting["cost"] == "auc":
-                    setting["cost_func"] = auc
-                else:
-                    log("Not implement the cost function based on {}".format(setting["cost"]), INFO)
-                    raise NotImplementError
+            setting["cost_func"] = cost_function
 
-                del setting["cost"]
-            else:
-                pass
-
-            log("2. {}".format(setting), INFO)
             if method.find("class") > -1:
-                model = Learning(method, CustomizedClassEstimator(**setting), setting["cost_func"], extend_class_proba)
+                model = Learning(method, CustomizedClassEstimator(**setting), cost_function, extend_class_proba)
             elif method.find("proba") > -1:
-                model = Learning(method, CustomizedProbaEstimator(**setting), setting["cost_func"], extend_class_proba)
+                model = Learning(method, CustomizedProbaEstimator(**setting), cost_function, extend_class_proba)
             else:
                 log("5. Can't create model based on {}".format(method), ERROR)
         else:
