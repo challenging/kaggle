@@ -47,6 +47,8 @@ class ModelConfParser(object):
                 d[option.lower()] = int(v)
             elif v == "nan":
                 d[option.lower()] = np.nan
+            elif v.lower() in ["true", "false"]:
+                d[option.lower()] = bool(v)
             else:
                 try:
                     d[option.lower()] = float(v)

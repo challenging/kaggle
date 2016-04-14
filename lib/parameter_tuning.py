@@ -58,6 +58,9 @@ class ParameterTuning(object):
     def load(self):
         self.params, self.done = load_cache(self.filepath)
 
+        log("The current parameters are {}".format(self.params), INFO)
+        log("The done list contains {}".format(self.done), INFO)
+
     def compare(self, cost):
         if cost > self.best_cost:
             self.best_cost = cost
@@ -229,14 +232,14 @@ class RandomForestTuning(ParameterTuning):
         self.phase("phase1", {})
 
         param2 = {'max_depth': range(6, 11, 2), 'max_features': [ratio for ratio in [0.75, 0.1, 0.25]]}
-
-        if self.method == "classifier":
-            param2["class_weight"] = [{0: 1, 1: 1}, {0: 1.5, 1: 1}, {0: 2, 1: 1}, "balanced"]
-
         self.phase("phase2", param2, True)
 
         param3 = {"min_samples_leaf": range(2, 5, 2), "min_samples_split": range(4, 9, 2)}
         self.phase("phase3", param3)
+
+        if self.method == "classifier":
+            param4 = {"class_weight": [{0: 1, 1: 1}, {0: 1.5, 1: 1}, {0: 2, 1: 1}, "balanced"]}
+            self.phase("phase4", param4)
 
 class ExtraTreeTuning(RandomForestTuning):
     pass

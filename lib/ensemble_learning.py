@@ -11,6 +11,8 @@ from sklearn.metrics import log_loss
 from sklearn.utils import shuffle
 
 from learning import LearningFactory, Learning, LearningQueue, LearningCost
+from customized_estimators import FinalEnsembleModel
+
 from utils import log, INFO, ERROR
 from load import load_cache, save_cache
 
@@ -23,16 +25,13 @@ def get_max_mean_min_probabilities(x):
 
     return min_probabilities, max_probabilities, mean_probabilities
 
-def store_layer_output(models, dataset, filepath, targets=[]):
+def store_layer_output(models, dataset, filepath, optional=[]):
     results_of_layer = {}
     for model_idx, model_name in enumerate(models):
-        results_of_layer.setdefault(model_name, [])
+        results_of_layer[model_name] = dataset[:, model_idx]
 
-        for idx in range(0, len(dataset)):
-            results_of_layer[model_name].append(dataset[idx][model_idx])
-
-    if targets:
-        for target in targets:
+    if optional:
+        for target in optional:
             results_of_layer.update(target)
 
     pd.DataFrame(results_of_layer).to_csv(filepath, index=False)
@@ -74,12 +73,20 @@ def start_learning(model_folder, train_x, train_y, test_x, models, n_folds, lear
         log("Save skf({:2d} folds) in {}".format(n_folds, filepath_nfold), INFO)
 
     for model_idx, m in enumerate(models):
+        model_name = m[0]
         for nfold, (train, test) in enumerate(skf):
-            model_name = m[0]
             if learning_queue.is_done_layer_two_training_dataset(test, model_idx):
                 log("fold-{:02d} data to '{}' model is done".format(nfold, model_name))
             else:
-                learning_queue.put(model_folder, nfold, model_idx, (train, test), m)
+                if model_name.find("deep") == -1:
+                    learning_queue.put(model_folder, nfold, model_idx, (train, test), m)
+                else:
+                    if nfold == 0:
+                        train, test = [idx for idx in range(0, len(train_x))], [idx for idx in range(0, len(test_x))]
+                        learning_queue.put(model_folder, nfold, model_idx, (train, test), m)
+                    else:
+                        continue
+
                 log("Put fold-{:02d} data into this '{}' model".format(nfold, model_name))
 
     learning_queue.starts(number_of_thread=number_of_thread)
@@ -90,12 +97,10 @@ def start_learning(model_folder, train_x, train_y, test_x, models, n_folds, lear
 
     return layer_two_testing_dataset
 
-def layer_one_model(model_folder, train_x, train_y, test_x, models,
-                    filepath_training, filepath_queue, filepath_nfold,
-                    n_folds=10, number_of_thread=1,
-                    random_state=1201):
-
-    log("The phase 1 starts...", INFO)
+def layer_model(model_folder, train_x, train_y, test_x, models,
+                filepath_queue, filepath_nfold,
+                n_folds=10, number_of_thread=1,
+                random_state=1201):
 
     number_of_feature = len(train_x[0])
     log("Data Distribution is ({}, {}), and then the number of feature is {}, and then prepare to save data in {}".format(np.sum(train_y==0), np.sum(train_y==1), number_of_feature, model_folder), INFO)
@@ -103,37 +108,9 @@ def layer_one_model(model_folder, train_x, train_y, test_x, models,
     learning_queue = get_learning_queue(models, n_folds, train_x, train_y, test_x, filepath_queue)
     layer_two_testing_dataset = start_learning(model_folder, train_x, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, number_of_thread, random_state)
 
-    # Save the results of layer1
-    targets = [{"Target": train_y}]
-    store_layer_output([m[0] for m in models], learning_queue.layer_two_training_dataset, filepath_training, targets=targets)
-
     return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_queue.learning_cost
 
-def layer_two_model(model_folder, train_x, train_y, test_x, models,
-                    filepath_training, filepath_queue, filepath_nfold,
-                    n_folds=10, number_of_thread=1,
-                    random_state=1201):
-
-    log("The phase 2 starts...")
-
-    zero_train_x = 1 - train_x
-    train_X = np.insert(train_x, range(0, len(train_x[0])), zero_train_x, axis=1)
-
-    zero_test_x = 1 - test_x
-    test_X = np.insert(test_x, range(0, len(test_x[0])), zero_test_x, axis=1)
-
-    number_of_feature = len(train_X[0])
-    log("Data Distribution is ({}, {}), and then the number of feature is {}, and then prepare to save data in {}".format(np.sum(train_y==0), np.sum(train_y==1), number_of_feature, model_folder), INFO)
-
-    learning_queue = get_learning_queue(models, n_folds, train_X, train_y, test_X, filepath_queue)
-    layer_two_testing_dataset = start_learning(model_folder, train_X, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, number_of_thread, random_state)
-
-    targets = [{"Target": train_y}]
-    store_layer_output([m[0] for m in models], train_X, filepath_training, targets=targets)
-
-    return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_queue.learning_cost
-
-def layer_three_model(train_x, train_y, test_x, cost_string="logloss"):
+def final_model(pair, train_x, train_y, test_x, cost_string="logloss"):
     log("The phase 3 starts...", INFO)
 
     cost_function = None
@@ -145,7 +122,9 @@ def layer_three_model(train_x, train_y, test_x, cost_string="logloss"):
         log("Please set the cost function", ERROR)
         sys.exit(1)
 
-    prediction_results_training = np.zeros((len(train_x)))
-    prediction_results_training[:] += prediction_results_training[:, 0]*4./9 + prediction_results_training[:, 1]*5./9
-
+    model = LearningFactory.get_model(pair)
+    model.train(train_x, train_y)
+    prediction_results_training = model.predict(train_x)
     log("The cost of layer-3 model is {}".format(cost_function(train_y, prediction_results_training)))
+
+    return model.predict(test_x)

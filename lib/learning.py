@@ -20,7 +20,7 @@ from keras.callbacks import ModelCheckpoint
 # For Shadow Learning
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, GradientBoostingRegressor
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier
-from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.linear_model import LogisticRegression, LogisticRegressionCV
 from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import auc, log_loss
 
@@ -44,10 +44,20 @@ class LearningFactory(object):
 
         log("Try to create model based on {}".format(method), INFO)
         if method.find("shallow") > -1:
-            if method.find("linear_regressor") > -1:
-                model = Learning(method, LinearRegression(), cost_function)
-            elif method.find("logistic_regressor") > -1:
-                model = Learning(method, LogisticRegression())
+            if method.find("logistic_regressor") > -1:
+                if "cost" in setting:
+                    if setting["cost"] == "logloss":
+                        setting["scoring"] = log_loss
+                    else:
+                        raise NotImplementError
+
+                    del setting["cost"]
+
+                lr = LogisticRegressionCV(**setting)
+
+                model = Learning(method, lr, cost_function)
+            elif method.find("linear_regressor") > -1:
+                model = Learning(method, LinearRegression())
             elif method.find("regressor") > -1:
                 if method.find("extratree") > -1:
                     model = Learning(method, ExtraTreesRegressor(**setting), cost_function)
@@ -86,19 +96,40 @@ class LearningFactory(object):
                     pass
 
             log("The folder of deep learning is in {}".format(setting["folder"]), INFO)
+            log(setting)
 
             model = Learning(method, None, cost_function)
             model.init_deep_params(**setting)
         elif method.find("customized") > -1:
+            log("1. {}".format(setting), INFO)
+
             if "n_jobs" in setting:
                 del setting["n_jobs"]
 
-            setting["cost_func"] = cost_function
+            extend_class_proba = False
+            if "extend_class_proba" in setting:
+                extend_class_proba = setting["extend_class_proba"]
 
+                del setting["extend_class_proba"]
+
+            if "cost" in setting:
+                if setting["cost"] == "logloss":
+                    setting["cost_func"] = log_loss
+                elif setting["cost"] == "auc":
+                    setting["cost_func"] = auc
+                else:
+                    log("Not implement the cost function based on {}".format(setting["cost"]), INFO)
+                    raise NotImplementError
+
+                del setting["cost"]
+            else:
+                pass
+
+            log("2. {}".format(setting), INFO)
             if method.find("class") > -1:
-                model = Learning(method, CustomizedClassEstimator(**setting), cost_function)
+                model = Learning(method, CustomizedClassEstimator(**setting), setting["cost_func"], extend_class_proba)
             elif method.find("proba") > -1:
-                model = Learning(method, CustomizedProbaEstimator(**setting), cost_function)
+                model = Learning(method, CustomizedProbaEstimator(**setting), setting["cost_func"], extend_class_proba)
             else:
                 log("5. Can't create model based on {}".format(method), ERROR)
         else:
@@ -107,14 +138,16 @@ class LearningFactory(object):
         return model
 
 class Learning(object):
-    def __init__(self, name, model, cost_function=log_loss):
+    def __init__(self, name, model, cost_function=log_loss, extend_class_proba=False):
         self.name = name.lower()
         self.model = model
         self.cost_function = cost_function
+        self.extend_class_proba = extend_class_proba
 
-    def init_deep_params(self, nfold, folder, input_dims,
+    def init_deep_params(self, nfold, folder, input_dims, learning_rate,
                          number_of_layer, batch_size, dimension,
-                         nepoch, validation_split, class_weight, callbacks=[]):
+                         nepoch, validation_split, class_weight,
+                         callbacks=[]):
 
         self.batch_size = batch_size
         self.nepoch = nepoch
@@ -125,7 +158,7 @@ class Learning(object):
         self.class_weight = class_weight
         self.validation_split = validation_split
 
-        self.model = logistic_regression(folder, number_of_layer, dimension, input_dims)
+        self.model = logistic_regression(folder, number_of_layer, dimension, input_dims, learning_rate=learning_rate)
 
     def is_shallow_learning(self):
         return self.name.find("shallow") > -1
@@ -175,7 +208,23 @@ class Learning(object):
 
         return training_results, testing_results
 
+    def preprocess_data(self, dataset):
+        n_feature = len(dataset[0])
+
+        new_dataset = dataset
+        if self.extend_class_proba:
+            other_class_proba = 1 - dataset
+            new_dataset = np.insert(dataset, range(0, len(dataset[0])), other_class_proba, axis=1)
+
+        new_n_feature = len(new_dataset[0])
+        if n_feature != new_n_feature:
+            log("Extend the number of feature from {} to {}".format(n_feature, new_n_feature), INFO)
+
+        return new_dataset
+
     def train(self, train_x, train_y):
+        train_x = self.preprocess_data(train_x)
+
         if self.is_cluster():
             train_x = train_x.astype(float) - train_x.min(0) / train_x.ptp(axis=0)
             if np.isnan(train_x).any():
@@ -212,6 +261,9 @@ class Learning(object):
             raise NotImplementError
 
     def predict(self, data):
+        log("The weights of {} are {}".format(self.name, self.coef()), INFO)
+
+        data = self.preprocess_data(data)
         if self.is_shallow_learning():
             if self.is_regressor():
                 if self.name.find("logistic_regressor") > -1:
@@ -240,9 +292,6 @@ class Learning(object):
             return None
 
     def cost(self, data, y_true):
-        log(data[:10])
-        log(self.predict(data)[:10])
-
         return self.cost_function(y_true, self.predict(data))
 
     def coef(self):
@@ -255,14 +304,12 @@ class Learning(object):
             return self.model.get_weights()
 
 class LearningCost(object):
-    def __init__(self, models, nfold):
+    def __init__(self, nfold):
         self.cost = {}
-        for model in models:
-            self.cost.setdefault(model, np.zeros(nfold).astype(float))
 
     def insert_cost(self, model_name, nfold, cost):
         if model_name not in self.cost:
-            self.cost.setdefault(model_name, np.zeros(len(self.cost.values()[0])))
+            self.cost.setdefault(model_name, np.zeros(len(self.cost.values()[0]).astype(float)))
             log("Not Found {} in self.cost, so creating it".format(model_name), WARN)
 
         self.cost[model_name][nfold] += cost
@@ -299,27 +346,19 @@ class LearningQueue(object):
         else:
             return True
 
-    def insert_layer_two_training_dataset(self, layer_two_training_idx, model_name, model_idx, results, model_folder=None):
+    def insert_layer_two_training_dataset(self, layer_two_training_idx, model_name, model_idx, results):
         self.lock.acquire()
 
         try:
             self.layer_two_training_dataset[layer_two_training_idx, model_idx] = results
-
-            if model_folder:
-                filepath = "{}/middle_layer/{}.dataset.pkl".format(model_folder, model_name)
-                save_cache(self.layer_two_training_dataset[:,model_idx], filepath)
         finally:
             self.lock.release()
 
-    def insert_layer_two_testing_dataset(self, model_name, model_idx, nfold, results, model_folder=None):
+    def insert_layer_two_testing_dataset(self, model_name, model_idx, nfold, results):
         self.lock.acquire()
 
         try:
             self.layer_two_testing_dataset[:, model_idx, nfold] = results
-
-            if model_folder:
-                filepath = "{}/middle_layer/{}.dataset.pkl".format(model_folder, model_name)
-                save_cache(self.layer_two_testing_dataset[:, model_idx], filepath)
         finally:
             self.lock.release()
 
@@ -371,25 +410,37 @@ class LearningThread(threading.Thread):
                 model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])
                 training_results, testing_results = model.get_cluster_results(self.obj.train_x[test_x_idx], self.obj.test_x)
 
-                self.obj.insert_layer_two_training_dataset(test_x_idx, model.name, model_idx, training_results, model_folder)
-                self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, testing_results, model_folder)
+                self.obj.insert_layer_two_training_dataset(test_x_idx, model.name, model_idx, training_results)
+                self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, testing_results)
                 self.obj.learning_cost.insert_cost(model_name, nfold, -1)
             else:
-                model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])
+                if model_name.find("deep") > -1 and nfold != 0:
+                    # Copy the prediction results of training dataset to other folds
+                    # All of them are already inserted when nfold equals zero
 
-                results = model.predict(self.obj.train_x[test_x_idx])
-                self.obj.insert_layer_two_training_dataset(test_x_idx, model.name, model_idx, results, model_folder)
+                    #Copy the prediction results of testing dataset to other folds
+                    layer_two_testing_dataset = self.obj.layer_two_testing_dataset[:, model_idx, 0]
+                    self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, layer_two_testing_dataset)
 
-                layer_two_testing_dataset = model.predict(self.obj.test_x)
-                self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, layer_two_testing_dataset, model_folder)
-
-                cost = model.cost(self.obj.train_x[test_x_idx], self.obj.train_y[test_x_idx])
-                if np.isnan(cost):
-                    log("The cost of '{}' model for {}th fold is NaN".format(model_name, nfold), WARN)
-                else:
+                    # Copy the cost of 0th fold into other folds
+                    cost = self.obj.learning_cost[model_name][0]
                     self.obj.learning_cost.insert_cost(model_name, nfold, cost)
+                else:
+                    model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])
 
-                log("The grid score is {}".format(model.grid_scores()), DEBUG)
+                    results = model.predict(self.obj.train_x[test_x_idx])
+                    self.obj.insert_layer_two_training_dataset(test_x_idx, model.name, model_idx, results)
+
+                    layer_two_testing_dataset = model.predict(self.obj.test_x)
+                    self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, layer_two_testing_dataset)
+
+                    cost = model.cost(self.obj.train_x[test_x_idx], self.obj.train_y[test_x_idx])
+                    if np.isnan(cost):
+                        log("The cost of '{}' model for {}th fold is NaN".format(model_name, nfold), WARN)
+                    else:
+                        self.obj.learning_cost.insert_cost(model_name, nfold, cost)
+
+                    log("The grid score is {}".format(model.grid_scores()), DEBUG)
 
             timestamp_end = time.time()
             log("Cost {:02f} secends to train '{}' model for fold-{:02d}, and cost is {:.8f}".format(\
