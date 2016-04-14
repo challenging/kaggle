@@ -20,7 +20,7 @@ from keras.callbacks import ModelCheckpoint
 # For Shadow Learning
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, GradientBoostingRegressor
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier
-from sklearn.linear_model import LogisticRegression, LogisticRegressionCV, LinearRegression
+from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import auc, log_loss
@@ -30,7 +30,7 @@ from sklearn.cluster import KMeans, DBSCAN, AffinityPropagation, AgglomerativeCl
 from sklearn.neighbors import NearestCentroid, kneighbors_graph
 from sklearn.preprocessing import MinMaxScaler, Imputer, StandardScaler
 
-from load import load_advanced_data, save_cache
+from load import save_cache, load_cache
 from utils import log, DEBUG, INFO, WARN, ERROR
 from deep_learning import logistic_regression, logistic_regression_2, KaggleCheckpoint
 from customized_estimators import CustomizedClassEstimator, CustomizedProbaEstimator
@@ -49,11 +49,12 @@ class LearningFactory(object):
                 if "extend_class_proba" in setting:
                     del setting["extend_class_proba"]
 
-                setting["scoring"] = cost_function
+                if "cost" in setting:
+                    del setting["cost"]
 
-                lr = LogisticRegressionCV(**setting)
+                #setting["scoring"] = cost_function
 
-                model = Learning(method, lr, cost_function)
+                model = Learning(method, LogisticRegression(**setting), cost_function)
             elif method.find("linear_regressor") > -1:
                 model = Learning(method, LinearRegression(), cost_function)
             elif method.find("regressor") > -1:
@@ -68,7 +69,13 @@ class LearningFactory(object):
                 else:
                     log("1. Can't create model based on {}".format(method), ERROR)
             elif method.find("classifier") > -1:
-                if method.find("extratree") > -1:
+                if method.find("calibration") > -1:
+                    for key, value in setting.items():
+                        if key.lower() not in ["base_estimator", "method", "cv"]:
+                            del setting[key]
+
+                    model = Learning(method, CalibratedClassifierCV(**setting), cost_function)
+                elif method.find("extratree") > -1:
                     model = Learning(method, ExtraTreesClassifier(**setting), cost_function)
                 elif method.find("randomforest") > -1:
                     model = Learning(method, RandomForestClassifier(**setting), cost_function)
@@ -102,13 +109,14 @@ class LearningFactory(object):
             log("1. {}".format(setting), INFO)
 
             if "n_jobs" in setting:
-                del setting["n_jobs"]
+                log("Delete the n_jobs={} from setting".format(setting.pop("n_jobs")), INFO)
 
             extend_class_proba = False
             if "extend_class_proba" in setting:
-                extend_class_proba = setting["extend_class_proba"]
+                extend_class_proba = setting.pop("extend_class_proba")
 
-                del setting["extend_class_proba"]
+            if "cost" in setting:
+                log("Delete the cost={} from setting".format(setting.pop("cost")), INFO)
 
             setting["cost_func"] = cost_function
 
@@ -382,18 +390,39 @@ class LearningThread(threading.Thread):
     def run(self):
         log("{} starts...".format(threading.current_thread().name), INFO)
 
+        previous_models = {}
+
         while True:
-            (model_folder, nfold, model_idx, (train_x_idx, test_x_idx), pair) = self.obj.learning_queue.get()
+            (model_folder, nfold, model_idx, (train_x_idx, test_x_idx), p) = self.obj.learning_queue.get()
             timestamp_start = time.time()
+            pair = copy.deepcopy(p)
 
             cost = -1
             model_name = pair[0]
+            model_setting = pair[1]
+
+            model_id, filepath_saving_model = None, None
+            if "model_id" in model_setting:
+                model_id = model_setting.pop("model_id")
+                filepath_saving_model = "{}/{}_{}.model.pkl".format(model_folder, model_id, nfold)
+
+                log("Get model ID({}), and then save it in {}".format(model_id, filepath_saving_model), INFO)
+
+            dependency_model_id, filepath_loading_model = None, None
+            if "dependency_model_id" in model_setting:
+                dependency_model_id = model_setting.pop("dependency_model_id")
+                filepath_loading_model = "{}/{}_{}.model.pkl".format(model_folder, dependency_model_id, nfold)
+
+                log("Try to load model from {}".format(filepath_loading_model), INFO)
 
             if model_name.find("deep") > -1:
-                pair[1]["folder"] = model_folder
-                pair[1]["nfold"] = nfold
+                model_setting["folder"] = model_folder
+                model_setting["nfold"] = nfold
 
-            model = LearningFactory.get_model(copy.deepcopy(pair))
+            if model_name.find("calibration") > -1:
+                model_setting["best_estimator"] = load_cache(filepath_loading_model)
+
+            model = LearningFactory.get_model(pair)
             if model == None or model.model == None:
                 log("Can't init this model({})".format(model_name), WARN)
             elif model.is_cluster():
@@ -431,6 +460,9 @@ class LearningThread(threading.Thread):
                         self.obj.learning_cost.insert_cost(model_name, nfold, cost)
 
                     log("The grid score is {}".format(model.grid_scores()), DEBUG)
+
+            if model_id:
+                save_cache(model.model, filepath_saving_model)
 
             timestamp_end = time.time()
             log("Cost {:02f} secends to train '{}' model for fold-{:02d}, and cost is {:.8f}".format(\

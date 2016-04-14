@@ -57,7 +57,12 @@ class ModelConfParser(object):
 
         d.setdefault("n_jobs", self.get_n_jobs())
 
-        return d.pop("method"), d
+        method = d.pop("method")
+
+        if "kernal" in d:
+            d["method"] = d.pop("kernal")
+
+        return method, d
 
     def get_layer_models(self, layer_number):
         for section in self.config.sections():

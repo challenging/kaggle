@@ -77,12 +77,6 @@ def tuning(methodology, binsize, combinations_size, top, is_testing, thread, con
 
     if os.path.exists(filepath_tuning):
         algorithm.load()
-    else:
-        algorithm.max_depth = 5
-        algorithm.max_features = 0.25
-        algorithm.min_samples_split = 6
-        algorithm.min_samples_leaf = 2
-        algorithm.done = ["phase1", "phase2", "phase3", "micro-phase2"]
 
     algorithm.process()
 

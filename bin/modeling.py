@@ -46,6 +46,7 @@ def learning(conf, thread):
 
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
+    '''
     if os.path.exists(filepath_cache_ii):
         train_x, test_x = load_cache(filepath_cache_ii)
     else:
@@ -54,6 +55,7 @@ def learning(conf, thread):
             test_x["{}-{}".format(layer1, layer2)] = test_x[layer1].values * test_x[layer2].values * value
 
         save_cache((train_x, test_x), filepath_cache_ii)
+    '''
 
     train_X, test_X = train_x.values, test_x.values
 

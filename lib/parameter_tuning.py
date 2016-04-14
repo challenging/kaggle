@@ -235,7 +235,7 @@ class RandomForestTuning(ParameterTuning):
         self.phase("phase2", param2, True)
 
         param3 = {"min_samples_leaf": range(2, 5, 2), "min_samples_split": range(4, 9, 2)}
-        self.phase("phase3", param3)
+        self.phase("phase3", param3, True)
 
         if self.method == "classifier":
             param4 = {"class_weight": [{0: 1, 1: 1}, {0: 1.5, 1: 1}, {0: 2, 1: 1}, "balanced"]}
