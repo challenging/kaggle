@@ -43,29 +43,30 @@ class LearningFactory(object):
         model = None
         method, setting = pair
 
+        extend_class_proba = False
+        if "extend_class_proba" in setting:
+            extend_class_proba = setting.pop("extend_class_proba")
+
         log("Try to create model based on {}".format(method), INFO)
         if method.find("shallow") > -1:
             if method.find("logistic_regressor") > -1:
-                if "extend_class_proba" in setting:
-                    del setting["extend_class_proba"]
-
                 if "cost" in setting:
                     del setting["cost"]
 
                 #setting["scoring"] = cost_function
 
-                model = Learning(method, LogisticRegression(**setting), cost_function)
+                model = Learning(method, LogisticRegression(**setting), cost_function, extend_class_proba)
             elif method.find("linear_regressor") > -1:
-                model = Learning(method, LinearRegression(), cost_function)
+                model = Learning(method, LinearRegression(), cost_function, extend_class_proba)
             elif method.find("regressor") > -1:
                 if method.find("extratree") > -1:
-                    model = Learning(method, ExtraTreesRegressor(**setting), cost_function)
+                    model = Learning(method, ExtraTreesRegressor(**setting), cost_function, extend_class_proba)
                 elif method.find("randomforest") > -1:
-                    model = Learning(method, RandomForestRegressor(**setting), cost_function)
+                    model = Learning(method, RandomForestRegressor(**setting), cost_function, extend_class_proba)
                 elif method.find("gradientboosting") > -1:
-                    model = Learning(method, GradientBoostingRegressor(**setting), cost_function)
+                    model = Learning(method, GradientBoostingRegressor(**setting), cost_function, extend_class_proba)
                 elif method.find("xgboosting") > -1:
-                    model = Learning(method, xgb.XGBRegressor(**setting), cost_function)
+                    model = Learning(method, xgb.XGBRegressor(**setting), cost_function, extend_class_proba)
                 else:
                     log("1. Can't create model based on {}".format(method), ERROR)
             elif method.find("classifier") > -1:
@@ -74,15 +75,15 @@ class LearningFactory(object):
                         if key.lower() not in ["base_estimator", "method", "cv"]:
                             del setting[key]
 
-                    model = Learning(method, CalibratedClassifierCV(**setting), cost_function)
+                    model = Learning(method, CalibratedClassifierCV(**setting), cost_function, extend_class_proba)
                 elif method.find("extratree") > -1:
-                    model = Learning(method, ExtraTreesClassifier(**setting), cost_function)
+                    model = Learning(method, ExtraTreesClassifier(**setting), cost_function, extend_class_proba)
                 elif method.find("randomforest") > -1:
-                    model = Learning(method, RandomForestClassifier(**setting), cost_function)
+                    model = Learning(method, RandomForestClassifier(**setting), cost_function, extend_class_proba)
                 elif method.find("gradientboosting") > -1:
-                    model = Learning(method, GradientBoostingClassifier(**setting), cost_function)
+                    model = Learning(method, GradientBoostingClassifier(**setting), cost_function, extend_class_proba)
                 elif method.find("xgboosting") > -1:
-                    model = Learning(method, xgb.XGBClassifier(**setting), cost_function)
+                    model = Learning(method, xgb.XGBClassifier(**setting), cost_function, extend_class_proba)
                 else:
                    log("2. Can't create model based on {}".format(method), ERROR)
             else:
@@ -110,10 +111,6 @@ class LearningFactory(object):
 
             if "n_jobs" in setting:
                 log("Delete the n_jobs={} from setting".format(setting.pop("n_jobs")), INFO)
-
-            extend_class_proba = False
-            if "extend_class_proba" in setting:
-                extend_class_proba = setting.pop("extend_class_proba")
 
             if "cost" in setting:
                 log("Delete the cost={} from setting".format(setting.pop("cost")), INFO)
@@ -216,7 +213,7 @@ class Learning(object):
 
         new_n_feature = len(new_dataset[0])
         if n_feature != new_n_feature:
-            log("Extend the number of feature from {} to {}".format(n_feature, new_n_feature), INFO)
+            log("Extend the number of feature from {} to {} for {}".format(n_feature, new_n_feature, self.name), INFO)
 
         return new_dataset
 
@@ -259,6 +256,7 @@ class Learning(object):
 
     def predict(self, data):
         data = self.preprocess_data(data)
+
         if self.is_shallow_learning():
             if self.is_regressor():
                 if self.name.find("logistic_regressor") > -1:
@@ -420,7 +418,7 @@ class LearningThread(threading.Thread):
                 model_setting["nfold"] = nfold
 
             if model_name.find("calibration") > -1:
-                model_setting["best_estimator"] = load_cache(filepath_loading_model)
+                model_setting["base_estimator"] = load_cache(filepath_loading_model)
 
             model = LearningFactory.get_model(pair)
             if model == None or model.model == None:
@@ -445,6 +443,7 @@ class LearningThread(threading.Thread):
                     cost = self.obj.learning_cost[model_name][0]
                     self.obj.learning_cost.insert_cost(model_name, nfold, cost)
                 else:
+                    log("{} - {}, {}".format(model_name, self.obj.train_x[train_x_idx].shape, self.obj.train_y[train_x_idx].shape))
                     model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])
 
                     results = model.predict(self.obj.train_x[test_x_idx])

@@ -42,20 +42,12 @@ def learning(conf, thread):
     filepath_testing = "{}/input/test.csv".format(BASEPATH)
     filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
     filepath_ii = "{}/input/transform2=True_testing=-1_type=2_binsize={}_combination=2.pkl".format(BASEPATH, binsize)
-    filepath_cache_ii = "{}/input/transform2=True_testing=-1_type=2_binsize={}_combination=2.cache.pkl".format(BASEPATH, binsize)
 
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
-    '''
-    if os.path.exists(filepath_cache_ii):
-        train_x, test_x = load_cache(filepath_cache_ii)
-    else:
-        for (layer1, layer2), value in load_interaction_information(filepath_ii, topX):
-            train_x["{}-{}".format(layer1, layer2)] = train_x[layer1].values * train_x[layer2].values * value
-            test_x["{}-{}".format(layer1, layer2)] = test_x[layer1].values * test_x[layer2].values * value
-
-        save_cache((train_x, test_x), filepath_cache_ii)
-    '''
+    for (layer1, layer2), value in load_interaction_information(filepath_ii, topX):
+        train_x["{}-{}".format(layer1, layer2)] = train_x[layer1].values * train_x[layer2].values * value
+        test_x["{}-{}".format(layer1, layer2)] = test_x[layer1].values * test_x[layer2].values * value
 
     train_X, test_X = train_x.values, test_x.values
 
