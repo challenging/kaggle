@@ -83,6 +83,9 @@ class LearningFactory(object):
                 elif method.find("gradientboosting") > -1:
                     model = Learning(method, GradientBoostingClassifier(**setting), cost_function, extend_class_proba)
                 elif method.find("xgboosting") > -1:
+                    if "n_jobs" in setting:
+                        log("Delete n_jobs={} from the setting for {}".format(setting.pop("n_jobs"), method), INFO)
+
                     model = Learning(method, xgb.XGBClassifier(**setting), cost_function, extend_class_proba)
                 else:
                    log("2. Can't create model based on {}".format(method), ERROR)

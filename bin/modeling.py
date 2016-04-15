@@ -95,7 +95,7 @@ def learning(conf, thread):
             setting["input_dims"] = number_of_feature
             setting["callbacks"] = [checkpointer]
             setting["number_of_layer"] = setting.pop("layer_number")
-            setting["dimension"] = number_of_feature*2
+            setting["dimension"] = int(number_of_feature*1.25)
 
             del setting["n_jobs"]
 
