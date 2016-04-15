@@ -186,26 +186,41 @@ def load_advanced_data(filepath_training, filepath_testing, drop_fields=[]):
 
     return df_train, df_test
 
-def load_interaction_information(filepath, count=500):
+def load_interaction_information(filepath, count=None, threshold=None):
     results = None
     with open(filepath, "rb") as INPUT:
         results = pickle.load(INPUT)
 
+    matching_type = (count != None)
     ranking = {}
     for layer1, info in results.items():
         if isinstance(info, dict):
             for layer2, value in info.items():
                 ranking["{}-{}".format(layer1, layer2)] = value
         elif isinstance(info, float):
-            ranking[layer1.replace(";", "-")] = info
+            layer1 = layer1.replace(";", "-")
 
-    for key, value in sorted(ranking.items(), key=operator.itemgetter(1), reverse=True):
-        yield (key.split("-")[:-1]), value
+            if count:
+                ranking[layer1] = info
+            elif threshold and info > threshold:
+                fields = layer1.split("-")
+                if "target" in fields:
+                    fields.remove("target")
 
-        if count < 2:
-            break
-        else:
-            count -= 1
+                yield fields, info
+
+    if matching_type:
+        for key, value in sorted(ranking.items(), key=operator.itemgetter(1), reverse=True):
+            fields = key.split("-")
+            if "target" in fields:
+                fields.remove("target")
+
+            yield fields, value
+
+            if count < 2:
+                break
+            else:
+                count -= 1
 
 def save_kaggle_submission(test_id, results, filepath, normalization=False):
     if normalization:

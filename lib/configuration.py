@@ -30,7 +30,12 @@ class ModelConfParser(object):
             return -1
 
     def get_interaction_information(self):
-        binsize, topX = self.config.getint("INTERACTION_INFORMATION", "binsize"), self.config.getint("INTERACTION_INFORMATION", "topX")
+        binsize, topX = self.config.getint("INTERACTION_INFORMATION", "binsize"), self.config.get("INTERACTION_INFORMATION", "topX")
+
+        if topX.isdigit():
+            topX = int(topX)
+        else:
+            topX = float(topX)
 
         return binsize, topX
 

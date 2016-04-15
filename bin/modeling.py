@@ -45,9 +45,22 @@ def learning(conf, thread):
 
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
-    for (layer1, layer2), value in load_interaction_information(filepath_ii, topX):
-        train_x["{}-{}".format(layer1, layer2)] = train_x[layer1].values * train_x[layer2].values * value
-        test_x["{}-{}".format(layer1, layer2)] = test_x[layer1].values * test_x[layer2].values * value
+    columns = train_x.columns
+    rounds = None
+    if isinstance(topX, int):
+        rounds = load_interaction_information(filepath_ii, count=topX)
+    elif isinstance(topX, float):
+        rounds = load_interaction_information(filepath_ii, threshold=topX)
+    else:
+        log("Wrong type for topX()".format(type(topX).__name__), ERROR)
+        sys.exit(100)
+
+    for (layer1, layer2), value in rounds:
+        if layer1 in columns and layer2 in columns:
+            train_x["{}-{}".format(layer1, layer2)] = train_x[layer1].values * train_x[layer2].values * value
+            test_x["{}-{}".format(layer1, layer2)] = test_x[layer1].values * test_x[layer2].values * value
+        else:
+            log("Not Found {}({}),{}({}) in the columns of training dataset".format(layer1, layer1 in columns, layer2, layer2 in columns))
 
     train_X, test_X = train_x.values, test_x.values
 
@@ -82,7 +95,7 @@ def learning(conf, thread):
             setting["input_dims"] = number_of_feature
             setting["callbacks"] = [checkpointer]
             setting["number_of_layer"] = setting.pop("layer_number")
-            setting["dimension"] = setting.pop("layer_dimension")
+            setting["dimension"] = number_of_feature*2
 
             del setting["n_jobs"]
 
