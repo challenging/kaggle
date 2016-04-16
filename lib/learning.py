@@ -23,7 +23,7 @@ from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, Gradi
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.grid_search import GridSearchCV
-from sklearn.metrics import auc, log_loss
+from sklearn.metrics import roc_auc_score, log_loss
 
 # For Cluster
 from sklearn.cluster import KMeans, DBSCAN, AffinityPropagation, AgglomerativeClustering, SpectralClustering
@@ -66,6 +66,9 @@ class LearningFactory(object):
                 elif method.find("gradientboosting") > -1:
                     model = Learning(method, GradientBoostingRegressor(**setting), cost_function, extend_class_proba)
                 elif method.find("xgboosting") > -1:
+                    if "n_jobs" in setting:
+                        log("Delete n_jobs={} from the setting for {}".format(setting.pop("n_jobs"), method), INFO)
+
                     model = Learning(method, xgb.XGBRegressor(**setting), cost_function, extend_class_proba)
                 else:
                     log("1. Can't create model based on {}".format(method), ERROR)

@@ -10,7 +10,7 @@ import xgboost as xgb
 from sklearn import cross_validation, metrics   #Additional scklearn functions
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.grid_search import GridSearchCV   #Perforing grid search
-from sklearn.metrics import auc, log_loss, make_scorer
+from sklearn.metrics import roc_auc_score, log_loss, make_scorer
 
 from utils import log, INFO, WARN
 from load import load_data, data_transform_2, load_cache, save_cache, load_interaction_information
@@ -28,7 +28,7 @@ class ParameterTuning(object):
         if self.cost == "logloss":
             self.cost_function = log_loss
         elif self.cost == "auc":
-            self.cost_function = auc
+            self.cost_function = roc_auc_score
 
         self.objective = objective
         self.cv = cv
@@ -82,7 +82,7 @@ class ParameterTuning(object):
         old_cost = self.best_cost
 
         if self.compare(cost):
-            log("Improve the cost from {} to {}".format(old_cost, self.best_cost))
+            log("Improve the {} from {} to {}".format(self.cost, old_cost, self.best_cost))
             for key, value in params.items():
                 setattr(self, key, value)
                 log("Set {} to be {}".format(key, getattr(self, key)))

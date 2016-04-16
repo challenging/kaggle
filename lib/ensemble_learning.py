@@ -7,7 +7,7 @@ import pandas as pd
 
 # For Shallow Learning
 from sklearn.cross_validation import StratifiedKFold
-from sklearn.metrics import log_loss
+from sklearn.metrics import log_loss, roc_auc_score
 from sklearn.utils import shuffle
 
 from learning import LearningFactory, Learning, LearningQueue, LearningCost
@@ -115,7 +115,7 @@ def final_model(pair, train_x, train_y, test_x, cost_string="logloss"):
     if cost_string == "logloss":
         cost_function = log_loss
     elif cost_string == "auc":
-        cost_function = auc
+        cost_function = roc_auc_score
     else:
         log("Please set the cost function", ERROR)
         sys.exit(1)

@@ -7,7 +7,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from sklearn.metrics import log_loss, auc
+from sklearn.metrics import log_loss, roc_auc_score
 
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Merge
@@ -27,7 +27,7 @@ class KaggleCheckpoint(ModelCheckpoint):
         if cost_string == "logloss":
             self.cost_function = cost_string
         elif cost_string == "auc":
-            self.cost_function = auc
+            self.cost_function = roc_auc_score
 
     def save_results(self, filepath, proba, base_proba=None, is_testing=False):
         probas = [prob[0] if prob[0] else 0.0 for prob in proba]
