@@ -192,7 +192,7 @@ class ParameterTuning(object):
         raise NotImplementError
 
 class RandomForestTuning(ParameterTuning):
-    def __init__(self, target, data_id, method, n_estimator=200, cost="logloss", objective="entropy", cv=5, n_jobs=-1):
+    def __init__(self, target, data_id, method, n_estimator=200, cost="logloss", objective="entropy", cv=10, n_jobs=-1):
         ParameterTuning.__init__(self, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
 
         self.default_criterion, self.criterion = "entropy", None
@@ -245,7 +245,7 @@ class ExtraTreeTuning(RandomForestTuning):
     pass
 
 class XGBoostingTuning(ParameterTuning):
-    def __init__(self, target, data_id, method, n_estimator=200, cost="logloss", objective="binary:logistic", cv=5, n_jobs=-1):
+    def __init__(self, target, data_id, method, n_estimator=200, cost="logloss", objective="binary:logistic", cv=10, n_jobs=-1):
         ParameterTuning.__init__(self, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
 
         self.default_learning_rate, self.learning_rate = 0.1, None
@@ -279,7 +279,7 @@ class XGBoostingTuning(ParameterTuning):
         if self.method == "classifier":
             log("Current parameters - learning_rate: {}, n_estimator: {}, max_depth: {}, min_child_weight: {}, gamma: {}, subsample: {}, colsample_bytree: {}, reg_alpha: {}".format(learning_rate, n_estimator, max_depth, min_child_weight, gamma, subsample, colsample_bytree, reg_alpha))
 
-            return xbg.XGBClassifier(learning_rate=learning_rate,
+            return xgb.XGBClassifier(learning_rate=learning_rate,
                                      n_estimators=n_estimator,
                                      max_depth=max_depth,
                                      min_child_weight=min_child_weight,

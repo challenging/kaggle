@@ -48,7 +48,6 @@ def tuning(methodology, binsize, combinations_size, top, is_testing, thread, con
         test_x["{}-{}".format(layer1, layer2)] = test_x[layer1].values * test_x[layer2].values * value
 
     train_x["Target"] = train_y.values
-    train_x = train_x.head(int(len(train_x)*0.9))
 
     if is_testing:
         train_x = train_x.head(1000)
