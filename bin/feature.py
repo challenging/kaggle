@@ -55,8 +55,8 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
     if interaction_information:
         log("Try to calculate the interaction information", INFO)
 
-        filepath_training = "{}/train.csv".format(BASEPATH)
-        filepath_testing = "{}/test.csv".format(BASEPATH)
+        filepath_training = "{}/input/train.csv".format(BASEPATH)
+        filepath_testing = "{}/input/test.csv".format(BASEPATH)
 
         train_x, test_x, train_y, id_train, id_test = None, None, None, None, None
         if transform2:
