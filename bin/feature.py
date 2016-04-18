@@ -27,7 +27,9 @@ from configuration import ModelConfParser
 @click.option("--combinations-size", default=2, help="size of combinations")
 def feature_engineer(conf, thread, feature_importance, interaction_information, binsize, testing, combinations_size):
     drop_fields = []
+
     transform2 = True
+    threshold = combinations_size*0.01
 
     cfg_parser = ModelConfParser(conf)
     BASEPATH = cfg_parser.get_workspace()
@@ -66,13 +68,12 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
 
         filepath_cache = "{}/input/transform2={}_binsize={}_cache.pkl".format(BASEPATH, transform2, binsize)
         filepath_couple = "{}/input/transform2={}_testing={}_type=2_binsize={}_combination={}.pkl".format(BASEPATH, transform2, testing, binsize, combinations_size)
-        filepath_series = "{}/input/transform2={}_testing={}_binsize={}_series.pkl".format(BASEPATH, transform2, testing, binsize)
         filepath_criteria = "{}/input/transform2={}_testing={}_binsize={}_criteria.pkl".format(BASEPATH, transform2, testing, binsize)
 
         results_couple = feature_engineering.calculate_interaction_information(filepath_cache,\
             train_x, train_y,\
-            filepath_couple, filepath_series, filepath_criteria,\
-            binsize=binsize, nthread=thread, combinations_size=combinations_size, threshold=0.02, is_testing=int(testing) if testing > 0 else None)
+            filepath_couple, filepath_criteria,\
+            binsize=binsize, nthread=thread, combinations_size=combinations_size, threshold=threshold, is_testing=int(testing) if testing > 0 else None)
 
 if __name__ == "__main__":
     feature_engineer()
