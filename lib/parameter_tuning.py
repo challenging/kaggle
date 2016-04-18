@@ -316,7 +316,7 @@ class XGBoostingTuning(ParameterTuning):
         self.phase("phase3", param3)
 
         param4 = {'subsample':[i/10.0 for i in range(6, 11, 2)], 'colsample_bytree':[i/10.0 for i in range(6, 11, 2)]}
-        self.phase("phase4", param4)
+        self.phase("phase4", param4, True)
 
         param5 = {'reg_alpha':[1e-5, 1e-2, 0.1, 1.0, 100.0]}
         self.phase("phase5", param5, True)
