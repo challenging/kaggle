@@ -90,7 +90,7 @@ class ParameterTuning(object):
             self.save()
         else:
             if not micro_tuning:
-                log("Fail so terminate due to the cost of phase2-model is {}(> {}), and the params is {}".format(cost, old_cost, params), WARN)
+                log("Fail so terminate due to the {} of phase2-model is {}(< {}), and the params is {}".format(self.cost, cost, old_cost, params), WARN)
 
                 for key, value in params.items():
                     setattr(self, key, getattr(self, "default_{}".format(key)))

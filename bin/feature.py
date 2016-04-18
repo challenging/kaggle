@@ -67,7 +67,7 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
             train_x, train_y, test_x, test_id = data_load(drop_fields=drop_fields)
 
         filepath_cache = "{}/input/transform2={}_binsize={}_cache.pkl".format(BASEPATH, transform2, binsize)
-        filepath_couple = "{}/input/transform2={}_testing={}_type=2_binsize={}_combination={}.pkl".format(BASEPATH, transform2, testing, binsize, combinations_size)
+        filepath_couple = "{}/input/interaction_information/transform2={}_testing={}_type=2_binsize={}_combination={}.pkl".format(BASEPATH, transform2, testing, binsize, combinations_size)
         filepath_criteria = "{}/input/transform2={}_testing={}_binsize={}_criteria.pkl".format(BASEPATH, transform2, testing, binsize)
 
         results_couple = feature_engineering.calculate_interaction_information(filepath_cache,\

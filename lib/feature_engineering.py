@@ -15,7 +15,7 @@ import pandas as pd
 import pandas.core.algorithms as algos
 
 from Queue import Queue
-from threading import Thread, Lock
+from threading import Thread, current_thread
 
 from itertools import combinations
 from collections import Counter
@@ -135,7 +135,7 @@ def transform(distribution):
     return keys, values
 
 class InteractionInformation(object):
-    def __init__(self, dataset, train_y, filepath_couple, filepath_criteria, combinations_size=2, threshold=0.01, save_size=100):
+    def __init__(self, dataset, train_y, filepath_couple, filepath_criteria, combinations_size=2, threshold=0.01):
         self.dataset = dataset
         self.train_y = train_y
 
@@ -143,12 +143,9 @@ class InteractionInformation(object):
         self.filepath_criteria = filepath_criteria
 
         self.queue = Queue()
-        self.lock_couple = Lock()
 
         self.combinations_size = combinations_size
         self.threshold = threshold
-        self.ori_save_size = save_size
-        self.save_size = save_size
 
         self.cache_criteria = {}
 
@@ -157,8 +154,15 @@ class InteractionInformation(object):
         self.read_cache()
 
     def read_cache(self):
-        if os.path.exists(self.filepath_couple):
-            self.results_couple = load_cache(self.filepath_couple)
+        parent_folder = os.path.dirname(self.filepath_couple)
+        if not os.path.isdir(parent_folder):
+            os.makedirs(parent_folder)
+
+        for filepath_couple in glob.iglob("{}*".format(self.filepath_couple)):
+            log("Try to load cache file from {}".format(filepath_couple))
+            self.results_couple.update(load_cache(filepath_couple))
+
+        log("Already finish %d results_couple".format(len(self.results_couple)))
 
         if os.path.exists(self.filepath_criteria):
             self.cache_criteria = load_cache(self.filepath_criteria)
@@ -194,23 +198,33 @@ class InteractionInformation(object):
             log("I({}) is done".format(key), INFO)
 
     def add_couple(self, key ,v):
-        with self.lock_couple:
-            self.results_couple[key] = v
-
-            if self.save_size < 0:
-                self.write_cache(True)
-
-                self.save_size = self.ori_save_size
-            else:
-                self.save_size -= 1
+        self.results_couple[key] = v
 
 class InteractionInformationThread(Thread):
     def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
         Thread.__init__(self, group=group, target=target, name=name, verbose=verbose)
 
+        self.saving_size = 10
+        self.reset_saving_size = 10
+
         self.args = args
         for key, value in kwargs.items():
             setattr(self, key, value)
+
+        log("The filepath_couple is in {}".format(self.filepath_couple))
+
+    def add_couple(self, key, v):
+        self.results_couple[key] = v
+
+        if self.saving_size < 0:
+            self.dump()
+
+            self.saving_size = self.reset_saving_size
+        else:
+            self.saving_size -= 1
+
+    def dump(self):
+        save_cache(self.results_couple, self.filepath_couple)
 
     def run(self):
         LABELS = ["A", "B", "C", "D", "E"]
@@ -297,13 +311,16 @@ class InteractionInformationThread(Thread):
             mi.set_rv_names(rv_names + ["Z"])
             interaction_information = dit.shannon.mutual_information(mi, rv_names, ["Z"])
 
-            self.ii.add_couple(column_couple, interaction_information)
+            self.add_couple(column_couple, interaction_information)
 
             timestamp_end = time.time()
             if interaction_information >= self.ii.threshold:
                 log("Cost {:.2f} secends to calculate I({}) is {}, the remaining size is {}".format(timestamp_end-timestamp_start, column_couple, interaction_information, self.ii.queue.qsize()), INFO)
 
             self.ii.queue.task_done()
+
+        # Dump the results
+        self.dump()
 
 def load_dataset(filepath_cache, dataset, binsize=2, threshold=0.1):
     LABELS = "abcdefghijklmnopqrstuvwxABCDEFGHIJKLMNOPQRSTUVWX0123456789!@#$%^&*()_+~"
@@ -434,15 +451,12 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, filepath
             count_break += 1
 
     for idx in range(0, nthread):
-        worker = InteractionInformationThread(kwargs={"ii": ii})
+        worker = InteractionInformationThread(kwargs={"ii": ii, "results_couple": {}, "filepath_couple": "{}.{}".format(filepath_couple, int(100000*time.time()))})
         worker.setDaemon(True)
         worker.start()
 
     log("Wait for the completion of the calculation of Interaction Information", INFO)
     ii.queue.join()
-
-    log("Write the results", INFO)
-    ii.write_cache(results=True)
 
     return ii.results_couple
 
