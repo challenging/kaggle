@@ -72,7 +72,7 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
         results_couple = feature_engineering.calculate_interaction_information(filepath_cache,\
             train_x, train_y,\
             filepath_couple, filepath_series, filepath_criteria,\
-            binsize=binsize, nthread=thread, combinations_size=combinations_size, threshold=0.01, is_testing=int(testing) if testing > 0 else None)
+            binsize=binsize, nthread=thread, combinations_size=combinations_size, threshold=0.02, is_testing=int(testing) if testing > 0 else None)
 
 if __name__ == "__main__":
     feature_engineer()

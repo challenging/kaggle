@@ -246,15 +246,22 @@ class InteractionInformationThread(Thread):
             distribution = {}
             for idxs in combinations(criteria_index, self.ii.combinations_size):
                 for criteria_target in ["0", "1"]:
+                    pos_target = tmp_df["target"] == criteria_target
+
                     if self.ii.combinations_size == 2:
                         layer1, layer2 = idxs[0], idxs[1]
                         layer1_name, layer1_values = criteria_value[layer1]
                         layer2_name, layer2_values = criteria_value[layer2]
 
                         for layer1_value in layer1_values:
+                            pos_value1 = tmp_df["layer1_name"] == layer1_value
+
                             for layer2_value in layer2_values:
+                                pos_value2 = tmp_df["layer2_name"] == layer2_value
+
                                 key = "{}{}{}".format(layer1_value, layer2_value, criteria_target)
-                                distribution[key] = len(np.where((tmp_df[layer1_name] == layer1_value) & (tmp_df[layer2_name] == layer2_value) & (tmp_df["target"] == criteria_target))[0])
+                                #distribution[key] = len(np.where((tmp_df[layer1_name] == layer1_value) & (tmp_df[layer2_name] == layer2_value) & (tmp_df["target"] == criteria_target))[0])
+                                distribution[key] = np.sum(pos_target&pos_value1&pos_value2)
                     elif self.ii.combinations_size == 3:
                         layer1, layer2, layer3 = idxs[0], idxs[1], idxs[2]
                         layer1_name, layer1_values = criteria_value[layer1]
@@ -262,10 +269,17 @@ class InteractionInformationThread(Thread):
                         layer3_name, layer3_values = criteria_value[layer3]
 
                         for layer1_value in layer1_values:
+                            pos_value1 = tmp_df["layer1_name"] == layer1_value
+
                             for layer2_value in layer2_values:
+                                pos_value2 = tmp_df["layer2_name"] == layer2_value
+
                                 for layer3_value in layer3_values:
+                                    pos_value3 = tmp_df["layer3_name"] == layer3_value
+
                                     key = "{}{}{}{}".format(layer1_value, layer2_value, layer3_value, criteria_target)
-                                    distribution[key] = len(np.where((tmp_df[layer1_name] == layer1_value) & (tmp_df[layer2_name] == layer2_value) & (tmp_df[layer3_name] == layer3_value)  & (tmp_df["target"] == criteria_target))[0])
+                                    #distribution[key] = len(np.where((tmp_df[layer1_name] == layer1_value) & (tmp_df[layer2_name] == layer2_value) & (tmp_df[layer3_name] == layer3_value)  & (tmp_df["target"] == criteria_target))[0])
+                                    distribution[key] = np.sum(pos_target&pos_value1&pos_value2&pos_value3)
                     elif self.ii.combinations_size == 4:
                         layer1, layer2, layer3, layer4 = idxs[0], idxs[1], idxs[2], idxs[3]
                         layer1_name, layer1_values = criteria_value[layer1]
@@ -274,11 +288,20 @@ class InteractionInformationThread(Thread):
                         layer4_name, layer4_values = criteria_value[layer4]
 
                         for layer1_value in layer1_values:
+                            pos_value1 = tmp_df["layer1_name"] == layer1_value
+
                             for layer2_value in layer2_values:
+                                pos_value2 = tmp_df["layer2_name"] == layer2_value
+
                                 for layer3_value in layer3_values:
+                                    pos_value3 = tmp_df["layer3_name"] == layer3_value
+
                                     for layer4_value in layer4_values:
+                                        pos_value4 = tmp_df["layer4_name"] == layer4_value
+
                                         key = "{}{}{}{}{}".format(layer1_value, layer2_value, layer3_value, layer4_value, criteria_target)
-                                        distribution[key] = len(np.where((tmp_df[layer1_name] == layer1_value) & (tmp_df[layer2_name] == layer2_value) & (tmp_df[layer3_name] == layer3_value) & (tmp_df[layer4_name] == layer4_value) & (tmp_df["target"] == criteria_target))[0])
+                                        #distribution[key] = len(np.where((tmp_df[layer1_name] == layer1_value) & (tmp_df[layer2_name] == layer2_value) & (tmp_df[layer3_name] == layer3_value) & (tmp_df[layer4_name] == layer4_value) & (tmp_df["target"] == criteria_target))[0])
+                                        distribution[key] = np.sum(pos_target&pos_value1&pos_value2&pos_value3&pos_value4)
                     else:
                         log("Not support the combination size is greater than 4", WARN)
                         self.ii.queue_task_done()
