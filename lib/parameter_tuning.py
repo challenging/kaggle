@@ -90,7 +90,7 @@ class ParameterTuning(object):
             self.save()
         else:
             if not micro_tuning:
-                log("Fail so terminate due to the cost of phase2-model is {}(> {}), and the params is {}".format(cost, old_cost, params), WARN)
+                log("Fail so terminate due to the {} of phase2-model is {}(< {}), and the params is {}".format(self.cost, cost, old_cost, params), WARN)
 
                 for key, value in params.items():
                     setattr(self, key, getattr(self, "default_{}".format(key)))
@@ -312,11 +312,11 @@ class XGBoostingTuning(ParameterTuning):
         param2 = {'max_depth':range(7, 14, 2), 'min_child_weight':range(1, 4, 2)}
         self.phase("phase2", param2, True)
 
-        param3 = {'gamma':[i/10.0 for i in range(0, 5)]}
+        param3 = {'gamma':[i/10.0 for i in range(0, 3)]}
         self.phase("phase3", param3)
 
-        param4 = {'subsample':[i/10.0 for i in range(6, 10)], 'colsample_bytree':[i/10.0 for i in range(6, 10)]}
-        self.phase("phase4", param4)
+        param4 = {'subsample':[i/10.0 for i in range(6, 11, 2)], 'colsample_bytree':[i/10.0 for i in range(6, 11, 2)]}
+        self.phase("phase4", param4, True)
 
         param5 = {'reg_alpha':[1e-5, 1e-2, 0.1, 1.0, 100.0]}
         self.phase("phase5", param5, True)

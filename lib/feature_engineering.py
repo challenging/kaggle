@@ -15,7 +15,7 @@ import pandas as pd
 import pandas.core.algorithms as algos
 
 from Queue import Queue
-from threading import Thread, Lock
+from threading import Thread, current_thread
 
 from itertools import combinations
 from collections import Counter
@@ -135,23 +135,18 @@ def transform(distribution):
     return keys, values
 
 class InteractionInformation(object):
-    def __init__(self, dataset, train_y, filepath_couple, filepath_series, filepath_criteria, combinations_size=2, threshold=0.01, save_size=100):
+    def __init__(self, dataset, train_y, filepath_couple, filepath_criteria, combinations_size=2, threshold=0.01):
         self.dataset = dataset
         self.train_y = train_y
 
         self.filepath_couple = filepath_couple
-        self.filepath_series = filepath_series
         self.filepath_criteria = filepath_criteria
 
         self.queue = Queue()
-        self.lock_couple = Lock()
 
         self.combinations_size = combinations_size
         self.threshold = threshold
-        self.ori_save_size = save_size
-        self.save_size = save_size
 
-        self.cache_series = {}
         self.cache_criteria = {}
 
         self.results_couple = {}
@@ -159,11 +154,15 @@ class InteractionInformation(object):
         self.read_cache()
 
     def read_cache(self):
-        if os.path.exists(self.filepath_couple):
-            self.results_couple = load_cache(self.filepath_couple)
+        parent_folder = os.path.dirname(self.filepath_couple)
+        if not os.path.isdir(parent_folder):
+            os.makedirs(parent_folder)
 
-        if os.path.exists(self.filepath_series):
-            self.cache_series = load_cache(self.filepath_series)
+        for filepath_couple in glob.iglob("{}*".format(self.filepath_couple)):
+            log("Try to load cache file from {}".format(filepath_couple))
+            self.results_couple.update(load_cache(filepath_couple))
+
+        log("Already finish %d results_couple".format(len(self.results_couple)))
 
         if os.path.exists(self.filepath_criteria):
             self.cache_criteria = load_cache(self.filepath_criteria)
@@ -172,21 +171,16 @@ class InteractionInformation(object):
         if results:
             save_cache(self.results_couple, self.filepath_couple)
         else:
-            save_cache(self.cache_series, self.filepath_series)
             save_cache(self.cache_criteria, self.filepath_criteria)
 
     def get_values_from_cache(self, column_x):
-        a, b = None, None
-
-        if column_x not in self.cache_series:
-            self.cache_series[column_x] = pd.Series(self.dataset[column_x])
-        a = self.cache_series[column_x]
+        unique_valus = None
 
         if column_x not in self.cache_criteria:
             self.cache_criteria[column_x] = self.dataset[column_x].unique()
-        b = self.cache_criteria[column_x]
+        unique_values = self.cache_criteria[column_x]
 
-        return (a, b)
+        return unique_values
 
     def compose_column_names(self, names):
         return "{};target".format(";".join(names))
@@ -200,85 +194,105 @@ class InteractionInformation(object):
         if key not in self.results_couple:
             self.queue.put(key)
             log("Put I({}) into the queue".format(key), INFO)
-        else:
-            log("I({}) is done".format(key), INFO)
 
     def add_couple(self, key ,v):
-        with self.lock_couple:
-            self.results_couple[key] = v
-
-            if self.save_size < 0:
-                self.write_cache(True)
-
-                self.save_size = self.ori_save_size
-            else:
-                self.save_size -= 1
+        self.results_couple[key] = v
 
 class InteractionInformationThread(Thread):
     def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
         Thread.__init__(self, group=group, target=target, name=name, verbose=verbose)
 
+        self.saving_size = 100
+        self.reset_saving_size = 100
+
         self.args = args
         for key, value in kwargs.items():
             setattr(self, key, value)
 
+        log("The filepath_couple is in {}".format(self.filepath_couple))
+
+    def add_couple(self, key, v):
+        self.results_couple[key] = v
+
+        if self.saving_size < 0:
+            self.dump()
+
+            self.saving_size = self.reset_saving_size
+        else:
+            self.saving_size -= 1
+
+    def dump(self):
+        save_cache(self.results_couple, self.filepath_couple)
+
     def run(self):
         LABELS = ["A", "B", "C", "D", "E"]
-        series_target = pd.Series(self.ii.train_y.astype(str))
-
         while True:
             timestamp_start = time.time()
             column_couple = self.ii.queue.get()
             column_names = self.ii.decompose_column_names(column_couple)
 
-            criteria_index, criteria_value = [], []
-
-            series = {"target": series_target}
+            criteria_value = {}
             for name in column_names:
-                series_value, column_criteria = self.ii.get_values_from_cache(name)
-                series[name] = series_value
+                unique_values = self.ii.get_values_from_cache(name)
 
-                criteria_index.append(len(criteria_index))
-                criteria_value.append((name, column_criteria))
-
-            tmp_df = pd.DataFrame(series)
+                criteria_value[name] = unique_values
 
             distribution = {}
-            for idxs in combinations(criteria_index, self.ii.combinations_size):
+            for names in combinations(criteria_value.keys(), self.ii.combinations_size):
                 for criteria_target in ["0", "1"]:
+                    dataset_target = self.ii.dataset[self.ii.train_y.values.astype(str) == criteria_target]
+
                     if self.ii.combinations_size == 2:
-                        layer1, layer2 = idxs[0], idxs[1]
-                        layer1_name, layer1_values = criteria_value[layer1]
-                        layer2_name, layer2_values = criteria_value[layer2]
+                        layer1_name, layer2_name = names
+                        layer1_values = criteria_value[layer1_name]
+                        layer2_values = criteria_value[layer2_name]
 
                         for layer1_value in layer1_values:
+                            dataset_value1 = dataset_target[dataset_target[layer1_name] == layer1_value]
+
                             for layer2_value in layer2_values:
+                                dataset_value2 = dataset_value1[dataset_value1[layer2_name] == layer2_value]
+
                                 key = "{}{}{}".format(layer1_value, layer2_value, criteria_target)
-                                distribution[key] = len(np.where((tmp_df[layer1_name] == layer1_value) & (tmp_df[layer2_name] == layer2_value) & (tmp_df["target"] == criteria_target))[0])
+                                distribution[key] = len(dataset_value2.index)
                     elif self.ii.combinations_size == 3:
-                        layer1, layer2, layer3 = idxs[0], idxs[1], idxs[2]
-                        layer1_name, layer1_values = criteria_value[layer1]
-                        layer2_name, layer2_values = criteria_value[layer2]
-                        layer3_name, layer3_values = criteria_value[layer3]
+                        layer1_name, layer2_name, layer3_name = names
+                        layer1_values = criteria_value[layer1_name]
+                        layer2_values = criteria_value[layer2_name]
+                        layer3_values = criteria_value[layer3_name]
 
                         for layer1_value in layer1_values:
+                            dataset_value1 = dataset_target[dataset_target[layer1_name] == layer1_value]
+
                             for layer2_value in layer2_values:
+                                dataset_value2 = dataset_value1[dataset_value1[layer2_name] == layer2_value]
+
                                 for layer3_value in layer3_values:
+                                    dataset_value3 = dataset_value2[dataset_value2[layer3_name] == layer3_value]
+
                                     key = "{}{}{}{}".format(layer1_value, layer2_value, layer3_value, criteria_target)
-                                    distribution[key] = len(np.where((tmp_df[layer1_name] == layer1_value) & (tmp_df[layer2_name] == layer2_value) & (tmp_df[layer3_name] == layer3_value)  & (tmp_df["target"] == criteria_target))[0])
+                                    distribution[key] = len(dataset_value3.index)
                     elif self.ii.combinations_size == 4:
-                        layer1, layer2, layer3, layer4 = idxs[0], idxs[1], idxs[2], idxs[3]
-                        layer1_name, layer1_values = criteria_value[layer1]
-                        layer2_name, layer2_values = criteria_value[layer2]
-                        layer3_name, layer3_values = criteria_value[layer3]
-                        layer4_name, layer4_values = criteria_value[layer4]
+                        layer1_name, layer2_name, layer3_name, layer4_name = names
+                        layer1_values = criteria_value[layer1]
+                        layer2_values = criteria_value[layer2]
+                        layer3_values = criteria_value[layer3]
+                        layer4_values = criteria_value[layer4]
 
                         for layer1_value in layer1_values:
+                            dataset_value1 = dataset_target[dataset_target[layer1_name] == layer1_value]
+
                             for layer2_value in layer2_values:
+                                dataset_value2 = dataset_value1[dataset_value1[layer2_name] == layer2_value]
+
                                 for layer3_value in layer3_values:
+                                    dataset_value3 = dataset_value2[dataset_value2[layer3_name] == layer3_value]
+
                                     for layer4_value in layer4_values:
+                                        dataset_value4 = dataset_value3[dataset_value3[layer4_name] == layer4_value]
+
                                         key = "{}{}{}{}{}".format(layer1_value, layer2_value, layer3_value, layer4_value, criteria_target)
-                                        distribution[key] = len(np.where((tmp_df[layer1_name] == layer1_value) & (tmp_df[layer2_name] == layer2_value) & (tmp_df[layer3_name] == layer3_value) & (tmp_df[layer4_name] == layer4_value) & (tmp_df["target"] == criteria_target))[0])
+                                        distribution[key] = len(dataset_value4.index)
                     else:
                         log("Not support the combination size is greater than 4", WARN)
                         self.ii.queue_task_done()
@@ -295,13 +309,16 @@ class InteractionInformationThread(Thread):
             mi.set_rv_names(rv_names + ["Z"])
             interaction_information = dit.shannon.mutual_information(mi, rv_names, ["Z"])
 
-            self.ii.add_couple(column_couple, interaction_information)
+            self.add_couple(column_couple, interaction_information)
 
             timestamp_end = time.time()
             if interaction_information >= self.ii.threshold:
                 log("Cost {:.2f} secends to calculate I({}) is {}, the remaining size is {}".format(timestamp_end-timestamp_start, column_couple, interaction_information, self.ii.queue.qsize()), INFO)
 
             self.ii.queue.task_done()
+
+        # Dump the results
+        self.dump()
 
 def load_dataset(filepath_cache, dataset, binsize=2, threshold=0.1):
     LABELS = "abcdefghijklmnopqrstuvwxABCDEFGHIJKLMNOPQRSTUVWX0123456789!@#$%^&*()_+~"
@@ -317,12 +334,6 @@ def load_dataset(filepath_cache, dataset, binsize=2, threshold=0.1):
     else:
         count_raw = len(dataset[dataset.columns[0]].values)
         for idx, column in enumerate(dataset.columns):
-            '''
-            if column != "delta_imp_aport_var13_1y3":
-                drop_columns.append(column)
-                continue
-            '''
-
             data_type = dataset.dtypes[idx]
             unique_values = dataset[column].unique()
 
@@ -409,11 +420,11 @@ def load_dataset(filepath_cache, dataset, binsize=2, threshold=0.1):
 
     return dataset
 
-def calculate_interaction_information(filepath_cache, dataset, train_y, filepath_couple, filepah_series, filepath_criteria, combinations_size,
-                                      binsize=2, threshold=0.01, nthread=4, is_testing=None):
+def calculate_interaction_information(filepath_cache, dataset, train_y, filepath_couple, filepath_criteria, combinations_size,
+                                      n_split=1, binsize=2, threshold=0.01, nthread=4, is_testing=None):
     dataset = load_dataset(filepath_cache, dataset, binsize)
 
-    ii = InteractionInformation(dataset, train_y, filepath_couple, filepah_series, filepath_criteria, combinations_size, threshold)
+    ii = InteractionInformation(dataset, train_y, filepath_couple, filepath_criteria, combinations_size, threshold)
 
     # Build Cache File
     timestamp_start = time.time()
@@ -425,7 +436,8 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, filepath
     log("Cost {:.4f} secends to build cache files".format(timestamp_end-timestamp_start), INFO)
 
     count_break = 0
-    for pair_column in combinations([column for column in dataset.columns], combinations_size):
+    rounds = list(combinations([column for column in dataset.columns], combinations_size))
+    for pair_column in rounds[len(rounds)%n_split::n_split]:
         if is_testing and random.random()*10 > 1: # Random Sampling when is_testing = True
             continue
 
@@ -438,15 +450,12 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, filepath
             count_break += 1
 
     for idx in range(0, nthread):
-        worker = InteractionInformationThread(kwargs={"ii": ii})
+        worker = InteractionInformationThread(kwargs={"ii": ii, "results_couple": {}, "filepath_couple": "{}.{}".format(filepath_couple, int(100000*time.time()))})
         worker.setDaemon(True)
         worker.start()
 
     log("Wait for the completion of the calculation of Interaction Information", INFO)
     ii.queue.join()
-
-    log("Write the results", INFO)
-    ii.write_cache(results=True)
 
     return ii.results_couple
 
