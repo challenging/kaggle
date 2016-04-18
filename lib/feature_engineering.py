@@ -204,8 +204,8 @@ class InteractionInformationThread(Thread):
     def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
         Thread.__init__(self, group=group, target=target, name=name, verbose=verbose)
 
-        self.saving_size = 10
-        self.reset_saving_size = 10
+        self.saving_size = 100
+        self.reset_saving_size = 100
 
         self.args = args
         for key, value in kwargs.items():
