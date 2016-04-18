@@ -23,9 +23,10 @@ from configuration import ModelConfParser
 @click.option("--feature-importance", is_flag=True, help="Calculate the feature importance")
 @click.option("--interaction-information", is_flag=True, help="Calculate the interaction information")
 @click.option("--binsize", default=16, help="bin/bucket size setting")
+@click.option("--split", default=1, help="the split number of combinations-size")
 @click.option("--testing", default=-1, help="cut off the input file to be the testing dataset")
 @click.option("--combinations-size", default=2, help="size of combinations")
-def feature_engineer(conf, thread, feature_importance, interaction_information, binsize, testing, combinations_size):
+def feature_engineer(conf, thread, feature_importance, interaction_information, split, binsize, testing, combinations_size):
     drop_fields = []
 
     transform2 = True
@@ -73,7 +74,7 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
         results_couple = feature_engineering.calculate_interaction_information(filepath_cache,\
             train_x, train_y,\
             filepath_couple, filepath_criteria,\
-            binsize=binsize, nthread=thread, combinations_size=combinations_size, threshold=threshold, is_testing=int(testing) if testing > 0 else None)
+            binsize=binsize, nthread=thread, combinations_size=combinations_size, threshold=threshold, n_split=split, is_testing=int(testing) if testing > 0 else None)
 
 if __name__ == "__main__":
     feature_engineer()

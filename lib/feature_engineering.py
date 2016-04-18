@@ -194,8 +194,6 @@ class InteractionInformation(object):
         if key not in self.results_couple:
             self.queue.put(key)
             log("Put I({}) into the queue".format(key), INFO)
-        else:
-            log("I({}) is done".format(key), INFO)
 
     def add_couple(self, key ,v):
         self.results_couple[key] = v
@@ -423,7 +421,7 @@ def load_dataset(filepath_cache, dataset, binsize=2, threshold=0.1):
     return dataset
 
 def calculate_interaction_information(filepath_cache, dataset, train_y, filepath_couple, filepath_criteria, combinations_size,
-                                      binsize=2, threshold=0.01, nthread=4, is_testing=None):
+                                      n_split=1, binsize=2, threshold=0.01, nthread=4, is_testing=None):
     dataset = load_dataset(filepath_cache, dataset, binsize)
 
     ii = InteractionInformation(dataset, train_y, filepath_couple, filepath_criteria, combinations_size, threshold)
@@ -438,7 +436,8 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, filepath
     log("Cost {:.4f} secends to build cache files".format(timestamp_end-timestamp_start), INFO)
 
     count_break = 0
-    for pair_column in combinations([column for column in dataset.columns], combinations_size):
+    rounds = list(combinations([column for column in dataset.columns], combinations_size))
+    for pair_column in rounds[len(rounds)%n_split::n_split]:
         if is_testing and random.random()*10 > 1: # Random Sampling when is_testing = True
             continue
 
