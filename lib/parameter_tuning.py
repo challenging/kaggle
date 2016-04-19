@@ -41,7 +41,6 @@ class ParameterTuning(object):
         self.train = None
 
         self.done = {}
-        self.params = {}
 
     def set_filepath(self, filepath):
         self.filepath = filepath
@@ -53,12 +52,11 @@ class ParameterTuning(object):
         self.predictors = predictors
 
     def save(self):
-        save_cache((self.params, self.done), self.filepath)
+        save_cache(self.done, self.filepath)
 
     def load(self):
-        self.params, self.done = load_cache(self.filepath)
+        self.done = load_cache(self.filepath)
 
-        log("The current parameters are {}".format(self.params), INFO)
         log("The done list contains {}".format(self.done), INFO)
 
     def compare(self, cost):
@@ -113,6 +111,8 @@ class ParameterTuning(object):
             infos = self.done[phase]
             if infos:
                 best_cost, best_params, scores, gsearch1 = infos
+
+                self.improve(phase, best_cost, best_params)
         else:
             gsearch1 = GridSearchCV(estimator=self.get_model_instance(),
                                     param_grid=params,
@@ -140,27 +140,31 @@ class ParameterTuning(object):
                 infos = self.done[key]
                 if infos:
                     micro_cost, micro_params, micro_scores, gsearch2 = infos
+                    self.improve(key, micro_cost, micro_params, True)
             else:
                 advanced_params = {}
                 for name, value in best_params.items():
                     if isinstance(value, int):
                         advanced_params[name] = [i for i in range(max(0, value-1), value+1)]
-                    elif isinstance(value, float):
+                    elif value != 0 and isinstance(value, float):
                         advanced_params[name] = [value*i for i in [0.25, 1, 1.25]]
 
-                gsearch2 = GridSearchCV(estimator=self.get_model_instance(),
-                                        param_grid=advanced_params,
-                                        scoring=make_scorer(self.cost_function),
-                                        n_jobs=self.n_jobs,
-                                        iid=False,
-                                        cv=self.cv,
-                                        verbose=1)
+                if advanced_params:
+                    gsearch2 = GridSearchCV(estimator=self.get_model_instance(),
+                                            param_grid=advanced_params,
+                                            scoring=make_scorer(self.cost_function),
+                                            n_jobs=self.n_jobs,
+                                            iid=False,
+                                            cv=self.cv,
+                                            verbose=1)
 
-                micro_cost, micro_params, micro_scores = self.get_best_params(gsearch2, self.train[self.predictors], self.train[self.target])
-                log("Finish the micro-tuning of {}, and then get best params is {}".format(phase, micro_params))
-                self.improve(key, micro_cost, micro_params, True)
+                    micro_cost, micro_params, micro_scores = self.get_best_params(gsearch2, self.train[self.predictors], self.train[self.target])
+                    log("Finish the micro-tuning of {}, and then get best params is {}".format(phase, micro_params))
+                    self.improve(key, micro_cost, micro_params, True)
 
-                self.done[key] = micro_cost, micro_params, micro_scores, gsearch2
+                    self.done[key] = micro_cost, micro_params, micro_scores, gsearch2
+                else:
+                    log("Due to the empty advanced_params so skipping the micro-tunnung", WARN)
 
         model = None
         a, b, c = None, None, None
@@ -201,14 +205,6 @@ class RandomForestTuning(ParameterTuning):
         self.default_min_samples_split, self.min_samples_split = 4, None
         self.default_min_samples_leaf, self.min_samples_leaf = 2, None
         self.default_class_weight, self.class_weight = {0: 1, 1: 1}, None
-
-    def set_params(self):
-        self.params = {"criterion": self.criterion,
-                       "max_features": self.max_features,
-                       "max_depth": self.max_depth,
-                       "min_samples_split": self.min_samples_split,
-                       "min_samples_leaf": self.min_samples_leaf,
-                       "class_weight": self.class_weight}
 
     def get_model_instance(self):
         n_estimator = self.get_value("n_estimator")
@@ -258,14 +254,6 @@ class XGBoostingTuning(ParameterTuning):
 
         self.default_reg_alpha, self.reg_alpha = 0, None
 
-    def set_params(self):
-        self.params = {"max_depth": self.max_depth,
-                       "min_child_weight": self.min_child_weight,
-                       "gamma": self.gamma,
-                       "subsample": self.sub_sample,
-                       "colsample_bytree": self.colsample_bytree,
-                       "reg_alpha": self.reg_alpha}
-
     def get_model_instance(self):
         learning_rate = self.get_value("learning_rate")
         n_estimator = self.get_value("n_estimator")
@@ -313,7 +301,7 @@ class XGBoostingTuning(ParameterTuning):
         self.phase("phase2", param2, True)
 
         param3 = {'gamma':[i/10.0 for i in range(0, 3)]}
-        self.phase("phase3", param3)
+        self.phase("phase3", param3, True)
 
         param4 = {'subsample':[i/10.0 for i in range(6, 11, 2)], 'colsample_bytree':[i/10.0 for i in range(6, 11, 2)]}
         self.phase("phase4", param4, True)
