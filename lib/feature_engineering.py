@@ -8,7 +8,6 @@ import pprint
 import random
 
 import re
-import dit
 import numpy as np
 import pandas as pd
 
@@ -26,6 +25,7 @@ from sklearn.feature_selection import RFE, f_regression
 from sklearn.preprocessing import MinMaxScaler, Imputer
 from sklearn.ensemble import RandomForestRegressor
 from minepy import MINE
+from information_discrete import mi_3d, mi_4d
 
 from load import save_cache, load_cache, load_interaction_information
 from utils import log, DEBUG, INFO, WARN
@@ -135,19 +135,15 @@ def transform(distribution):
     return keys, values
 
 class InteractionInformation(object):
-    def __init__(self, dataset, train_y, filepath_couple, filepath_criteria, combinations_size=2, threshold=0.01):
+    def __init__(self, dataset, train_y, filepath_couple, combinations_size=2):
         self.dataset = dataset
         self.train_y = train_y
 
         self.filepath_couple = filepath_couple
-        self.filepath_criteria = filepath_criteria
 
         self.queue = Queue()
 
         self.combinations_size = combinations_size
-        self.threshold = threshold
-
-        self.cache_criteria = {}
 
         self.results_couple = {}
 
@@ -162,25 +158,10 @@ class InteractionInformation(object):
             log("Try to load cache file from {}".format(filepath_couple))
             self.results_couple.update(load_cache(filepath_couple))
 
-        log("Already finish %d results_couple".format(len(self.results_couple)))
+        log("Already finish {} results_couple".format(len(self.results_couple)))
 
-        if os.path.exists(self.filepath_criteria):
-            self.cache_criteria = load_cache(self.filepath_criteria)
-
-    def write_cache(self, results=False):
-        if results:
-            save_cache(self.results_couple, self.filepath_couple)
-        else:
-            save_cache(self.cache_criteria, self.filepath_criteria)
-
-    def get_values_from_cache(self, column_x):
-        unique_valus = None
-
-        if column_x not in self.cache_criteria:
-            self.cache_criteria[column_x] = self.dataset[column_x].unique()
-        unique_values = self.cache_criteria[column_x]
-
-        return unique_values
+    def write_cache(self):
+        save_cache(self.results_couple, self.filepath_couple)
 
     def compose_column_names(self, names):
         return "{};target".format(";".join(names))
@@ -202,8 +183,8 @@ class InteractionInformationThread(Thread):
     def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
         Thread.__init__(self, group=group, target=target, name=name, verbose=verbose)
 
-        self.saving_size = 100
-        self.reset_saving_size = 100
+        self.reset_saving_size = 1000
+        self.saving_size = self.reset_saving_size
 
         self.args = args
         for key, value in kwargs.items():
@@ -225,95 +206,31 @@ class InteractionInformationThread(Thread):
         save_cache(self.results_couple, self.filepath_couple)
 
     def run(self):
-        LABELS = ["A", "B", "C", "D", "E"]
         while True:
             timestamp_start = time.time()
             column_couple = self.ii.queue.get()
             column_names = self.ii.decompose_column_names(column_couple)
 
-            criteria_value = {}
-            for name in column_names:
-                unique_values = self.ii.get_values_from_cache(name)
+            mi = -1
+            if self.ii.combinations_size == 2:
+                mi = mi(self.ii.dataset[column_names[0]].values, self.ii.train_y.values)
+            elif self.ii.combinations_size == 3:
+                mi = mi_3d((column_names[0], self.ii.dataset[column_names[0]].values),
+                            (column_names[1], self.ii.dataset[column_names[1]].values),
+                            ("target", self.ii.train_y.values))
+            elif self.ii.combinations_size == 4:
+                mi = mi_4d((column_names[0], self.ii.dataset[column_names[0]].values),
+                            (column_names[1], self.ii.dataset[column_names[1]].values),
+                            (column_names[2], self.ii.dataset[column_names[2]].values),
+                            ("target", self.ii.train_y.values))
+            else:
+                log("The combinations-size should be less or equal than 4", ERROR)
+                break
 
-                criteria_value[name] = unique_values
-
-            distribution = {}
-            for names in combinations(criteria_value.keys(), self.ii.combinations_size):
-                for criteria_target in ["0", "1"]:
-                    dataset_target = self.ii.dataset[self.ii.train_y.values.astype(str) == criteria_target]
-
-                    if self.ii.combinations_size == 2:
-                        layer1_name, layer2_name = names
-                        layer1_values = criteria_value[layer1_name]
-                        layer2_values = criteria_value[layer2_name]
-
-                        for layer1_value in layer1_values:
-                            dataset_value1 = dataset_target[dataset_target[layer1_name] == layer1_value]
-
-                            for layer2_value in layer2_values:
-                                dataset_value2 = dataset_value1[dataset_value1[layer2_name] == layer2_value]
-
-                                key = "{}{}{}".format(layer1_value, layer2_value, criteria_target)
-                                distribution[key] = len(dataset_value2.index)
-                    elif self.ii.combinations_size == 3:
-                        layer1_name, layer2_name, layer3_name = names
-                        layer1_values = criteria_value[layer1_name]
-                        layer2_values = criteria_value[layer2_name]
-                        layer3_values = criteria_value[layer3_name]
-
-                        for layer1_value in layer1_values:
-                            dataset_value1 = dataset_target[dataset_target[layer1_name] == layer1_value]
-
-                            for layer2_value in layer2_values:
-                                dataset_value2 = dataset_value1[dataset_value1[layer2_name] == layer2_value]
-
-                                for layer3_value in layer3_values:
-                                    dataset_value3 = dataset_value2[dataset_value2[layer3_name] == layer3_value]
-
-                                    key = "{}{}{}{}".format(layer1_value, layer2_value, layer3_value, criteria_target)
-                                    distribution[key] = len(dataset_value3.index)
-                    elif self.ii.combinations_size == 4:
-                        layer1_name, layer2_name, layer3_name, layer4_name = names
-                        layer1_values = criteria_value[layer1]
-                        layer2_values = criteria_value[layer2]
-                        layer3_values = criteria_value[layer3]
-                        layer4_values = criteria_value[layer4]
-
-                        for layer1_value in layer1_values:
-                            dataset_value1 = dataset_target[dataset_target[layer1_name] == layer1_value]
-
-                            for layer2_value in layer2_values:
-                                dataset_value2 = dataset_value1[dataset_value1[layer2_name] == layer2_value]
-
-                                for layer3_value in layer3_values:
-                                    dataset_value3 = dataset_value2[dataset_value2[layer3_name] == layer3_value]
-
-                                    for layer4_value in layer4_values:
-                                        dataset_value4 = dataset_value3[dataset_value3[layer4_name] == layer4_value]
-
-                                        key = "{}{}{}{}{}".format(layer1_value, layer2_value, layer3_value, layer4_value, criteria_target)
-                                        distribution[key] = len(dataset_value4.index)
-                    else:
-                        log("Not support the combination size is greater than 4", WARN)
-                        self.ii.queue_task_done()
-
-                        continue
-
-            keys, values = transform(distribution)
-
-            mi = dit.Distribution(keys, values)
-
-            interaction_information = -1
-
-            rv_names = LABELS[:self.ii.combinations_size]
-            mi.set_rv_names(rv_names + ["Z"])
-            interaction_information = dit.shannon.mutual_information(mi, rv_names, ["Z"])
-
-            self.add_couple(column_couple, interaction_information)
+            self.add_couple(column_couple, mi)
 
             timestamp_end = time.time()
-            if interaction_information >= self.ii.threshold:
-                log("Cost {:.2f} secends to calculate I({}) is {}, the remaining size is {}".format(timestamp_end-timestamp_start, column_couple, interaction_information, self.ii.queue.qsize()), INFO)
+            log("Cost {:.2f} secends to calculate I({}) is {}, the remaining size is {}".format(timestamp_end-timestamp_start, column_couple, mi, self.ii.queue.qsize()), INFO)
 
             self.ii.queue.task_done()
 
@@ -420,24 +337,15 @@ def load_dataset(filepath_cache, dataset, binsize=2, threshold=0.1):
 
     return dataset
 
-def calculate_interaction_information(filepath_cache, dataset, train_y, filepath_couple, filepath_criteria, combinations_size,
-                                      n_split=1, binsize=2, threshold=0.01, nthread=4, is_testing=None):
+def calculate_interaction_information(filepath_cache, dataset, train_y, filepath_couple, combinations_size,
+                                      n_split_idx=0, n_split_num=1, binsize=2, nthread=4, is_testing=None):
     dataset = load_dataset(filepath_cache, dataset, binsize)
 
-    ii = InteractionInformation(dataset, train_y, filepath_couple, filepath_criteria, combinations_size, threshold)
-
-    # Build Cache File
-    timestamp_start = time.time()
-    for column in dataset.columns:
-        if column:
-            ii.get_values_from_cache(column)
-    ii.write_cache()
-    timestamp_end = time.time()
-    log("Cost {:.4f} secends to build cache files".format(timestamp_end-timestamp_start), INFO)
+    ii = InteractionInformation(dataset, train_y, filepath_couple, combinations_size)
 
     count_break = 0
     rounds = list(combinations([column for column in dataset.columns], combinations_size))
-    for pair_column in rounds[len(rounds)%n_split::n_split]:
+    for pair_column in rounds[n_split_idx::n_split_num]:
         if is_testing and random.random()*10 > 1: # Random Sampling when is_testing = True
             continue
 
@@ -459,6 +367,33 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, filepath
 
     return ii.results_couple
 
+def test_new_interaction_information(filepath_cache, dataset, train_y, binsize=4):
+    import math
+    from information_discrete import mi
+
+    dataset = load_dataset(filepath_cache, dataset, binsize)
+    # Cost 162.86 secends to calculate I(var3;imp_op_var39_comer_ult1;saldo_medio_var5_hace3;target) is 0.030339899738, the remaining size is 776080
+    #tmp_df = dataset["var3"]
+    #tmp_df["imp_op_var39_comer_ult1"] = dataset["imp_op_var39_comer_ult1"]
+    #tmp_df["saldo_medio_var5_hace3"] = dataset["saldo_medio_var5_hace3"]
+    #tmp_df["target"] = train_y.values
+
+    # ind_var34;saldo_medio_var5_ult3;target 0.0149167532518
+    a = mi(dataset["ind_var34"].values, dataset["saldo_medio_var5_ult3"].values)
+    b = mi_3d(("ind_var34", dataset["ind_var34"].values), ("saldo_medio_var5_ult3", dataset["saldo_medio_var5_ult3"].values), ("target", train_y.values))
+
+    distribution = {}
+    x = np.unique(dataset["ind_var34"].values)
+    y = np.unique(dataset["saldo_medio_var5_ult3"].values)
+    z = np.unique(train_y.values)
+
+    from entropy_estimators import cmidd
+    c = cmidd(dataset["ind_var34"].values, dataset["saldo_medio_var5_ult3"].values, train_y.values)
+
+    print c, a, b, c-a
+
+    print mi_4d(("var3", dataset["var3"].values), ("ind_var34", dataset["ind_var34"].values), ("saldo_medio_var5_ult3", dataset["saldo_medio_var5_ult3"].values), ("target", train_y.values))
+
 def merge_binsize(filepath_output, pattern, topX=500):
     dfs = []
 
@@ -478,6 +413,3 @@ def merge_binsize(filepath_output, pattern, topX=500):
     # Merge
     results = pd.concat(dfs, axis=1)
     results.to_csv(filepath_output)
-
-if __name__ == "__main__":
-    merge_binsize("../input/merge_binsize.csv", "../input/transform2*testing=-1*type=2*binsize=*pkl", 1000)

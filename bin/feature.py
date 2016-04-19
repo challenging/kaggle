@@ -23,14 +23,14 @@ from configuration import ModelConfParser
 @click.option("--feature-importance", is_flag=True, help="Calculate the feature importance")
 @click.option("--interaction-information", is_flag=True, help="Calculate the interaction information")
 @click.option("--binsize", default=16, help="bin/bucket size setting")
-@click.option("--split", default=1, help="the split number of combinations-size")
+@click.option("--split-idx", default=0, help="the index of split number")
+@click.option("--split-num", default=1, help="the split number of combinations-size")
 @click.option("--testing", default=-1, help="cut off the input file to be the testing dataset")
 @click.option("--combinations-size", default=2, help="size of combinations")
-def feature_engineer(conf, thread, feature_importance, interaction_information, split, binsize, testing, combinations_size):
+def feature_engineer(conf, thread, feature_importance, interaction_information, split_idx, split_num, binsize, testing, combinations_size):
     drop_fields = []
 
     transform2 = True
-    threshold = combinations_size*0.01
 
     cfg_parser = ModelConfParser(conf)
     BASEPATH = cfg_parser.get_workspace()
@@ -69,12 +69,12 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
 
         filepath_cache = "{}/input/transform2={}_binsize={}_cache.pkl".format(BASEPATH, transform2, binsize)
         filepath_couple = "{}/input/interaction_information/transform2={}_testing={}_type=2_binsize={}_combination={}.pkl".format(BASEPATH, transform2, testing, binsize, combinations_size)
-        filepath_criteria = "{}/input/transform2={}_testing={}_binsize={}_criteria.pkl".format(BASEPATH, transform2, testing, binsize)
 
-        results_couple = feature_engineering.calculate_interaction_information(filepath_cache,\
-            train_x, train_y,\
-            filepath_couple, filepath_criteria,\
-            binsize=binsize, nthread=thread, combinations_size=combinations_size, threshold=threshold, n_split=split, is_testing=int(testing) if testing > 0 else None)
+        #feature_engineering.test_new_interaction_information(filepath_cache, train_x, train_y, binsize)
+
+        results_couple = feature_engineering.calculate_interaction_information(filepath_cache, train_x, train_y, filepath_couple, \
+            binsize=binsize, nthread=thread, combinations_size=combinations_size, n_split_idx=split_idx, n_split_num=split_num,
+            is_testing=int(testing) if testing > 0 else None)
 
 if __name__ == "__main__":
     feature_engineer()
