@@ -169,12 +169,14 @@ class InteractionInformation(object):
     def decompose_column_names(self, name):
         return name.split(";")[:-1]
 
-    def add_item(self, column_names):
+    def add_item(self, column_names, combinations_size):
         key = self.compose_column_names(column_names)
 
         if key not in self.results_couple:
-            self.queue.put(key)
-            log("Put I({}) into the queue".format(key), INFO)
+            self.queue.put((key, combinations_size))
+
+            if self.queue.qsize() % 10000 == 0:
+                log("Put I({}) into the queue, and the size of queue is {}".format(key, self.queue.qsize()), INFO)
 
     def add_couple(self, key ,v):
         self.results_couple[key] = v
@@ -208,29 +210,30 @@ class InteractionInformationThread(Thread):
     def run(self):
         while True:
             timestamp_start = time.time()
-            column_couple = self.ii.queue.get()
+            column_couple, combinations_size = self.ii.queue.get()
             column_names = self.ii.decompose_column_names(column_couple)
 
             mi = -1
-            if self.ii.combinations_size == 2:
+            if combinations_size == 2:
                 mi = mi(self.ii.dataset[column_names[0]].values, self.ii.train_y.values)
-            elif self.ii.combinations_size == 3:
+            elif combinations_size == 3:
                 mi = mi_3d((column_names[0], self.ii.dataset[column_names[0]].values),
                             (column_names[1], self.ii.dataset[column_names[1]].values),
                             ("target", self.ii.train_y.values))
-            elif self.ii.combinations_size == 4:
+            elif combinations_size >= 4:
                 mi = mi_4d((column_names[0], self.ii.dataset[column_names[0]].values),
                             (column_names[1], self.ii.dataset[column_names[1]].values),
                             (column_names[2], self.ii.dataset[column_names[2]].values),
                             ("target", self.ii.train_y.values))
-            else:
-                log("The combinations-size should be less or equal than 4", ERROR)
-                break
 
             self.add_couple(column_couple, mi)
 
             timestamp_end = time.time()
-            log("Cost {:.2f} secends to calculate I({}) is {}, the remaining size is {}".format(timestamp_end-timestamp_start, column_couple, mi, self.ii.queue.qsize()), INFO)
+
+            if mi >= 0.02:
+                log("Cost {:.8f} secends to calculate I({}) is {}, the remaining size is {}".format(timestamp_end-timestamp_start, column_couple, mi, self.ii.queue.qsize()), INFO)
+            elif self.ii.queue.qsize() % 10000 == 0:
+                log("The remaining size of self.ii.queue is {}".format(self.ii.queue.qsize()), INFO)
 
             self.ii.queue.task_done()
 
@@ -344,18 +347,20 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, filepath
     ii = InteractionInformation(dataset, train_y, filepath_couple, combinations_size)
 
     count_break = 0
-    rounds = list(combinations([column for column in dataset.columns], combinations_size))
-    for pair_column in rounds[n_split_idx::n_split_num]:
-        if is_testing and random.random()*10 > 1: # Random Sampling when is_testing = True
-            continue
 
-        ii.add_item(pair_column)
+    for size in range(combinations_size, 1, -1):
+        rounds = list(combinations([column for column in dataset.columns], size))
+        for pair_column in rounds[n_split_idx::n_split_num]:
+            if is_testing and random.random()*10 > 1: # Random Sampling when is_testing = True
+                continue
 
-        if is_testing and count_break > is_testing:
-            log("Early break due to the is_testing is True", INFO)
-            break
-        else:
-            count_break += 1
+            ii.add_item(pair_column, size)
+
+            if is_testing and count_break > is_testing:
+                log("Early break due to the is_testing is True", INFO)
+                break
+            else:
+                count_break += 1
 
     for idx in range(0, nthread):
         worker = InteractionInformationThread(kwargs={"ii": ii, "results_couple": {}, "filepath_couple": "{}.{}".format(filepath_couple, int(100000*time.time()))})
