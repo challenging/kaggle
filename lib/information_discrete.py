@@ -291,7 +291,7 @@ def mi_4d(pair_w, pair_x, pair_y, pair_z):
         wyz = get_value_from_cache(";".join([w_name, y_name, z_name]), [w, y, z])
         xyz = get_value_from_cache(";".join([x_name, y_name, z_name]), [x, y, z])
 
-        wxyz = get_value_from_cache(cache, ";".join([w_name, x_name, y_name, z_name]), [w, x, y, z])
+        wxyz = get_value_from_cache(";".join([w_name, x_name, y_name, z_name]), [w, x, y, z])
     else:
         probW = symbols_to_prob(w).prob()
         probX = symbols_to_prob(x).prob()
