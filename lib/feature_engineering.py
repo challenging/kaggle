@@ -223,7 +223,7 @@ class InteractionInformationThread(Thread):
             timestamp_end = time.time()
 
             if mi > 2e-04:
-                log("Cost {:.4f} secends to calculate I({}) is {}, the remaining size is {}. The size of self.results_couple is {}".format(timestamp_end-timestamp_start, column_couple, mi, self.ii.queue.qsize(), len(self.results_couple)), INFO)
+                log("Cost {:.4f} secends to calculate I({}) is {:.8f}, the remaining size is {}. The size of self.results_couple is {}".format(timestamp_end-timestamp_start, column_couple, mi, self.ii.queue.qsize(), len(self.results_couple)), INFO)
             elif self.ii.queue.qsize() % 10000 == 0:
                 log("The remaining size of self.ii.queue is {}".format(self.ii.queue.qsize()), INFO)
 
