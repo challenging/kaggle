@@ -6,7 +6,6 @@ __all__ = ['entropy', 'symbols_to_prob', 'combine_symbols', 'mi', 'cond_mi', 'mi
 import numpy as np
 from collections import Counter
 
-enable_cache = True
 cache = {}
 
 class Counter(Counter):
@@ -115,43 +114,6 @@ def combine_symbols(*args):
 
     return tuple(zip(*args))
 
-
-def mi(x, y):
-    '''
-    compute and return the mutual information between x and y
-
-    inputs:
-    -------
-        x, y:   iterables of hashable items
-
-    output:
-    -------
-        mi:     float
-
-    Notes:
-    ------
-        if you are trying to mix several symbols together as in mi(x, (y0,y1,...)), try
-
-        info[p] = _info.mi(x, info.combine_symbols(y0, y1, ...) )
-    '''
-    # dict.values() returns a view object that has to be converted to a list before being
-    # converted to an array
-    # the following lines will execute properly in python3, but not python2 because there
-    # is no zip object
-    try:
-        if isinstance(x, zip):
-            x = list(x)
-        if isinstance(y, zip):
-            y = list(y)
-    except:
-        pass
-
-    probX = symbols_to_prob(x).prob()
-    probY = symbols_to_prob(y).prob()
-    probXY = symbols_to_prob(combine_symbols(x, y)).prob()
-
-    return entropy(prob=probX) + entropy(prob=probY) - entropy(prob=probXY)
-
 def cond_mi(x, y, z):
     '''
     compute and return the mutual information between x and y given z, I(x, y | z)
@@ -189,6 +151,54 @@ def get_value_from_cache(name, *value):
 
     return cache[name]
 
+def mi(pair_x, pair_y):
+    '''
+    compute and return the mutual information between x and y
+
+    inputs:
+    -------
+        x, y:   iterables of hashable items
+
+    output:
+    -------
+        mi:     float
+
+    Notes:
+    ------
+        if you are trying to mix several symbols together as in mi(x, (y0,y1,...)), try
+
+        info[p] = _info.mi(x, info.combine_symbols(y0, y1, ...) )
+    '''
+    # dict.values() returns a view object that has to be converted to a list before being
+    # converted to an array
+    # the following lines will execute properly in python3, but not python2 because there
+    # is no zip object
+    global cache
+
+    try:
+        if isinstance(x, zip):
+            x = list(x)
+        if isinstance(y, zip):
+            y = list(y)
+    except:
+        pass
+
+    x_name, x = pair_x
+    y_name, y = pair_y
+
+    probX, probY, probXY = -1, -1, -1
+
+    if cache != None:
+        probX = get_value_from_cache(x_name, [x])
+        probY = get_value_from_caceh(y_name, [y])
+        probXY = get_value_from_caceh(";".join([x_name, y_name]), [x, y])
+    else:
+        probX = symbols_to_prob(x).prob()
+        probY = symbols_to_prob(y).prob()
+        probXY = symbols_to_prob(combine_symbols(x, y)).prob()
+
+    return entropy(prob=probX) + entropy(prob=probY) - entropy(prob=probXY)
+
 def mi_3d(pair_x, pair_y, pair_z):
     '''
     compute and return the mutual information between x and y given z, I(x, y, z)
@@ -205,14 +215,14 @@ def mi_3d(pair_x, pair_y, pair_z):
     ---------------------
     https://en.wikipedia.org/wiki/Interaction_information
     '''
-    global enable_cache
+    global cache
 
     x_name, x = pair_x
     y_name, y = pair_y
     z_name, z = pair_z
 
     probX, probY, probZ, probXY, probYZ, probYZ, probXYZ = -1, -1, -1, -1, -1, -1, -1
-    if enable_cache:
+    if cache != None:
         probX = get_value_from_cache(x_name, [x])
         probY = get_value_from_cache(y_name, [y])
         probZ = get_value_from_cache(z_name, [z])
@@ -250,12 +260,12 @@ def mi_4d(pair_w, pair_x, pair_y, pair_z):
     implementation notes:
     https://en.wikipedia.org/wiki/Interaction_information
     ---------------------
-        I(w, x, y | z) = H(w) + H(x) + H(y) + H(z)
+        I(w, x, y, z) = H(w) + H(x) + H(y) + H(z)
                         - H(w,x) - H(w, y) - H(w,z) - H(x,y) - H(x,z) -H(y,z)
                         + H(w,x,y) + H(w,x,z) + H(w,y,z) + H(x,y,z)
                         - H(w, x, y, z)
     '''
-    global enable_cache
+    global cache
 
     w_name, w = pair_w
     x_name, x = pair_x
@@ -263,7 +273,7 @@ def mi_4d(pair_w, pair_x, pair_y, pair_z):
     z_name, z = pair_z
 
     probW, probX, probY, probZ, wx, wy, wz, xy, xz, yz, wxy, wxz, wyz, xyz, wxyz = -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
-    if enable_cache:
+    if cache != None:
         probW = get_value_from_cache(w_name, [w])
         probX = get_value_from_cache(x_name, [x])
         probY = get_value_from_cache(y_name, [y])
@@ -281,7 +291,7 @@ def mi_4d(pair_w, pair_x, pair_y, pair_z):
         wyz = get_value_from_cache(";".join([w_name, y_name, z_name]), [w, y, z])
         xyz = get_value_from_cache(";".join([x_name, y_name, z_name]), [x, y, z])
 
-        wxyz = get_value_from_cache(";".join([w_name, x_name, y_name, z_name]), [w, x, y, z])
+        wxyz = get_value_from_cache(cache, ";".join([w_name, x_name, y_name, z_name]), [w, x, y, z])
     else:
         probW = symbols_to_prob(w).prob()
         probX = symbols_to_prob(x).prob()

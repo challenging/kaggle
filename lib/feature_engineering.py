@@ -135,11 +135,11 @@ def transform(distribution):
     return keys, values
 
 class InteractionInformation(object):
-    def __init__(self, dataset, train_y, filepath_couple, combinations_size=2):
+    def __init__(self, dataset, train_y, folder_couple, combinations_size=2):
         self.dataset = dataset
         self.train_y = train_y
 
-        self.filepath_couple = filepath_couple
+        self.folder_couple = folder_couple
 
         self.queue = Queue()
 
@@ -150,18 +150,21 @@ class InteractionInformation(object):
         self.read_cache()
 
     def read_cache(self):
-        parent_folder = os.path.dirname(self.filepath_couple)
-        if not os.path.isdir(parent_folder):
-            os.makedirs(parent_folder)
+        if not os.path.isdir(self.folder_couple):
+            os.makedirs(self.folder_couple)
 
-        for filepath_couple in glob.iglob("{}*".format(self.filepath_couple)):
+        for filepath_couple in glob.iglob("{}/*pkl*".format(self.folder_couple)):
             log("Try to load cache file from {}".format(filepath_couple))
-            self.results_couple.update(load_cache(filepath_couple))
+
+            try:
+                obj = load_cache(filepath_couple)
+
+                if obj:
+                    self.results_couple.update(obj)
+            except ValueError as e:
+                pass
 
         log("Already finish {} results_couple".format(len(self.results_couple)))
-
-    def write_cache(self):
-        save_cache(self.results_couple, self.filepath_couple)
 
     def compose_column_names(self, names):
         return "{};target".format(";".join(names))
@@ -185,27 +188,20 @@ class InteractionInformationThread(Thread):
     def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
         Thread.__init__(self, group=group, target=target, name=name, verbose=verbose)
 
-        self.reset_saving_size = 1000
-        self.saving_size = self.reset_saving_size
-
         self.args = args
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        log("The filepath_couple is in {}".format(self.filepath_couple))
-
     def add_couple(self, key, v):
         self.results_couple[key] = v
+        self.dump()
 
-        if self.saving_size < 0:
-            self.dump()
+    def dump(self, force_dump=False):
+        if force_dump or len(self.results_couple) > self.batch_size_dump:
+            filepath_couple = "{}/{}.pkl".format(self.folder_couple, int(10000*time.time()))
 
-            self.saving_size = self.reset_saving_size
-        else:
-            self.saving_size -= 1
-
-    def dump(self):
-        save_cache(self.results_couple, self.filepath_couple)
+            save_cache(self.results_couple, filepath_couple)
+            self.results_couple = {}
 
     def run(self):
         while True:
@@ -214,13 +210,13 @@ class InteractionInformationThread(Thread):
             column_names = self.ii.decompose_column_names(column_couple)
 
             mi = -1
-            if combinations_size == 2:
+            if combinations_size == 1:
                 mi = mi(self.ii.dataset[column_names[0]].values, self.ii.train_y.values)
-            elif combinations_size == 3:
+            elif combinations_size == 2:
                 mi = mi_3d((column_names[0], self.ii.dataset[column_names[0]].values),
                             (column_names[1], self.ii.dataset[column_names[1]].values),
                             ("target", self.ii.train_y.values))
-            elif combinations_size >= 4:
+            elif combinations_size == 3:
                 mi = mi_4d((column_names[0], self.ii.dataset[column_names[0]].values),
                             (column_names[1], self.ii.dataset[column_names[1]].values),
                             (column_names[2], self.ii.dataset[column_names[2]].values),
@@ -230,7 +226,7 @@ class InteractionInformationThread(Thread):
 
             timestamp_end = time.time()
 
-            if mi >= 0.02:
+            if mi > 2e-04:
                 log("Cost {:.8f} secends to calculate I({}) is {}, the remaining size is {}".format(timestamp_end-timestamp_start, column_couple, mi, self.ii.queue.qsize()), INFO)
             elif self.ii.queue.qsize() % 10000 == 0:
                 log("The remaining size of self.ii.queue is {}".format(self.ii.queue.qsize()), INFO)
@@ -238,7 +234,7 @@ class InteractionInformationThread(Thread):
             self.ii.queue.task_done()
 
         # Dump the results
-        self.dump()
+        self.dump(True)
 
 def load_dataset(filepath_cache, dataset, binsize=2, threshold=0.1):
     LABELS = "abcdefghijklmnopqrstuvwxABCDEFGHIJKLMNOPQRSTUVWX0123456789!@#$%^&*()_+~"
@@ -340,11 +336,11 @@ def load_dataset(filepath_cache, dataset, binsize=2, threshold=0.1):
 
     return dataset
 
-def calculate_interaction_information(filepath_cache, dataset, train_y, filepath_couple, combinations_size,
+def calculate_interaction_information(filepath_cache, dataset, train_y, folder_couple, combinations_size,
                                       n_split_idx=0, n_split_num=1, binsize=2, nthread=4, is_testing=None):
     dataset = load_dataset(filepath_cache, dataset, binsize)
 
-    ii = InteractionInformation(dataset, train_y, filepath_couple, combinations_size)
+    ii = InteractionInformation(dataset, train_y, folder_couple, combinations_size)
 
     count_break = 0
 
@@ -363,7 +359,7 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, filepath
                 count_break += 1
 
     for idx in range(0, nthread):
-        worker = InteractionInformationThread(kwargs={"ii": ii, "results_couple": {}, "filepath_couple": "{}.{}".format(filepath_couple, int(100000*time.time()))})
+        worker = InteractionInformationThread(kwargs={"ii": ii, "results_couple": {}, "folder_couple": folder_couple, "batch_size_dump": 2**16})
         worker.setDaemon(True)
         worker.start()
 

@@ -68,11 +68,11 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
             train_x, train_y, test_x, test_id = data_load(drop_fields=drop_fields)
 
         filepath_cache = "{}/input/transform2={}_binsize={}_cache.pkl".format(BASEPATH, transform2, binsize)
-        filepath_couple = "{}/input/interaction_information/transform2={}_testing={}_type=2_binsize={}_combination={}.pkl".format(BASEPATH, transform2, testing, binsize, combinations_size)
+        folder_couple = "{}/input/interaction_information/transform2={}_testing={}_binsize={}".format(BASEPATH, transform2, testing, binsize)
 
         #feature_engineering.test_new_interaction_information(filepath_cache, train_x, train_y, binsize)
 
-        results_couple = feature_engineering.calculate_interaction_information(filepath_cache, train_x, train_y, filepath_couple, \
+        results_couple = feature_engineering.calculate_interaction_information(filepath_cache, train_x, train_y, folder_couple, \
             binsize=binsize, nthread=thread, combinations_size=combinations_size, n_split_idx=split_idx, n_split_num=split_num,
             is_testing=int(testing) if testing > 0 else None)
 

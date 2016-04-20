@@ -251,7 +251,7 @@ def load_cache(filepath):
         log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
 
         os.remove(filepath)
-        sys.exit(100)
+        raise
 
     return obj
 
