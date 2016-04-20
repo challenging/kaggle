@@ -2,6 +2,7 @@
 
 import os
 import sys
+import glob
 import time
 import pickle
 import operator
@@ -186,32 +187,28 @@ def load_advanced_data(filepath_training, filepath_testing, drop_fields=[]):
 
     return df_train, df_test
 
-def load_interaction_information(filepath, count=None, threshold=None):
-    results = None
-    with open(filepath, "rb") as INPUT:
-        results = pickle.load(INPUT)
+def load_interaction_information(folder, count=None, threshold=None, reverse=True):
+    results = {}
+    for filepath in glob.glob("{}/*pkl*".format(folder)):
+        with open(filepath, "rb") as INPUT:
+            results.update(pickle.load(INPUT))
 
     matching_type = (count != None)
+
     ranking = {}
     for layer1, info in results.items():
-        if isinstance(info, dict):
-            for layer2, value in info.items():
-                ranking["{}-{}".format(layer1, layer2)] = value
-        elif isinstance(info, float):
-            layer1 = layer1.replace(";", "-")
+        if count:
+            ranking[layer1] = info
+        elif threshold and info > threshold:
+            fields = layer1.split(";")
+            if "target" in fields:
+                fields.remove("target")
 
-            if count:
-                ranking[layer1] = info
-            elif threshold and info > threshold:
-                fields = layer1.split("-")
-                if "target" in fields:
-                    fields.remove("target")
-
-                yield fields, info
+            yield fields, info
 
     if matching_type:
-        for key, value in sorted(ranking.items(), key=operator.itemgetter(1), reverse=True):
-            fields = key.split("-")
+        for key, value in sorted(ranking.items(), key=operator.itemgetter(1), reverse=reverse):
+            fields = key.split(";")
             if "target" in fields:
                 fields.remove("target")
 
@@ -256,17 +253,15 @@ def load_cache(filepath):
     return obj
 
 if __name__ == "__main__":
-    drop_fields = []
-    BASEPATH = "/Users/RungChiChen/Documents/kaggle/Santander Customer Satisfaction"
+    folder_ii = "/Users/RungChiChen/Documents/kaggle/Santander Customer Satisfaction/input/interaction_information/transform2=True_testing=-1_binsize=4"
 
-    filepath_training = "{}/input/train.csv".format(BASEPATH)
-    filepath_testing = "{}/input/test.csv".format(BASEPATH)
-    filepath_cache_1 = "{}/input/training_dataset.cache".format(BASEPATH)
+    stats = {}
+    for columns, value in load_interaction_information(folder_ii, count=float(sys.argv[1]), reverse=False):
+        n_dims = len(columns)
 
-    train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
+        print columns, value
 
-    filepath_interaction_information = "{}/input/transform2=True_testing=-1_type=2_binsize=4_combination=2.pkl".format(BASEPATH)
-    for layers, value in load_interaction_information(filepath_interaction_information):
-        print layers, value
+        stats.setdefault(n_dims, 0)
+        stats[n_dims] += 1
 
-        break
+    print stats

@@ -41,16 +41,16 @@ def learning(conf, thread):
     filepath_training = "{}/input/train.csv".format(BASEPATH)
     filepath_testing = "{}/input/test.csv".format(BASEPATH)
     filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
-    filepath_ii = "{}/input/transform2=True_testing=-1_type=2_binsize={}_combination=2.pkl".format(BASEPATH, binsize)
+    folder_ii = "{}/input/transform2=True_testing=-1_binsize={}".format(BASEPATH, binsize)
 
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
     columns = train_x.columns
     rounds = None
     if isinstance(topX, int):
-        rounds = load_interaction_information(filepath_ii, count=topX)
+        rounds = load_interaction_information(folder_ii, count=topX)
     elif isinstance(topX, float):
-        rounds = load_interaction_information(filepath_ii, threshold=topX)
+        rounds = load_interaction_information(folder_ii, threshold=topX)
     else:
         log("Wrong type for topX()".format(type(topX).__name__), ERROR)
         sys.exit(100)

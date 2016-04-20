@@ -24,9 +24,8 @@ from configuration import ModelConfParser
 @click.option("--is-testing", is_flag=True, help="Testing mode")
 @click.option("--methodology", required=True, help="Tune parameters of which methodology")
 @click.option("--binsize", default=16, help="bin/bucket size setting")
-@click.option("--combinations-size", default=2, help="size of combinations")
 @click.option("--top", default=300, help="Extract how many interaction information we extract")
-def tuning(methodology, binsize, combinations_size, top, is_testing, thread, conf):
+def tuning(methodology, binsize, top, is_testing, thread, conf):
     drop_fields = []
     N = 650 - len(drop_fields)
 
@@ -38,13 +37,13 @@ def tuning(methodology, binsize, combinations_size, top, is_testing, thread, con
     filepath_training = "{}/input/train.csv".format(BASEPATH)
     filepath_testing = "{}/input/test.csv".format(BASEPATH)
     filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
-    filepath_ii = "{}/input/transform2=True_testing=-1_type=2_binsize={}_combination={}.pkl".format(BASEPATH, binsize, combinations_size)
-    filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_binsize={}_combination={}.pkl".format(BASEPATH, methodology, is_testing, binsize, combinations_size)
+    folder_ii = "{}/input/transform2=True_testing=-1_type=2_binsize={}".format(BASEPATH, binsize)
+    filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_binsize={}.pkl".format(BASEPATH, methodology, is_testing, binsize)
 
     train_x = None
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
-    for (layer1, layer2), value in load_interaction_information(filepath_ii, top):
+    for (layer1, layer2), value in load_interaction_information(folder_ii, top):
         train_x["{}-{}".format(layer1, layer2)] = train_x[layer1].values * train_x[layer2].values * value
         test_x["{}-{}".format(layer1, layer2)] = test_x[layer1].values * test_x[layer2].values * value
 
