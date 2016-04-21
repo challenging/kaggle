@@ -223,7 +223,7 @@ class InteractionInformationThread(Thread):
             timestamp_end = time.time()
 
             if mi > 2e-04:
-                log("Cost {:.4f} secends to calculate I({}) is {:.8f}, the remaining size is {}. The size of self.results_couple is {}".format(timestamp_end-timestamp_start, column_couple, mi, self.ii.queue.qsize(), len(self.results_couple)), INFO)
+                log("Cost {:.2f} secends to calculate I({}) is {:.6f}, the remaining size is {}/{}".format(timestamp_end-timestamp_start, column_couple, mi, self.ii.queue.qsize(), len(self.results_couple)), INFO)
             elif self.ii.queue.qsize() % 10000 == 0:
                 log("The remaining size of self.ii.queue is {}".format(self.ii.queue.qsize()), INFO)
 
@@ -353,6 +353,9 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, folder_c
                 break
             else:
                 count_break += 1
+
+    # Memory Concern
+    ii.results_couple = {}
 
     for idx in range(0, nthread):
         worker = InteractionInformationThread(kwargs={"ii": ii, "results_couple": {}, "folder_couple": folder_couple, "batch_size_dump": 2**13})
