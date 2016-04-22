@@ -37,6 +37,7 @@ def learning(conf, thread):
     binsize, topX = parser.get_interaction_information()
     cost = parser.get_cost()
     nfold = parser.get_nfold()
+    top = parser.get_top()
 
     filepath_training = "{}/input/train.csv".format(BASEPATH)
     filepath_testing = "{}/input/test.csv".format(BASEPATH)

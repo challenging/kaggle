@@ -23,6 +23,14 @@ class ModelConfParser(object):
 
         return nfold
 
+    def get_top(self):
+        top = "300"
+
+        if self.config.has_option("MAIN", "top"):
+            top = self.config.get("MAIN", "top")
+
+        return top
+
     def get_n_jobs(self):
         if self.config.has_option("MAIN", "n_jobs"):
             return self.config.getint("MAIN", "n_jobs")
