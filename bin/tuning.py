@@ -39,7 +39,7 @@ def tuning(methodology, nfold, binsize, top, is_testing, thread, conf):
     filepath_testing = "{}/input/test.csv".format(BASEPATH)
     filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
     folder_ii = "{}/input/interaction_information/transform2=True_testing=-1_binsize={}".format(BASEPATH, binsize)
-    filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_binsize={}.pkl".format(BASEPATH, methodology, is_testing, binsize)
+    filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_nfold={}_binsize={}.pkl".format(BASEPATH, methodology, is_testing, nfold, binsize)
 
     train_x = None
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
@@ -71,6 +71,10 @@ def tuning(methodology, nfold, binsize, top, is_testing, thread, conf):
             algorithm = ExtraTreeTuning("Target", "ID", "classifier", cost=cost,n_jobs=thread, cv=nfold)
         elif methodology[-1] == "r":
             algorithm = ExtraTreeTuning("Target", "ID", "regressor", cost=cost,n_jobs=thread, cv=nfold)
+
+    if algorithm == None:
+        log("Not support this algorithm - {}".format(methodology), ERROR)
+        sys.exit(1)
 
     algorithm.set_train(train_x)
     algorithm.set_filepath(filepath_tuning)

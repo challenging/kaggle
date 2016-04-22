@@ -55,7 +55,8 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
 
         fp = feature_engineering.FeatureProfile()
         ranks = fp.profile(train_x.values, train_y, names, filepath_feature, int(len(train_x.columns)*0.5))
-    elif interaction_information:
+
+    if interaction_information:
         log("Try to calculate the interaction information", INFO)
 
         filepath_training = "{}/input/train.csv".format(BASEPATH)
@@ -73,7 +74,8 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
         results_couple = feature_engineering.calculate_interaction_information(filepath_cache, train_x, train_y, folder_couple, \
             binsize=binsize, nthread=thread, combinations_size=combinations_size, n_split_idx=split_idx, n_split_num=split_num,
             is_testing=int(testing) if testing > 0 else None)
-    elif merge_ii:
+
+    if merge_ii:
         folder_couple = "{}/input/interaction_information/transform2={}_testing={}_binsize={}".format(BASEPATH, transform2, testing, binsize)
 
         count_filepath, count_couple, final_count_filepath, final_count_couple = feature_engineering.merge_interaction_information(folder_couple)

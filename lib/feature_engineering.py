@@ -160,24 +160,31 @@ def merge_interaction_information(folder_couple, size_dump=2**15):
         return 1
 
     results = {}
-    count_filepath, count_couple, final_count_filepath, final_count_couple = -1, -1, -1, -1
+    count_filepath, count_couple, final_count_filepath, final_count_couple = 0, 0, 0, 0
 
-    for filepath in glob.iglob("{}/*pkl".format(folder)):
+    for filepath in glob.iglob("{}/*pkl".format(folder_couple)):
         with open(filepath, "rb") as INPUT:
-            results.update(load_cache(filepath))
+            o = load_cache(filepath)
+            results.update(o)
+
+            count_couple += len(o)
+
+        os.rename(filepath, "{}.bak".format(filepath))
         count_filepath += 1
-    count_couple = len(count_couple)
 
-    dump_results = {}
-    for idx, key in enumerate(results.keys()):
-        dump_results[key] = results[key]
-        final_count_couple += 1
+    if count_filepath == 0:
+        log("Not file in {}".format(folder_couple), WARN)
+    else:
+        dump_results = {}
+        for idx, key in enumerate(results.keys()):
+            dump_results[key] = results[key]
+            final_count_couple += 1
 
-        if len(dump_results) > size_dump:
-            final_count_filepath += save(dump_results)
-            dump_results = {}
+            if len(dump_results) > size_dump:
+                final_count_filepath += save(dump_results)
+                dump_results = {}
 
-    final_count_filepath += save_cache(dump_results)
+        final_count_filepath += save(dump_results)
 
     return count_filepath, count_couple, final_count_filepath, final_count_couple
 
@@ -186,11 +193,6 @@ def test_new_interaction_information(filepath_cache, dataset, train_y, binsize=4
     from information_discrete import mi
 
     dataset = load_dataset(filepath_cache, dataset, binsize)
-    # Cost 162.86 secends to calculate I(var3;imp_op_var39_comer_ult1;saldo_medio_var5_hace3;target) is 0.030339899738, the remaining size is 776080
-    #tmp_df = dataset["var3"]
-    #tmp_df["imp_op_var39_comer_ult1"] = dataset["imp_op_var39_comer_ult1"]
-    #tmp_df["saldo_medio_var5_hace3"] = dataset["saldo_medio_var5_hace3"]
-    #tmp_df["target"] = train_y.values
 
     # ind_var34;saldo_medio_var5_ult3;target 0.0149167532518
     a = mi(dataset["ind_var34"].values, dataset["saldo_medio_var5_ult3"].values)
