@@ -44,9 +44,22 @@ def tuning(methodology, nfold, binsize, top, is_testing, thread, conf):
     train_x = None
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
-    for (layer1, layer2), value in load_interaction_information(folder_ii, top):
-        train_x["{}-{}".format(layer1, layer2)] = train_x[layer1].values * train_x[layer2].values * value
-        test_x["{}-{}".format(layer1, layer2)] = test_x[layer1].values * test_x[layer2].values * value
+    for layers, value in load_interaction_information(folder_ii, top):
+        for df in [train_x, test_x]:
+            t = value
+            is_not_break = True
+            for layer in layers:
+                if layer in train_x.columns:
+                    t *= df[layer]
+                else:
+                    is_not_break = False
+                    break
+
+            if is_not_break:
+                df[";".join(layers)] = t
+            else:
+                log("Skip {}".format(layers), WARN)
+                break
 
     train_x["Target"] = train_y.values
 

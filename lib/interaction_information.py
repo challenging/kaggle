@@ -161,6 +161,7 @@ class InteractionInformationThread(Thread):
     def dump(self, force_dump=False):
         if force_dump or len(self.results_couple) > self.batch_size_dump:
             filepath_couple = "{}/{}.{}.pkl".format(self.folder_couple, socket.gethostname(), int(10000*time.time()))
+            log("write {} records in {}".format(len(self.results_couple), filepath_couple), INFO)
 
             save_cache(self.results_couple, filepath_couple)
             self.results_couple = {}
@@ -196,4 +197,5 @@ class InteractionInformationThread(Thread):
             self.ii.queue.task_done()
 
         # Dump the results
+        log("Force dumpping the results", INFO)
         self.dump(True)

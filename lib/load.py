@@ -187,37 +187,51 @@ def load_advanced_data(filepath_training, filepath_testing, drop_fields=[]):
 
     return df_train, df_test
 
-def load_interaction_information(folder, count=None, threshold=None, reverse=True):
+def load_interaction_information(folder, threshold=300, reverse=True):
+    SPLIT_SYMBOL = ";"
+
     results = {}
-    for filepath in glob.glob("{}/*pkl*".format(folder)):
+    for filepath in glob.glob("{}/*pkl".format(folder)):
         with open(filepath, "rb") as INPUT:
             results.update(pickle.load(INPUT))
 
-    matching_type = (count != None)
+    is_integer = isinstance(threshold, int)
 
+    for_integer = {}
     ranking = {}
-    for layer1, info in results.items():
-        if count:
-            ranking[layer1] = info
-        elif threshold and info > threshold:
-            fields = layer1.split(";")
-            if "target" in fields:
-                fields.remove("target")
+    for layer1, score in results.items():
+        fields = layer1.split(SPLIT_SYMBOL)
+        if "target" in fields:
+            fields.remove("target")
 
+        if len(fields) == 1:
+            continue
+
+        if is_integer:
+            size = len(fields)
+            for_integer[size] = threshold
+
+            ranking[SPLIT_SYMBOL.join(fields)] = info
+        elif score > threshold:
             yield fields, info
 
-    if matching_type:
+    if is_integer:
         for key, value in sorted(ranking.items(), key=operator.itemgetter(1), reverse=reverse):
-            fields = key.split(";")
-            if "target" in fields:
-                fields.remove("target")
+            fields = key.split(SPLIT_SYMBOL)
+            size = len(fields)
+            for_integer[size] -= 1
 
             yield fields, value
 
-            if count < 2:
+            all_zero = True
+            for t, value in for_integer.items():
+                if value > 0:
+                    all_zero = False
+
+                    break
+
+            if all_zero:
                 break
-            else:
-                count -= 1
 
 def save_kaggle_submission(test_id, results, filepath, normalization=False):
     if normalization:

@@ -142,13 +142,20 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, folder_c
     # Memory Concern
     ii.results_couple = {}
 
+    threads = []
     for idx in range(0, nthread):
         worker = InteractionInformationThread(kwargs={"ii": ii, "results_couple": {}, "folder_couple": folder_couple, "batch_size_dump": 2**13})
         worker.setDaemon(True)
         worker.start()
 
+        threads.append(worker)
+
     log("Wait for the completion of the calculation of Interaction Information", INFO)
     ii.queue.join()
+
+    # Force dumpping the results
+    for t in threads:
+        t.dump(True)
 
     return ii.results_couple
 

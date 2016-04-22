@@ -55,12 +55,22 @@ def learning(conf, thread):
         log("Wrong type for topX()".format(type(topX).__name__), ERROR)
         sys.exit(100)
 
-    for (layer1, layer2), value in rounds:
-        if layer1 in columns and layer2 in columns:
-            train_x["{}-{}".format(layer1, layer2)] = train_x[layer1].values * train_x[layer2].values * value
-            test_x["{}-{}".format(layer1, layer2)] = test_x[layer1].values * test_x[layer2].values * value
-        else:
-            log("Not Found {}({}),{}({}) in the columns of training dataset".format(layer1, layer1 in columns, layer2, layer2 in columns))
+    for layers, value in load_interaction_information(folder_ii, top):
+        for df in [train_x, test_x]:
+            t = value
+            is_not_break = True
+            for layer in layers:
+                if layer in train_x.columns:
+                    t *= df[layer]
+                else:
+                    is_not_break = False
+                    break
+
+            if is_not_break:
+                df[";".join(layers)] = t
+            else:
+                log("Skip {}".format(layers), WARN)
+                break
 
     train_X, test_X = train_x.values, test_x.values
 
