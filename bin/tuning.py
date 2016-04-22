@@ -13,7 +13,7 @@ BASEPATH = os.path.dirname(os.path.abspath(__file__))
 sys.path.append("{}/../lib".format(BASEPATH))
 import feature_engineering
 
-from utils import log, INFO
+from utils import log, INFO, ERROR
 from load import load_data, data_transform_2, load_interaction_information, save_cache, load_cache
 from parameter_tuning import XGBoostingTuning, RandomForestTuning, ExtraTreeTuning
 from configuration import ModelConfParser
