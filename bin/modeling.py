@@ -46,30 +46,21 @@ def learning(conf, thread):
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
     columns = train_x.columns
-    rounds = None
-    if isinstance(topX, int):
-        rounds = load_interaction_information(folder_ii, count=topX)
-    elif isinstance(topX, float):
-        rounds = load_interaction_information(folder_ii, threshold=topX)
-    else:
-        log("Wrong type for topX()".format(type(topX).__name__), ERROR)
-        sys.exit(100)
-
     for layers, value in load_interaction_information(folder_ii, top):
         for df in [train_x, test_x]:
             t = value
-            is_not_break = True
+            breaking_layer = None
             for layer in layers:
-                if layer in train_x.columns:
+                if layer in columns:
                     t *= df[layer]
                 else:
-                    is_not_break = False
+                    breaking_layer = layer
                     break
 
-            if is_not_break:
+            if breaking_layer != None:
                 df[";".join(layers)] = t
             else:
-                log("Skip {}".format(layers), WARN)
+                log("Skip {} due to {} not in columns".format(layers, breaking_layer), WARN)
                 break
 
     train_X, test_X = train_x.values, test_x.values

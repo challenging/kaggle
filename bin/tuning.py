@@ -25,7 +25,7 @@ from configuration import ModelConfParser
 @click.option("--methodology", required=True, help="Tune parameters of which methodology")
 @click.option("--nfold", default=5, help="the number of nfold")
 @click.option("--binsize", default=16, help="bin/bucket size setting")
-@click.option("--top", default=300, help="Extract how many interaction information we extract")
+@click.option("--top", default="300", help="Extract how many interaction information we extract")
 def tuning(methodology, nfold, binsize, top, is_testing, thread, conf):
     drop_fields = []
     N = 650 - len(drop_fields)
@@ -39,7 +39,7 @@ def tuning(methodology, nfold, binsize, top, is_testing, thread, conf):
     filepath_testing = "{}/input/test.csv".format(BASEPATH)
     filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
     folder_ii = "{}/input/interaction_information/transform2=True_testing=-1_binsize={}".format(BASEPATH, binsize)
-    filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_nfold={}_binsize={}.pkl".format(BASEPATH, methodology, is_testing, nfold, binsize)
+    filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_nfold={}_top={}_binsize={}.pkl".format(BASEPATH, methodology, is_testing, nfold, top, binsize)
 
     train_x = None
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)

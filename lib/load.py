@@ -195,7 +195,11 @@ def load_interaction_information(folder, threshold=300, reverse=True):
         with open(filepath, "rb") as INPUT:
             results.update(pickle.load(INPUT))
 
-    is_integer = isinstance(threshold, int)
+    is_integer = threshold.isdigit()
+    if is_integer:
+        threshold = int(threshold)
+    else:
+        threshold = float(threshold)
 
     for_integer = {}
     ranking = {}
@@ -211,9 +215,9 @@ def load_interaction_information(folder, threshold=300, reverse=True):
             size = len(fields)
             for_integer[size] = threshold
 
-            ranking[SPLIT_SYMBOL.join(fields)] = info
+            ranking[SPLIT_SYMBOL.join(fields)] = score
         elif score > threshold:
-            yield fields, info
+            yield fields, score
 
     if is_integer:
         for key, value in sorted(ranking.items(), key=operator.itemgetter(1), reverse=reverse):
@@ -221,11 +225,12 @@ def load_interaction_information(folder, threshold=300, reverse=True):
             size = len(fields)
             for_integer[size] -= 1
 
-            yield fields, value
+            if for_integer[size] >= 0:
+                yield fields, value
 
             all_zero = True
             for t, value in for_integer.items():
-                if value > 0:
+                if value >= 0:
                     all_zero = False
 
                     break
@@ -270,7 +275,7 @@ if __name__ == "__main__":
     folder_ii = "/Users/RungChiChen/Documents/kaggle/Santander Customer Satisfaction/input/interaction_information/transform2=True_testing=-1_binsize=4"
 
     stats = {}
-    for columns, value in load_interaction_information(folder_ii, count=float(sys.argv[1]), reverse=False):
+    for columns, value in load_interaction_information(folder_ii, threshold=sys.argv[1]):
         n_dims = len(columns)
 
         print columns, value

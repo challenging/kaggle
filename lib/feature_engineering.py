@@ -124,10 +124,12 @@ def calculate_interaction_information(filepath_cache, dataset, train_y, folder_c
     ii = InteractionInformation(dataset, train_y, folder_couple, combinations_size)
 
     count_break = 0
-
     for size in range(combinations_size, 1, -1):
         rounds = list(combinations([column for column in dataset.columns], size))
-        for pair_column in rounds[n_split_idx::n_split_num]:
+        batch_size = len(rounds)/n_split_num
+
+        idx_start, idx_end = n_split_idx*batch_size, min(len(rounds), (n_split_idx+1)*batch_size)
+        for pair_column in rounds[idx_start:idx_end]:
             if is_testing and random.random()*10 > 1: # Random Sampling when is_testing = True
                 continue
 

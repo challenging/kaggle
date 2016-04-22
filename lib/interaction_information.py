@@ -119,8 +119,6 @@ class InteractionInformation(object):
             os.makedirs(self.folder_couple)
 
         for filepath_couple in glob.iglob("{}/*pkl*".format(self.folder_couple)):
-            log("Try to load cache file from {}".format(filepath_couple))
-
             try:
                 obj = load_cache(filepath_couple)
 
@@ -160,11 +158,13 @@ class InteractionInformationThread(Thread):
 
     def dump(self, force_dump=False):
         if force_dump or len(self.results_couple) > self.batch_size_dump:
-            filepath_couple = "{}/{}.{}.pkl".format(self.folder_couple, socket.gethostname(), int(10000*time.time()))
-            log("write {} records in {}".format(len(self.results_couple), filepath_couple), INFO)
-
-            save_cache(self.results_couple, filepath_couple)
-            self.results_couple = {}
+            if len(self.results_couple) > 0:
+                filepath_couple = "{}/{}.{}.pkl".format(self.folder_couple, socket.gethostname(), int(10000*time.time()))
+                log("write {} records in {}".format(len(self.results_couple), filepath_couple), INFO)
+                save_cache(self.results_couple, filepath_couple)
+                self.results_couple = {}
+            else:
+                log("The self.results_couple is empty", INFO)
 
     def run(self):
         while True:
