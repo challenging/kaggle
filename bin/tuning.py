@@ -23,9 +23,10 @@ from configuration import ModelConfParser
 @click.option("--thread", default=1, help="Number of thread")
 @click.option("--is-testing", is_flag=True, help="Testing mode")
 @click.option("--methodology", required=True, help="Tune parameters of which methodology")
+@click.option("--nfold", default=5, help="the number of nfold")
 @click.option("--binsize", default=16, help="bin/bucket size setting")
 @click.option("--top", default=300, help="Extract how many interaction information we extract")
-def tuning(methodology, binsize, top, is_testing, thread, conf):
+def tuning(methodology, nfold, binsize, top, is_testing, thread, conf):
     drop_fields = []
     N = 650 - len(drop_fields)
 
@@ -37,7 +38,7 @@ def tuning(methodology, binsize, top, is_testing, thread, conf):
     filepath_training = "{}/input/train.csv".format(BASEPATH)
     filepath_testing = "{}/input/test.csv".format(BASEPATH)
     filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
-    folder_ii = "{}/input/transform2=True_testing=-1_type=2_binsize={}".format(BASEPATH, binsize)
+    folder_ii = "{}/input/interaction_information/transform2=True_testing=-1_binsize={}".format(BASEPATH, binsize)
     filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_binsize={}.pkl".format(BASEPATH, methodology, is_testing, binsize)
 
     train_x = None
@@ -57,19 +58,19 @@ def tuning(methodology, binsize, top, is_testing, thread, conf):
     algorithm = None
     if methodology.find("xg") > -1:
         if methodology[-1] == "c":
-            algorithm = XGBoostingTuning("Target", "ID", "classifier", cost=cost, n_jobs=thread)
+            algorithm = XGBoostingTuning("Target", "ID", "classifier", cost=cost, n_jobs=thread, cv=nfold)
         elif methodology[-1] == "r":
-            algorithm = XGBoostingTuning("Target", "ID", "regressor", cost=cost, n_jobs=thread)
+            algorithm = XGBoostingTuning("Target", "ID", "regressor", cost=cost, n_jobs=thread, cv=nfold)
     elif methodology.find("rf") > -1:
         if methodology[-1] == "c":
-            algorithm = RandomForestTuning("Target", "ID", "classifier", cost=cost,n_jobs=thread)
+            algorithm = RandomForestTuning("Target", "ID", "classifier", cost=cost,n_jobs=thread, cv=nfold)
         elif methodology[-1] == "r":
-            algorithm = RandomForestTuning("Target", "ID", "regressor", cost=cost,n_jobs=thread)
+            algorithm = RandomForestTuning("Target", "ID", "regressor", cost=cost,n_jobs=thread, cv=nfold)
     elif methodology.find("et") > -1:
         if methodology[-1] == "c":
-            algorithm = ExtraTreeTuning("Target", "ID", "classifier", cost=cost,n_jobs=thread)
+            algorithm = ExtraTreeTuning("Target", "ID", "classifier", cost=cost,n_jobs=thread, cv=nfold)
         elif methodology[-1] == "r":
-            algorithm = ExtraTreeTuning("Target", "ID", "regressor", cost=cost,n_jobs=thread)
+            algorithm = ExtraTreeTuning("Target", "ID", "regressor", cost=cost,n_jobs=thread, cv=nfold)
 
     algorithm.set_train(train_x)
     algorithm.set_filepath(filepath_tuning)
