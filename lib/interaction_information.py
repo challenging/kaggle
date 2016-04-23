@@ -90,7 +90,7 @@ class FeatureProfile(object):
         '''
 
         for idx in range(0, 4):
-            thread = Thread.threading(target=FeatureProfile.run)
+            thread = Thread(target=FeatureProfile.run)
             thread.setDaemon(True)
             thread.start()
 

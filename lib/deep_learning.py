@@ -41,8 +41,6 @@ class KaggleCheckpoint(ModelCheckpoint):
         pd.DataFrame(results).to_csv(filepath, index=False)
         log("Save the results in {}".format(filepath), DEBUG)
 
-        return base_proba
-
     def on_epoch_end(self, epoch, logs={}):
         filepath = self.folder + "/" + self.filepath.format(epoch=epoch+1, **logs)
 
