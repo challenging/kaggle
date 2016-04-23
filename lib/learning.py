@@ -39,7 +39,7 @@ BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
 class LearningFactory(object):
     @staticmethod
-    def get_model(pair, cost_function=log_loss):
+    def get_model(pair, cost_function):
         model = None
         method, setting = pair
 
@@ -52,8 +52,6 @@ class LearningFactory(object):
             if method.find("logistic_regressor") > -1:
                 if "cost" in setting:
                     del setting["cost"]
-
-                #setting["scoring"] = cost_function
 
                 model = Learning(method, LogisticRegression(**setting), cost_function, extend_class_proba)
             elif method.find("linear_regressor") > -1:
@@ -108,7 +106,6 @@ class LearningFactory(object):
                     pass
 
             log("The folder of deep learning is in {}".format(setting["folder"]), INFO)
-            log(setting)
 
             model = Learning(method, None, cost_function)
             model.init_deep_params(**setting)
@@ -334,9 +331,9 @@ class LearningQueue(object):
     def put(self, folder, nfold, model_idx, dataset_idxs, model):
         self.learning_queue.put((folder, nfold, model_idx, dataset_idxs, model))
 
-    def starts(self, number_of_thread=1):
+    def starts(self, cost_func, number_of_thread=1):
         for idx in range(0, number_of_thread):
-            worker = LearningThread(kwargs={"obj": self})
+            worker = LearningThread(kwargs={"obj": self, "cost_func": cost_func})
             worker.setDaemon(True)
             worker.start()
 
@@ -426,7 +423,7 @@ class LearningThread(threading.Thread):
             if model_name.find("calibration") > -1:
                 model_setting["base_estimator"] = load_cache(filepath_loading_model)
 
-            model = LearningFactory.get_model(pair)
+            model = LearningFactory.get_model(pair, self.cost_func)
             if model == None or model.model == None:
                 log("Can't init this model({})".format(model_name), WARN)
             elif model.is_cluster():
@@ -460,7 +457,7 @@ class LearningThread(threading.Thread):
 
                     cost = model.cost(self.obj.train_x[test_x_idx], self.obj.train_y[test_x_idx])
                     if np.isnan(cost):
-                        log("The cost of '{}' model for {}th fold is NaN".format(model_name, nfold), WARN)
+                        log("The {} of '{}' model for {}th fold is NaN".format(self.cost_func.__name__, model_name, nfold), WARN)
                     else:
                         self.obj.learning_cost.insert_cost(model_name, nfold, cost)
 

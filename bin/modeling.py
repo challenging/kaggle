@@ -78,7 +78,7 @@ def learning(conf, thread):
                                     testing_set=(testing_dataset, test_id),
                                     folder=None,
                                     cost_string=cost,
-                                    verbose=0, save_best_only=False)
+                                    verbose=0, save_best_only=True)
 
     # Init the parameters of cluster
     for model_section in parser.get_layer_models(1):
@@ -116,8 +116,8 @@ def learning(conf, thread):
 
         last_model.append((method, setting))
 
-    model_folder = "{}/prediction_model/ensemble_learning/nfold={}_layer1={}_layer2={}_feature={}_binsize={}_topX={}".format(\
-                        BASEPATH, nfold, len(layer1_models), len(layer2_models), number_of_feature, binsize, topX)
+    model_folder = "{}/prediction_model/ensemble_learning/nfold={}_layer1={}_layer2={}_feature={}_binsize={}_top={}".format(\
+                        BASEPATH, nfold, len(layer1_models), len(layer2_models), number_of_feature, binsize, top)
     if not os.path.exists(model_folder):
         os.makedirs(model_folder)
 
@@ -129,14 +129,14 @@ def learning(conf, thread):
     filepath_nfold = "{}/layer1_nfold.pkl".format(model_folder)
     layer2_train_x, layer2_test_x, learning_loss = layer_model(model_folder, train_X, train_Y, test_X, layer1_models,
                              filepath_queue, filepath_nfold,
-                             n_folds=nfold, number_of_thread=thread)
+                             n_folds=nfold, cost_string=cost, number_of_thread=thread)
 
     # Phase 2. --> Model Training
     filepath_queue = "{}/layer2_queue.pkl".format(model_folder)
     filepath_nfold = "{}/layer2_nfold.pkl".format(model_folder)
     layer3_train_x, layer3_test_x, learning_loss = layer_model(model_folder, layer2_train_x, train_Y, layer2_test_x, layer2_models,
                              filepath_queue, filepath_nfold,
-                             n_folds=nfold, number_of_thread=thread)
+                             n_folds=nfold, cost_string=cost, number_of_thread=thread)
 
     training_dataset_proba = np.hstack((layer2_train_x, layer3_train_x))
     training_targets = [{"Target": train_y}]

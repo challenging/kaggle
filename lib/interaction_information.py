@@ -24,10 +24,14 @@ from load import save_cache, load_cache, load_interaction_information
 from utils import log, DEBUG, INFO, WARN
 
 class FeatureProfile(object):
+    queue = Queue()
+    ranking = {}
+
     def __init__(self):
         pass
 
-    def normalization(slef, ranks, names, order=1):
+    @staticmethod
+    def normalization(ranks, names, order=1):
         if np.isnan(ranks).any():
             log("Found {} NaN values, so try to transform them to 'mean'".format(np.isnan(ranks).sum()), WARN)
 
@@ -41,45 +45,56 @@ class FeatureProfile(object):
 
         return dict(zip(names, r))
 
+    @staticmethod
+    def run():
+        while True:
+            timestamp_start = time.time()
+
+            key, names, model, coef, X, Y, order = FeatureProfile.queue.get()
+
+            model.fit(X, Y)
+            FeatureProfile.ranking[key] = FeatureProfile.normalization(np.abs(getattr(model, coef)), names, order)
+
+            timestamp_end = time.time()
+            log("Cost {:.4f} secends to finish {}".format(time.time() - timestamp_start, key), INFO)
+
+            FeatureProfile.queue.task_done()
+
     def profile(self, X, Y, names, filepath, score_function, n_features_rfe=5):
-        ranks = {}
+        # create parent folder
+        folder_parent = os.path.dirname(filepath)
+        if not os.path.isdir(folder_parent):
+            os.makedirs(folder_parent)
 
-        timestamp_start = time.time()
         lr = LinearRegression(normalize=True)
-        lr.fit(X, Y)
-        ranks["Linear reg"] = self.normalization(np.abs(lr.coef_), names)
-        log("Cost {:.4f} secends to finish Linear Regression".format(time.time() - timestamp_start), INFO)
+        FeatureProfile.queue.put(("Linear Reg.", names, lr, "coef_", X, Y, 1))
 
-        timestamp_start = time.time()
         ridge = Ridge(alpha=7)
-        ridge.fit(X, Y)
-        ranks["Ridge"] = self.normalization(np.abs(ridge.coef_), names)
-        log("Cost {:.4f} secends to finish Ridge".format(time.time() - timestamp_start), INFO)
+        FeatureProfile.queue.put(("Ridge", names, ridge, "coef_", X, Y, 1))
 
-        timestamp_start = time.time()
         lasso = Lasso(alpha=.05)
-        lasso.fit(X, Y)
-        ranks["Lasso"] = self.normalization(np.abs(lasso.coef_), names)
-        log("Cost {:.4f} secends to finish Lasso".format(time.time() - timestamp_start), INFO)
+        FeatureProfile.queue.put(("Lasso", names, lasso, "coef_", X, Y, 1))
 
-        timestamp_start = time.time()
         rlasso = RandomizedLasso(alpha=0.04)
-        rlasso.fit(X, Y)
-        ranks["Stability"] = self.normalization(np.abs(rlasso.scores_), names)
-        log("Cost {:.4f} secends to finish Stability".format(time.time() - timestamp_start), INFO)
+        FeatureProfile.queue.put(("Stability", names, rlasso, "scores_", X, Y, 1))
 
         #stop the search when 5 features are left (they will get equal scores)
-        timestamp_start = time.time()
+        '''
         rfe = RFE(lr, n_features_to_select=n_features_rfe)
-        rfe.fit(X,Y)
-        ranks["RFE"] = self.normalization(map(float, rfe.ranking_), names, order=-1)
-        log("Cost {:.4f} secends to finish RFE".format(time.time() - timestamp_start), INFO)
+        FeatureProfile.queue.put(("RFE", names, rfe, "ranking_", X, Y, -1))
+        '''
 
-        timestamp_start = time.time()
+        '''
         rf = RandomForestRegressor(n_jobs=-1)
-        rf.fit(X,Y)
-        ranks["RF"] = self.normalization(rf.feature_importances_, names)
-        log("Cost {:.4f} secends to finish Random Forest".format(time.time() - timestamp_start), INFO)
+        FeatureProfile.queue.put(("RF", names, rf, "feature_importances_", X, Y, 1))
+        '''
+
+        for idx in range(0, 4):
+            thread = Thread.threading(target=FeatureProfile.run)
+            thread.setDaemon(True)
+            thread.start()
+
+        FeatureProfile.queue.join()
 
         timestamp_start = time.time()
         f, pval = f_regression(X, Y, center=True)

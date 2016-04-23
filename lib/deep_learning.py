@@ -17,19 +17,19 @@ from keras.callbacks import ModelCheckpoint
 from utils import log, DEBUG, INFO
 
 class KaggleCheckpoint(ModelCheckpoint):
-    def __init__(self, filepath, save_best_only=True, training_set=(None, None), testing_set=(None, None), folder=None, cost_string="logloss", verbose=1):
+    def __init__(self, filepath, save_best_only=True, training_set=(None, None), testing_set=(None, None), folder=None, cost_string="log_loss", verbose=1):
         ModelCheckpoint.__init__(self, filepath=filepath, save_best_only=save_best_only, verbose=1)
 
         self.training_x, self.training_y = training_set
         self.testing_x, self.testing_id, = testing_set
         self.folder = folder
 
-        if cost_string == "logloss":
+        if cost_string == "log_loss":
             self.cost_function = cost_string
         elif cost_string == "auc":
             self.cost_function = roc_auc_score
 
-    def save_results(self, filepath, proba, base_proba=None, is_testing=False):
+    def save_results(self, filepath, proba, is_testing=False):
         probas = [prob[0] if prob[0] else 0.0 for prob in proba]
 
         results = {"PredictedProb": probas}
@@ -40,15 +40,6 @@ class KaggleCheckpoint(ModelCheckpoint):
 
         pd.DataFrame(results).to_csv(filepath, index=False)
         log("Save the results in {}".format(filepath), DEBUG)
-
-        if not base_proba:
-            base_proba = np.max(results["PredictedProb"], axis=0)
-
-        results["PredictedProb"] = results["PredictedProb"] / base_proba
-
-        filepath_normalization = filepath.replace(".csv", "_normalization.csv")
-        pd.DataFrame(results).to_csv(filepath_normalization, index=False)
-        log("Save the normalized results in {}".format(filepath_normalization), DEBUG)
 
         return base_proba
 
@@ -68,23 +59,14 @@ class KaggleCheckpoint(ModelCheckpoint):
 
                     # Save the prediction results for testing set
                     if self.folder:
+                        # Save the training results
                         proba_training = self.model.predict_proba(self.training_x)
 
-                        max_proba = np.max(proba_training, axis=0)
-                        norm_proba_training = proba_training / max_proba
-
-                        # Save the training results
                         filepath_training = "{}/training_{:05d}.csv".format(self.folder, epoch+1)
-                        base_proba = self.save_results(filepath_training, proba_training)
-
-                        # Save the testing results
-                        filepath_testing = "{}/submission_{:05d}.csv".format(self.folder, epoch+1)
-                        proba = self.model.predict_proba(self.testing_x)
-                        self.save_results(filepath_testing, proba, base_proba, is_testing=True)
+                        self.save_results(filepath_training, proba_training)
 
                         cost = self.cost_function(self.training_y, proba_training)
-                        norm_cost = self.cost_function(self.training_y, norm_proba_training)
-                        log("Epoch {:05d}: current cost is {:.8f}/{:.8f}".format(epoch+1, cost, norm_cost), INFO)
+                        log("Epoch {:05d}: current {} is {:.8f}".format(epoch+1, self.cost_function.__name__, cost), INFO)
                 else:
                     if self.verbose > 0:
                         log('Epoch %05d: %s did not improve' %(epoch, self.monitor), DEBUG)

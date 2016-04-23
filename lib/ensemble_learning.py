@@ -54,7 +54,7 @@ def get_learning_queue(models, n_folds, train_x, train_y, test_x, filepath_queue
 
     return learning_queue
 
-def start_learning(model_folder, train_x, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, number_of_thread=4, random_state=1201):
+def start_learning(model_folder, train_x, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, cost_func, number_of_thread=4, random_state=1201):
     skf = None
     if filepath_nfold and os.path.exists(filepath_nfold):
         skf = load_cache(filepath_nfold)
@@ -87,7 +87,7 @@ def start_learning(model_folder, train_x, train_y, test_x, models, n_folds, lear
 
                 log("Put fold-{:02d} data into this '{}' model".format(nfold, model_name))
 
-    learning_queue.starts(number_of_thread=number_of_thread)
+    learning_queue.starts(cost_func, number_of_thread=number_of_thread)
 
     layer_two_testing_dataset = np.zeros((test_x.shape[0], len(models)))
     for idx in range(0, len(learning_queue.layer_two_testing_dataset)):
@@ -97,22 +97,28 @@ def start_learning(model_folder, train_x, train_y, test_x, models, n_folds, lear
 
 def layer_model(model_folder, train_x, train_y, test_x, models,
                 filepath_queue, filepath_nfold,
-                n_folds=10, number_of_thread=1,
+                n_folds=10, cost_string="log_loss", number_of_thread=1,
                 random_state=1201):
+
+    cost_func = None
+    if cost_string == "log_loss":
+        cost_func = log_loss
+    elif cost_string == "auc":
+        cost_func = roc_auc_score
 
     number_of_feature = len(train_x[0])
     log("Data Distribution is ({}, {}), and then the number of feature is {}, and then prepare to save data in {}".format(np.sum(train_y==0), np.sum(train_y==1), number_of_feature, model_folder), INFO)
 
     learning_queue = get_learning_queue(models, n_folds, train_x, train_y, test_x, filepath_queue)
-    layer_two_testing_dataset = start_learning(model_folder, train_x, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, number_of_thread, random_state)
+    layer_two_testing_dataset = start_learning(model_folder, train_x, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, cost_func, number_of_thread, random_state)
 
     return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_queue.learning_cost
 
-def final_model(pair, train_x, train_y, test_x, cost_string="logloss"):
+def final_model(pair, train_x, train_y, test_x, cost_string="log_loss"):
     log("The phase 3 starts...", INFO)
 
     cost_function = None
-    if cost_string == "logloss":
+    if cost_string == "log_loss":
         cost_function = log_loss
     elif cost_string == "auc":
         cost_function = roc_auc_score
