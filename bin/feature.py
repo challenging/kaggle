@@ -71,10 +71,10 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
             os.makedirs(folder_feature)
 
         names = list(train_x.columns.values)
-        folder_feature = "{}/etc/feature_profile/transform2=True_binsize={}_top={}".format(folder_feature, binsize, top)
+        folder_feature = "{}/transform2=True_binsize={}_top={}".format(folder_feature, binsize, top)
 
         fp = FeatureProfile()
-        ranks = fp.profile(train_x.values, train_y, names, folder_feature, int(len(train_x.columns)*0.5))
+        fp.profile(train_x.values, train_y, names, folder_feature, int(len(train_x.columns)*0.5))
 
     if interaction_information:
         log("Try to calculate the interaction information", INFO)

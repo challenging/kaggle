@@ -100,17 +100,16 @@ class FeatureProfile(object):
 
         r = {}
         for name in names:
-            r[name] = round(np.mean([ranks[method][name] for method in ranks.keys()]), 8)
-        log("Cost {:.4f} secends to finish MIC".format(time.time() - timestamp_start), INFO)
+            r[name] = round(np.mean([FeatureProfile.ranking[method][name] for method in FeatureProfile.ranking.keys()]), 8)
 
-        methods = sorted(ranks.keys())
+        methods = sorted(FeatureProfile.ranking.keys())
         FeatureProfile.ranking["Mean"] = r
         methods.append("Mean")
 
         FeatureProfile.ranking["Feature"] = dict(zip(names, names))
 
-        pd.DataFrame(ranks).to_csv("{}.csv".format(filepath), index=False)
-        save_cache(ranks, "{}.pkl".format(filepath))
+        pd.DataFrame(FeatureProfile.ranking).to_csv("{}.csv".format(filepath), index=False)
+        save_cache(FeatureProfile.ranking, "{}.pkl".format(filepath))
 
         return FeatureProfile.ranking
 

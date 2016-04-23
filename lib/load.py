@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#:!/usr/bin/env python
 
 import os
 import sys
@@ -239,8 +239,14 @@ def load_interaction_information(folder, threshold=300, reverse=True):
                 break
 
 def load_feature_importance(filepath_pkl, top=512):
-    rankings = load_cache(filepath_pkl)
+    ranking = load_cache(filepath_pkl)
+    records = ranking["Mean"]
 
+    columns = []
+    for name, score in sorted(records.items(), key=operator.itemgetter(1), reverse=True):
+        columns.append(name)
+        if len(columns) >= top:
+            break
 
     return columns
 
@@ -278,15 +284,4 @@ def load_cache(filepath):
     return obj
 
 if __name__ == "__main__":
-    folder_ii = "/Users/RungChiChen/Documents/kaggle/Santander Customer Satisfaction/input/interaction_information/transform2=True_testing=-1_binsize=4"
-
-    stats = {}
-    for columns, value in load_interaction_information(folder_ii, threshold=sys.argv[1]):
-        n_dims = len(columns)
-
-        print columns, value
-
-        stats.setdefault(n_dims, 0)
-        stats[n_dims] += 1
-
-    print stats
+    load_feature_importance("/Users/RungChiChen/Documents/kaggle/Santander Customer Satisfaction/etc/feature_profile/transform2=True_binsize=4_top=500.pkl", 512)

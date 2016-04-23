@@ -103,8 +103,8 @@ class ParameterTuning(object):
     def get_model_instance(self):
         raise NotImeplementError
 
-    def enable_feature_importance(self, filepath_pkl, top=512):
-        self.predictors = load_feature_importance(filepath_pkl, top)
+    def enable_feature_importance(self, filepath_pkl, top_feature=512):
+        self.predictors = load_feature_importance(filepath_pkl, top_feature)
 
     def phase(self, phase, params, is_micro_tuning=False):
         gsearch1 = None
@@ -127,6 +127,8 @@ class ParameterTuning(object):
                                     iid=False,
                                     cv=self.cv,
                                     verbose=1)
+
+            log("Training by {} features".format(len(self.predictors)), INFO)
 
             best_cost, best_params, scores = self.get_best_params(gsearch1, self.train[self.predictors], self.train[self.target])
             log("The cost of {}-model is {:.8f} based on {}".format(phase, best_cost, best_params.keys()))

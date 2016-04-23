@@ -43,7 +43,7 @@ def learning(conf, thread):
     filepath_testing = "{}/input/test.csv".format(BASEPATH)
     filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
     folder_ii = "{}/input/interaction_information/transform2=True_testing=-1_binsize={}".format(BASEPATH, binsize)
-    filepath_feature_importance = "{}/etc/feature_profile/transform2=True_binsize={}_top={}".format(BASEPATH, binsize, top_feature)
+    filepath_feature_importance = "{}/etc/feature_profile/transform2=True_binsize={}_top={}.pkl".format(BASEPATH, binsize, top)
 
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
