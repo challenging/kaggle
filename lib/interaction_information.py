@@ -17,6 +17,7 @@ from sklearn.linear_model import LinearRegression, Ridge, Lasso, RandomizedLasso
 from sklearn.feature_selection import RFE, f_regression
 from sklearn.preprocessing import MinMaxScaler, Imputer
 from sklearn.ensemble import RandomForestRegressor
+
 from information_discrete import mi_3d, mi_4d
 
 from load import save_cache, load_cache, load_interaction_information
@@ -40,7 +41,7 @@ class FeatureProfile(object):
 
         return dict(zip(names, r))
 
-    def profile(self, X, Y, names, filepath, n_features_rfe=5):
+    def profile(self, X, Y, names, filepath, score_function, n_features_rfe=5):
         ranks = {}
 
         timestamp_start = time.time()
@@ -75,7 +76,7 @@ class FeatureProfile(object):
         log("Cost {:.4f} secends to finish RFE".format(time.time() - timestamp_start), INFO)
 
         timestamp_start = time.time()
-        rf = RandomForestRegressor()
+        rf = RandomForestRegressor(n_jobs=-1)
         rf.fit(X,Y)
         ranks["RF"] = self.normalization(rf.feature_importances_, names)
         log("Cost {:.4f} secends to finish Random Forest".format(time.time() - timestamp_start), INFO)
@@ -96,7 +97,8 @@ class FeatureProfile(object):
 
         ranks["Feature"] = dict(zip(names, names))
 
-        pd.DataFrame(ranks).to_csv(filepath, index=False)
+        pd.DataFrame(ranks).to_csv("{}.csv".format(filepath), index=False)
+        save_cache(ranks, "{}.pkl".format(filepath))
 
         return ranks
 

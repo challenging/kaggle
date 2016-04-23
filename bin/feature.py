@@ -38,7 +38,6 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
     binsize, top = parser.get_interaction_information()
 
     if feature_importance:
-
         filepath_training = "{}/input/train.csv".format(BASEPATH)
         filepath_testing = "{}/input/test.csv".format(BASEPATH)
         filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
@@ -67,12 +66,12 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
         print "Data Distribution is ({}, {}), and then the number of feature is {}".format(np.sum(train_y==0), np.sum(train_y==1), len(names))
 
         # output folder
-        folder_feature = "{}/feature_profiling".format(BASEPATH)
+        folder_feature = "{}/etc/feature_profiling".format(BASEPATH)
         if not os.path.isdir(folder_feature):
             os.makedirs(folder_feature)
 
         names = list(train_x.columns.values)
-        filepath_feature = "{}/feature_profile.csv".format(folder_feature)
+        filepath_feature = "{}/etc/feature_profile/transform2=True_binsize={}_top={}".format(folder_feature, binsize, top)
 
         fp = FeatureProfile()
         ranks = fp.profile(train_x.values, train_y, names, filepath_feature, int(len(train_x.columns)*0.5))
