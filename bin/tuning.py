@@ -13,7 +13,7 @@ BASEPATH = os.path.dirname(os.path.abspath(__file__))
 sys.path.append("{}/../lib".format(BASEPATH))
 import feature_engineering
 
-from utils import log, INFO, ERROR
+from utils import log, INFO, WARN, ERROR
 from load import load_data, data_transform_2, load_interaction_information, save_cache, load_cache
 from parameter_tuning import XGBoostingTuning, RandomForestTuning, ExtraTreeTuning
 from configuration import ModelConfParser
@@ -22,11 +22,10 @@ from configuration import ModelConfParser
 @click.option("--conf", required=True, help="Filepath of Configuration")
 @click.option("--thread", default=1, help="Number of thread")
 @click.option("--is-testing", is_flag=True, help="Testing mode")
+@click.option("--is-feature-importance", is_flag=True, help="Turn on the feature importance")
 @click.option("--methodology", required=True, help="Tune parameters of which methodology")
 @click.option("--nfold", default=5, help="the number of nfold")
-@click.option("--binsize", default=16, help="bin/bucket size setting")
-@click.option("--top", default="300", help="Extract how many interaction information we extract")
-def tuning(methodology, nfold, binsize, top, is_testing, thread, conf):
+def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
     drop_fields = []
     N = 650 - len(drop_fields)
 
@@ -34,6 +33,7 @@ def tuning(methodology, nfold, binsize, top, is_testing, thread, conf):
     BASEPATH = parser.get_workspace()
     n_jobs = parser.get_n_jobs()
     cost = parser.get_cost()
+    binsize, top = parser.get_interaction_information()
 
     filepath_training = "{}/input/train.csv".format(BASEPATH)
     filepath_testing = "{}/input/test.csv".format(BASEPATH)
@@ -47,15 +47,15 @@ def tuning(methodology, nfold, binsize, top, is_testing, thread, conf):
     for layers, value in load_interaction_information(folder_ii, top):
         for df in [train_x, test_x]:
             t = value
-            is_not_break = True
+            breaking_layer = None
             for layer in layers:
                 if layer in train_x.columns:
                     t *= df[layer]
                 else:
-                    is_not_break = False
+                    breaking_layer = layer
                     break
 
-            if is_not_break:
+            if breaking_layer == None:
                 df[";".join(layers)] = t
             else:
                 log("Skip {}".format(layers), WARN)
@@ -94,6 +94,9 @@ def tuning(methodology, nfold, binsize, top, is_testing, thread, conf):
 
     if os.path.exists(filepath_tuning):
         algorithm.load()
+
+    if is_feature_importance:
+        algorithm.enable_feature_importance()
 
     algorithm.process()
 

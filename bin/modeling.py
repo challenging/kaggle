@@ -14,7 +14,7 @@ import ConfigParser
 import numpy as np
 
 sys.path.append("{}/../lib".format(os.path.dirname(os.path.abspath(__file__))))
-from utils import log, INFO
+from utils import log, INFO, WARN
 from load import load_data, load_advanced_data, load_cache, save_cache, save_kaggle_submission, load_interaction_information
 from learning import LearningFactory
 from configuration import ModelConfParser
@@ -34,10 +34,9 @@ def learning(conf, thread):
     parser = ModelConfParser(conf)
 
     BASEPATH = parser.get_workspace()
-    binsize, topX = parser.get_interaction_information()
+    binsize, top = parser.get_interaction_information()
     cost = parser.get_cost()
     nfold = parser.get_nfold()
-    top = parser.get_top()
 
     filepath_training = "{}/input/train.csv".format(BASEPATH)
     filepath_testing = "{}/input/test.csv".format(BASEPATH)
@@ -47,18 +46,17 @@ def learning(conf, thread):
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
     columns = train_x.columns
-    for layers, value in load_interaction_information(folder_ii, top):
+    for layers, value in load_interaction_information(folder_ii, threshold=top):
         for df in [train_x, test_x]:
             t = value
             breaking_layer = None
             for layer in layers:
                 if layer in columns:
-                    t *= df[layer]
+                    t *= df[layer].values
                 else:
                     breaking_layer = layer
                     break
-
-            if breaking_layer != None:
+            if breaking_layer == None:
                 df[";".join(layers)] = t
             else:
                 log("Skip {} due to {} not in columns".format(layers, breaking_layer), WARN)

@@ -23,14 +23,6 @@ class ModelConfParser(object):
 
         return nfold
 
-    def get_top(self):
-        top = "300"
-
-        if self.config.has_option("MAIN", "top"):
-            top = self.config.get("MAIN", "top")
-
-        return top
-
     def get_n_jobs(self):
         if self.config.has_option("MAIN", "n_jobs"):
             return self.config.getint("MAIN", "n_jobs")
@@ -38,14 +30,7 @@ class ModelConfParser(object):
             return -1
 
     def get_interaction_information(self):
-        binsize, topX = self.config.getint("INTERACTION_INFORMATION", "binsize"), self.config.get("INTERACTION_INFORMATION", "topX")
-
-        if topX.isdigit():
-            topX = int(topX)
-        else:
-            topX = float(topX)
-
-        return binsize, topX
+        return self.config.getint("INTERACTION_INFORMATION", "binsize"), self.config.get("INTERACTION_INFORMATION", "top")
 
     def get_global_setting(self):
         workspace, nfold, cost_string = self.config.get("MAIN", "workspace"), self.config.get("MAIN", "nfold"), self.config.get("MAIN", "cost")

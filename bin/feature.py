@@ -13,8 +13,9 @@ BASEPATH = os.path.dirname(os.path.abspath(__file__))
 sys.path.append("{}/../lib".format(BASEPATH))
 import feature_engineering
 
+from interaction_information import FeatureProfile
 from utils import log, INFO
-from load import data_load, data_transform_2, save_cache, load_cache
+from load import data_load, load_data, data_transform_2, load_interaction_information, save_cache, load_cache
 from configuration import ModelConfParser
 
 @click.command()
@@ -23,24 +24,44 @@ from configuration import ModelConfParser
 @click.option("--feature-importance", is_flag=True, help="Calculate the feature importance")
 @click.option("--interaction-information", is_flag=True, help="Calculate the interaction information")
 @click.option("--merge-ii", is_flag=True, help="merge the pickle files of interaction information")
-@click.option("--binsize", default=16, help="bin/bucket size setting")
 @click.option("--split-idx", default=0, help="the index of split number")
 @click.option("--split-num", default=1, help="the split number of combinations-size")
 @click.option("--testing", default=-1, help="cut off the input file to be the testing dataset")
 @click.option("--combinations-size", default=3, help="size of combinations")
-def feature_engineer(conf, thread, feature_importance, interaction_information, merge_ii, split_idx, split_num, binsize, testing, combinations_size):
+def feature_engineer(conf, thread, feature_importance, interaction_information, merge_ii, split_idx, split_num, testing, combinations_size):
     drop_fields = []
 
-    transform2 = True
+    N, transform2 = 650, True
 
-    cfg_parser = ModelConfParser(conf)
-    BASEPATH = cfg_parser.get_workspace()
+    parser = ModelConfParser(conf)
+    BASEPATH = parser.get_workspace()
+    binsize, top = parser.get_interaction_information()
 
     if feature_importance:
-        log("Try to calculate the feature ranking/score/importance", INFO)
-        train_x, train_y, test_x, test_id = data_load(drop_fields=drop_fields)
-        if transform2:
-            train_x, test_x = data_transform_2(train_x, test_x)
+
+        filepath_training = "{}/input/train.csv".format(BASEPATH)
+        filepath_testing = "{}/input/test.csv".format(BASEPATH)
+        filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
+        folder_ii = "{}/input/interaction_information/transform2=True_testing=-1_binsize={}".format(BASEPATH, binsize)
+
+        train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
+
+        columns = train_x.columns
+        for layers, value in load_interaction_information(folder_ii, threshold=top):
+            for df in [train_x, test_x]:
+                t = value
+                breaking_layer = None
+                for layer in layers:
+                    if layer in columns:
+                        t *= df[layer].values
+                    else:
+                        breaking_layer = layer
+                        break
+                if breaking_layer == None:
+                    df[";".join(layers)] = t
+                else:
+                    log("Skip {} due to {} not in columns".format(layers, breaking_layer), WARN)
+                    break
 
         names = train_x.columns
         print "Data Distribution is ({}, {}), and then the number of feature is {}".format(np.sum(train_y==0), np.sum(train_y==1), len(names))
@@ -53,7 +74,7 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
         names = list(train_x.columns.values)
         filepath_feature = "{}/feature_profile.csv".format(folder_feature)
 
-        fp = feature_engineering.FeatureProfile()
+        fp = FeatureProfile()
         ranks = fp.profile(train_x.values, train_y, names, filepath_feature, int(len(train_x.columns)*0.5))
 
     if interaction_information:

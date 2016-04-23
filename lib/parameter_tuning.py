@@ -6,11 +6,13 @@ import sys
 import numpy as np
 import pandas as pd
 import xgboost as xgb
+import matplotlib.pyplot as plt
 
 from sklearn import cross_validation, metrics   #Additional scklearn functions
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, ExtraTreesClassifier, ExtraTreesRegressor
 from sklearn.grid_search import GridSearchCV   #Perforing grid search
 from sklearn.metrics import roc_auc_score, log_loss, make_scorer
+from sklearn.feature_selection import SelectFromModel
 
 from utils import log, INFO, WARN
 from load import load_data, data_transform_2, load_cache, save_cache, load_interaction_information
@@ -39,6 +41,7 @@ class ParameterTuning(object):
         self.best_cost = -np.inf
 
         self.train = None
+        self.train_selector = None
 
         self.done = {}
 
@@ -100,7 +103,16 @@ class ParameterTuning(object):
     def get_model_instance(self):
         raise NotImeplementError
 
+    def enable_feature_importance(self):
+        clf = ExtraTreesClassifier(random_state=self.random_state)
+        selector = clf.fit(self.train[self.predictors], self.train[self.target])
+
+        fs = SelectFromModel(selector, prefit=True)
+        self.train_selector = fs.transform(self.train[self.predictors])
+
     def phase(self, phase, params, is_micro_tuning=False):
+        training_dataset = self.train_selector if np.any(self.train_selector) else self.train[self.predictors]
+
         gsearch1 = None
         best_cost, best_params, scores = -np.inf, -np.inf, None
         if phase in self.done:
@@ -122,7 +134,7 @@ class ParameterTuning(object):
                                     cv=self.cv,
                                     verbose=1)
 
-            best_cost, best_params, scores = self.get_best_params(gsearch1, self.train[self.predictors], self.train[self.target])
+            best_cost, best_params, scores = self.get_best_params(gsearch1, training_dataset, self.train[self.target])
             log("The cost of {}-model is {:.8f} based on {}".format(phase, best_cost, best_params.keys()))
             self.improve(phase, best_cost, best_params)
 
@@ -158,7 +170,7 @@ class ParameterTuning(object):
                                             cv=self.cv,
                                             verbose=1)
 
-                    micro_cost, micro_params, micro_scores = self.get_best_params(gsearch2, self.train[self.predictors], self.train[self.target])
+                    micro_cost, micro_params, micro_scores = self.get_best_params(gsearch2, training_dataset, self.train[self.target])
                     log("Finish the micro-tuning of {}, and then get best params is {}".format(phase, micro_params))
                     self.improve(key, micro_cost, micro_params, True)
 
@@ -238,7 +250,23 @@ class RandomForestTuning(ParameterTuning):
             self.phase("phase4", param4)
 
 class ExtraTreeTuning(RandomForestTuning):
-    pass
+    def get_model_instance(self):
+        n_estimator = self.get_value("n_estimator")
+
+        criterion = self.get_value("criterion")
+        max_features = self.get_value("max_features")
+        max_depth = self.get_value("max_depth")
+
+        if self.method == "classifier":
+            return ExtraTreesClassifier(n_estimators=n_estimator,
+                                          #criterion=criterion,
+                                          max_features=max_features,
+                                          max_depth=max_depth)
+        elif self.method == "regressor":
+            return ExtraTreesRegressor(n_estimators=n_estimator,
+                                         #criterion=criterion,
+                                         max_features=max_features,
+                                         max_depth=max_depth)
 
 class XGBoostingTuning(ParameterTuning):
     def __init__(self, target, data_id, method, n_estimator=200, cost="logloss", objective="binary:logistic", cv=10, n_jobs=-1):
@@ -294,7 +322,10 @@ class XGBoostingTuning(ParameterTuning):
                                     scale_pos_weight=1,
                                     seed=self.random_state)
 
-    def process(self):
+    def process(self, is_feature_importance=False):
+        if is_feature_importance:
+            self.enable_feature_importance()
+
         self.phase("phase1", {})
 
         param2 = {'max_depth':range(7, 14, 2), 'min_child_weight':range(1, 4, 2)}
