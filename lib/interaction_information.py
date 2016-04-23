@@ -79,15 +79,11 @@ class FeatureProfile(object):
         FeatureProfile.queue.put(("Stability", names, rlasso, "scores_", X, Y, 1))
 
         #stop the search when 5 features are left (they will get equal scores)
-        '''
         rfe = RFE(lr, n_features_to_select=n_features_rfe)
         FeatureProfile.queue.put(("RFE", names, rfe, "ranking_", X, Y, -1))
-        '''
 
-        '''
         rf = RandomForestRegressor(n_jobs=-1)
         FeatureProfile.queue.put(("RF", names, rf, "feature_importances_", X, Y, 1))
-        '''
 
         for idx in range(0, 4):
             thread = Thread(target=FeatureProfile.run)
