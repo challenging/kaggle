@@ -15,7 +15,7 @@ from sklearn.metrics import roc_auc_score, log_loss, make_scorer
 from sklearn.feature_selection import SelectFromModel
 
 from utils import log, INFO, WARN
-from load import load_data, data_transform_2, load_cache, save_cache, load_interaction_information
+from load import load_data, data_transform_2, load_cache, save_cache, load_interaction_information, load_feature_importance
 
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -103,16 +103,10 @@ class ParameterTuning(object):
     def get_model_instance(self):
         raise NotImeplementError
 
-    def enable_feature_importance(self):
-        clf = ExtraTreesClassifier(random_state=self.random_state)
-        selector = clf.fit(self.train[self.predictors], self.train[self.target])
-
-        fs = SelectFromModel(selector, prefit=True)
-        self.train_selector = fs.transform(self.train[self.predictors])
+    def enable_feature_importance(self, filepath_pkl, top=512):
+        self.predictors = load_feature_importance(filepath_pkl, top)
 
     def phase(self, phase, params, is_micro_tuning=False):
-        training_dataset = self.train_selector if np.any(self.train_selector) else self.train[self.predictors]
-
         gsearch1 = None
         best_cost, best_params, scores = -np.inf, -np.inf, None
         if phase in self.done:
@@ -134,7 +128,7 @@ class ParameterTuning(object):
                                     cv=self.cv,
                                     verbose=1)
 
-            best_cost, best_params, scores = self.get_best_params(gsearch1, training_dataset, self.train[self.target])
+            best_cost, best_params, scores = self.get_best_params(gsearch1, self.train[self.predictors], self.train[self.target])
             log("The cost of {}-model is {:.8f} based on {}".format(phase, best_cost, best_params.keys()))
             self.improve(phase, best_cost, best_params)
 
@@ -170,7 +164,7 @@ class ParameterTuning(object):
                                             cv=self.cv,
                                             verbose=1)
 
-                    micro_cost, micro_params, micro_scores = self.get_best_params(gsearch2, training_dataset, self.train[self.target])
+                    micro_cost, micro_params, micro_scores = self.get_best_params(gsearch2, self.train[self.predictors], self.train[self.target])
                     log("Finish the micro-tuning of {}, and then get best params is {}".format(phase, micro_params))
                     self.improve(key, micro_cost, micro_params, True)
 

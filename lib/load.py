@@ -238,6 +238,12 @@ def load_interaction_information(folder, threshold=300, reverse=True):
             if all_zero:
                 break
 
+def load_feature_importance(filepath_pkl, top=512):
+    rankings = load_cache(filepath_pkl)
+
+
+    return columns
+
 def save_kaggle_submission(test_id, results, filepath, normalization=False):
     if normalization:
         results = (results - results.min()) / (results.max() - results.min())

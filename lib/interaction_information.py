@@ -52,8 +52,12 @@ class FeatureProfile(object):
 
             key, names, model, coef, X, Y, order = FeatureProfile.queue.get()
 
-            model.fit(X, Y)
-            FeatureProfile.ranking[key] = FeatureProfile.normalization(np.abs(getattr(model, coef)), names, order)
+            if key == "Corr.":
+                f, pval = f_regression(X, Y, center=True)
+                FeatureProfile.ranking[key] = self.normalization(f, names)
+            else:
+                model.fit(X, Y)
+                FeatureProfile.ranking[key] = FeatureProfile.normalization(np.abs(getattr(model, coef)), names, order)
 
             timestamp_end = time.time()
             log("Cost {:.4f} secends to finish {}".format(time.time() - timestamp_start, key), INFO)
@@ -85,6 +89,8 @@ class FeatureProfile(object):
         rf = RandomForestRegressor(n_jobs=-1)
         FeatureProfile.queue.put(("RF", names, rf, "feature_importances_", X, Y, 1))
 
+        FeatureProfile.queue.put(("Corr.", names, None, None, X, Y, 1))
+
         for idx in range(0, 4):
             thread = Thread(target=FeatureProfile.run)
             thread.setDaemon(True)
@@ -92,26 +98,21 @@ class FeatureProfile(object):
 
         FeatureProfile.queue.join()
 
-        timestamp_start = time.time()
-        f, pval = f_regression(X, Y, center=True)
-        ranks["Corr."] = self.normalization(f, names)
-        log("Cost {:.4f} secends to finish Corr.".format(time.time() - timestamp_start), INFO)
-
         r = {}
         for name in names:
             r[name] = round(np.mean([ranks[method][name] for method in ranks.keys()]), 8)
         log("Cost {:.4f} secends to finish MIC".format(time.time() - timestamp_start), INFO)
 
         methods = sorted(ranks.keys())
-        ranks["Mean"] = r
+        FeatureProfile.ranking["Mean"] = r
         methods.append("Mean")
 
-        ranks["Feature"] = dict(zip(names, names))
+        FeatureProfile.ranking["Feature"] = dict(zip(names, names))
 
         pd.DataFrame(ranks).to_csv("{}.csv".format(filepath), index=False)
         save_cache(ranks, "{}.pkl".format(filepath))
 
-        return ranks
+        return FeatureProfile.ranking
 
 class InteractionInformation(object):
     def __init__(self, dataset, train_y, folder_couple, combinations_size=2):

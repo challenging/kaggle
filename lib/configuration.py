@@ -29,6 +29,14 @@ class ModelConfParser(object):
         else:
             return -1
 
+    def get_top_feature(self):
+        top_feature = 512
+
+        if self.config.has_option("MAIN", "top_feature"):
+            top_feature = self.config.getint("MAIN", "top_feature")
+
+        return top_feature
+
     def get_interaction_information(self):
         return self.config.getint("INTERACTION_INFORMATION", "binsize"), self.config.get("INTERACTION_INFORMATION", "top")
 

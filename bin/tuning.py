@@ -34,12 +34,14 @@ def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
     n_jobs = parser.get_n_jobs()
     cost = parser.get_cost()
     binsize, top = parser.get_interaction_information()
+    top_feature = parser.get_top_feature()
 
     filepath_training = "{}/input/train.csv".format(BASEPATH)
     filepath_testing = "{}/input/test.csv".format(BASEPATH)
     filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
     folder_ii = "{}/input/interaction_information/transform2=True_testing=-1_binsize={}".format(BASEPATH, binsize)
     filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_nfold={}_top={}_binsize={}.pkl".format(BASEPATH, methodology, is_testing, nfold, top, binsize)
+    filepath_feature_importance = "{}/etc/feature_profile/transform2=True_binsize={}_top={}".format(BASEPATH, binsize, top_feature)
 
     train_x = None
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
@@ -68,20 +70,26 @@ def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
 
     log("{} data records with {} features".format(len(train_x), len(train_x.columns)))
 
-    algorithm = None
+    algorithm, is_classifier = None, False
     if methodology.find("xg") > -1:
         if methodology[-1] == "c":
             algorithm = XGBoostingTuning("Target", "ID", "classifier", cost=cost, n_jobs=thread, cv=nfold)
+
+            is_classifier = True
         elif methodology[-1] == "r":
             algorithm = XGBoostingTuning("Target", "ID", "regressor", cost=cost, n_jobs=thread, cv=nfold)
     elif methodology.find("rf") > -1:
         if methodology[-1] == "c":
             algorithm = RandomForestTuning("Target", "ID", "classifier", cost=cost,n_jobs=thread, cv=nfold)
+
+            is_classifier = True
         elif methodology[-1] == "r":
             algorithm = RandomForestTuning("Target", "ID", "regressor", cost=cost,n_jobs=thread, cv=nfold)
     elif methodology.find("et") > -1:
         if methodology[-1] == "c":
             algorithm = ExtraTreeTuning("Target", "ID", "classifier", cost=cost,n_jobs=thread, cv=nfold)
+
+            is_classifier = True
         elif methodology[-1] == "r":
             algorithm = ExtraTreeTuning("Target", "ID", "regressor", cost=cost,n_jobs=thread, cv=nfold)
 
@@ -90,6 +98,9 @@ def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
         sys.exit(1)
 
     algorithm.set_train(train_x)
+    if is_classifier:
+        algorithm.enable_feature_importance(filepath_feature_importance, top_feature)
+
     algorithm.set_filepath(filepath_tuning)
 
     if os.path.exists(filepath_tuning):

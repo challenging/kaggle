@@ -66,7 +66,7 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
         print "Data Distribution is ({}, {}), and then the number of feature is {}".format(np.sum(train_y==0), np.sum(train_y==1), len(names))
 
         # output folder
-        folder_feature = "{}/etc/feature_profiling".format(BASEPATH)
+        folder_feature = "{}/etc/feature_profile".format(BASEPATH)
         if not os.path.isdir(folder_feature):
             os.makedirs(folder_feature)
 

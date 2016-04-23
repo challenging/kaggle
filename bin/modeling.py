@@ -37,11 +37,13 @@ def learning(conf, thread):
     binsize, top = parser.get_interaction_information()
     cost = parser.get_cost()
     nfold = parser.get_nfold()
+    top_feature = parser.get_top_feature()
 
     filepath_training = "{}/input/train.csv".format(BASEPATH)
     filepath_testing = "{}/input/test.csv".format(BASEPATH)
     filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
     folder_ii = "{}/input/interaction_information/transform2=True_testing=-1_binsize={}".format(BASEPATH, binsize)
+    filepath_feature_importance = "{}/etc/feature_profile/transform2=True_binsize={}_top={}".format(BASEPATH, binsize, top_feature)
 
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
@@ -95,7 +97,7 @@ def learning(conf, thread):
             setting["input_dims"] = number_of_feature
             setting["callbacks"] = [checkpointer]
             setting["number_of_layer"] = setting.pop("layer_number")
-            setting["dimension"] = int(number_of_feature*1.25)
+            setting["dimension"] = 2048#int(number_of_feature*0.5)
 
             del setting["n_jobs"]
 
