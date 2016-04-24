@@ -40,7 +40,7 @@ def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
     filepath_testing = "{}/input/test.csv".format(BASEPATH)
     filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
     folder_ii = "{}/input/interaction_information/transform2=True_testing=-1_binsize={}".format(BASEPATH, binsize)
-    filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_nfold={}_top={}_binsize={}.pkl".format(BASEPATH, methodology, is_testing, nfold, top, binsize)
+    filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_nfold={}_top={}_binsize={}_topfeature={}.pkl".format(BASEPATH, methodology, is_testing, nfold, top, binsize, top_feature)
     filepath_feature_importance = "{}/etc/feature_profile/transform2=True_binsize={}_top={}.pkl".format(BASEPATH, binsize, top)
 
     train_x = None
