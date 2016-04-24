@@ -152,9 +152,9 @@ class ParameterTuning(object):
                 advanced_params = {}
                 for name, value in best_params.items():
                     if isinstance(value, int):
-                        advanced_params[name] = [i for i in range(max(0, value-1), value+1)]
+                        advanced_params[name] = [i for i in range(max(0, value-1), value+1) if i != value]
                     elif value != 0 and isinstance(value, float):
-                        advanced_params[name] = [value*i for i in [0.25, 1, 1.25]]
+                        advanced_params[name] = [value*i for i in [0.25, 0.75, 1.25]]
 
                 if advanced_params:
                     gsearch2 = GridSearchCV(estimator=self.get_model_instance(),
@@ -211,7 +211,7 @@ class RandomForestTuning(ParameterTuning):
         self.default_max_depth, self.max_depth = 8, None
         self.default_min_samples_split, self.min_samples_split = 4, None
         self.default_min_samples_leaf, self.min_samples_leaf = 2, None
-        self.default_class_weight, self.class_weight = {0: 1, 1: 1}, None
+        self.default_class_weight, self.class_weight = "balanced", None
 
     def get_model_instance(self):
         n_estimator = self.get_value("n_estimator")
@@ -241,7 +241,7 @@ class RandomForestTuning(ParameterTuning):
         self.phase("phase3", param3, True)
 
         if self.method == "classifier":
-            param4 = {"class_weight": [{0: 1, 1: 1}, {0: 1.5, 1: 1}, {0: 2, 1: 1}, "balanced"]}
+            param4 = {"class_weight": [{0: 1, 1: 1}, {0: 1.5, 1: 1}, {0: 2, 1: 1}]}
             self.phase("phase4", param4)
 
 class ExtraTreeTuning(RandomForestTuning):
