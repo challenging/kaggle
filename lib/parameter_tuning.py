@@ -119,9 +119,12 @@ class ParameterTuning(object):
 
                 self.improve(phase, best_cost, best_params)
         else:
-            gsearch1 = GridSearchCV(estimator=self.get_model_instance(),
+            model = self.get_model_instance()
+            log("The params are {}".format(model.get_params()), INFO)
+
+            gsearch1 = GridSearchCV(estimator=model,
                                     param_grid=params,
-                                    scoring=make_scorer(self.cost_function),
+                                    scoring="roc_auc" if self.cost_function.__name__ == "roc_auc_score" else make_scorer(self.cost_function),
                                     n_jobs=self.n_jobs,
                                     iid=False,
                                     cv=self.cv,
@@ -159,7 +162,7 @@ class ParameterTuning(object):
                 if advanced_params:
                     gsearch2 = GridSearchCV(estimator=self.get_model_instance(),
                                             param_grid=advanced_params,
-                                            scoring=make_scorer(self.cost_function),
+                                            scoring="roc_auc" if self.cost_function.__name__ == "roc_auc_score" else make_scorer(self.cost_function),
                                             n_jobs=self.n_jobs,
                                             iid=False,
                                             cv=self.cv,
