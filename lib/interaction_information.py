@@ -3,6 +3,7 @@
 import os
 import sys
 import glob
+import copy
 import time
 import random
 import socket
@@ -70,7 +71,7 @@ class FeatureProfile(object):
                     model.fit(X, Y)
                     FeatureProfile.ranking[key] = FeatureProfile.normalization(np.abs(getattr(model, coef)), names, order)
 
-                save_cache(FeatureProfile.ranking, filepath)
+                save_cache(copy.deepcopy(FeatureProfile.ranking), filepath)
 
             timestamp_end = time.time()
             log("Cost {:.4f} secends to finish {}".format(time.time() - timestamp_start, key), INFO)
