@@ -107,7 +107,7 @@ def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
         algorithm.load()
 
     if is_feature_importance:
-        algorithm.enable_feature_importance()
+        algorithm.enable_feature_importance(filepath_feature_importance, top_feature)
 
     algorithm.process()
 
