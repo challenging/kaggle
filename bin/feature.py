@@ -42,6 +42,7 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
         filepath_testing = "{}/input/test.csv".format(BASEPATH)
         filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
         folder_ii = "{}/input/interaction_information/transform2=True_testing=-1_binsize={}".format(BASEPATH, binsize)
+        folder_feature = "{}/etc/feature_profile/transform2=True_binsize={}_top={}".format(BASEPATH, binsize, top)
 
         train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
@@ -62,16 +63,8 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
                     log("Skip {} due to {} not in columns".format(layers, breaking_layer), WARN)
                     break
 
-        names = train_x.columns
-        print "Data Distribution is ({}, {}), and then the number of feature is {}".format(np.sum(train_y==0), np.sum(train_y==1), len(names))
-
-        # output folder
-        folder_feature = "{}/etc/feature_profile".format(BASEPATH)
-        if not os.path.isdir(folder_feature):
-            os.makedirs(folder_feature)
-
         names = list(train_x.columns.values)
-        folder_feature = "{}/transform2=True_binsize={}_top={}".format(folder_feature, binsize, top)
+        print "Data Distribution is ({}, {}), and then the number of feature is {}".format(np.sum(train_y==0), np.sum(train_y==1), len(names))
 
         fp = FeatureProfile()
         fp.profile(train_x.values, train_y, names, folder_feature, int(len(train_x.columns)*0.5))

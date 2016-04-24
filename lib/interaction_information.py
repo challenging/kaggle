@@ -46,18 +46,31 @@ class FeatureProfile(object):
         return dict(zip(names, r))
 
     @staticmethod
-    def run():
+    def run(names, X, Y, filepath):
+        def glob_ranking(folder):
+            ranking = {}
+
+            for f in glob.iglob("{}/*.pkl".format(folder)):
+                ranking.update(load_cache(f))
+
+            return ranking
+
         while True:
             timestamp_start = time.time()
+            done_ranking = glob_ranking(os.path.dirname(filepath))
 
-            key, names, model, coef, X, Y, order = FeatureProfile.queue.get()
-
-            if key == "Corr.":
-                f, pval = f_regression(X, Y, center=True)
-                FeatureProfile.ranking[key] = self.normalization(f, names)
+            key, model, coef, order = FeatureProfile.queue.get()
+            if key in done_ranking:
+                log("{} was done before".format(key), INFO)
             else:
-                model.fit(X, Y)
-                FeatureProfile.ranking[key] = FeatureProfile.normalization(np.abs(getattr(model, coef)), names, order)
+                if key == "Corr.":
+                    f, pval = f_regression(X, Y, center=True)
+                    FeatureProfile.ranking[key] = FeatureProfile.normalization(f, names)
+                else:
+                    model.fit(X, Y)
+                    FeatureProfile.ranking[key] = FeatureProfile.normalization(np.abs(getattr(model, coef)), names, order)
+
+                save_cache(FeatureProfile.ranking, filepath)
 
             timestamp_end = time.time()
             log("Cost {:.4f} secends to finish {}".format(time.time() - timestamp_start, key), INFO)
@@ -71,28 +84,28 @@ class FeatureProfile(object):
             os.makedirs(folder_parent)
 
         lr = LinearRegression(normalize=True)
-        FeatureProfile.queue.put(("Linear Reg.", names, lr, "coef_", X, Y, 1))
+        FeatureProfile.queue.put(("Linear Reg.", lr, "coef_", 1))
 
         ridge = Ridge(alpha=7)
-        FeatureProfile.queue.put(("Ridge", names, ridge, "coef_", X, Y, 1))
+        FeatureProfile.queue.put(("Ridge", ridge, "coef_", 1))
 
         lasso = Lasso(alpha=.05)
-        FeatureProfile.queue.put(("Lasso", names, lasso, "coef_", X, Y, 1))
+        FeatureProfile.queue.put(("Lasso", lasso, "coef_", 1))
 
         rlasso = RandomizedLasso(alpha=0.04)
-        FeatureProfile.queue.put(("Stability", names, rlasso, "scores_", X, Y, 1))
+        FeatureProfile.queue.put(("Stability", rlasso, "scores_", 1))
 
         #stop the search when 5 features are left (they will get equal scores)
         rfe = RFE(lr, n_features_to_select=n_features_rfe)
-        FeatureProfile.queue.put(("RFE", names, rfe, "ranking_", X, Y, -1))
+        FeatureProfile.queue.put(("RFE", rfe, "ranking_", -1))
 
         rf = RandomForestRegressor(n_jobs=-1)
-        FeatureProfile.queue.put(("RF", names, rf, "feature_importances_", X, Y, 1))
+        FeatureProfile.queue.put(("RF", rf, "feature_importances_", 1))
 
-        FeatureProfile.queue.put(("Corr.", names, None, None, X, Y, 1))
+        FeatureProfile.queue.put(("Corr.", None, None, 1))
 
         for idx in range(0, 4):
-            thread = Thread(target=FeatureProfile.run)
+            thread = Thread(target=FeatureProfile.run, kwargs={"names": names, "X":X, "Y":Y, "filepath": "{}.{}.pkl".format(filepath, current_thread().name)})
             thread.setDaemon(True)
             thread.start()
 
