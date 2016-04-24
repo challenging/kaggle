@@ -22,7 +22,7 @@ from configuration import ModelConfParser
 @click.option("--conf", required=True, help="Filepath of Configuration")
 @click.option("--thread", default=1, help="Number of thread")
 @click.option("--is-testing", is_flag=True, help="Testing mode")
-@click.option("--is-feature-importance", default=-1, help="Turn on the feature importance")
+@click.option("--is-feature-importance", is_flag=True, help="Turn on the feature importance")
 @click.option("--methodology", required=True, help="Tune parameters of which methodology")
 @click.option("--nfold", default=5, help="the number of nfold")
 def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
@@ -34,7 +34,10 @@ def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
     n_jobs = parser.get_n_jobs()
     cost = parser.get_cost()
     binsize, top = parser.get_interaction_information()
-    top_feature = parser.get_top_feature()
+
+    top_feature = -1
+    if is_feature_importance:
+        top_feature = parser.get_top_feature()
 
     filepath_training = "{}/input/train.csv".format(BASEPATH)
     filepath_testing = "{}/input/test.csv".format(BASEPATH)
