@@ -48,6 +48,8 @@ class FeatureProfile(object):
 
     @staticmethod
     def run(names, X, Y, filepath):
+        filepath = filepath.replace(".pkl", "{}.pkl".format(current_thread().name))
+
         def glob_ranking(folder):
             ranking = {}
 
@@ -106,7 +108,7 @@ class FeatureProfile(object):
         FeatureProfile.queue.put(("Corr.", None, None, 1))
 
         for idx in range(0, 4):
-            thread = Thread(target=FeatureProfile.run, kwargs={"names": names, "X":X, "Y":Y, "filepath": "{}.{}.pkl".format(filepath, current_thread().name)})
+            thread = Thread(target=FeatureProfile.run, kwargs={"names": names, "X":X, "Y":Y, "filepath": "{}.pkl".format(filepath)})
             thread.setDaemon(True)
             thread.start()
 

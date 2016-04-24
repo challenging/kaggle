@@ -59,7 +59,6 @@ def data_transform_1(train, test):
             #for int or float: fill NaN
             tmp_len = len(train[train_series.isnull()])
             if tmp_len > 0:
-                #print "mean", train_series.mean()
                 train.loc[train_series.isnull(), train_name] = -999
 
             #and Test

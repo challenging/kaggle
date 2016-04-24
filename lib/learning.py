@@ -345,19 +345,21 @@ class LearningQueue(object):
         else:
             return True
 
-    def insert_layer_two_training_dataset(self, layer_two_training_idx, model_name, model_idx, results):
+    def insert_layer_two_training_dataset(self, layer_two_training_idx, model_idx, results, params, filepath):
         self.lock.acquire()
 
         try:
             self.layer_two_training_dataset[layer_two_training_idx, model_idx] = results
+            save_cache((params, layer_two_training_idx, model_idx, results), filepath)
         finally:
             self.lock.release()
 
-    def insert_layer_two_testing_dataset(self, model_name, model_idx, nfold, results):
+    def insert_layer_two_testing_dataset(self, model_idx, nfold, results, params, filepath):
         self.lock.acquire()
 
         try:
             self.layer_two_testing_dataset[:, model_idx, nfold] = results
+            save_cache((params, model_idx, nfold, results), filepath)
         finally:
             self.lock.release()
 
@@ -423,6 +425,9 @@ class LearningThread(threading.Thread):
             if model_name.find("calibration") > -1:
                 model_setting["base_estimator"] = load_cache(filepath_loading_model)
 
+            filepath_training = "{}/{}_{}.pkl".format(model_folder, model_name, nfold)
+            filepath_testing = "{}/{}_{}.pkl".format(model_folder, model_name, nfold)
+
             model = LearningFactory.get_model(pair, self.cost_func)
             if model == None or model.model == None:
                 log("Can't init this model({})".format(model_name), WARN)
@@ -430,8 +435,8 @@ class LearningThread(threading.Thread):
                 model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])
                 training_results, testing_results = model.get_cluster_results(self.obj.train_x[test_x_idx], self.obj.test_x)
 
-                self.obj.insert_layer_two_training_dataset(test_x_idx, model.name, model_idx, training_results)
-                self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, testing_results)
+                self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, training_results, model.model.get_params(), filepath_training)
+                self.obj.insert_layer_two_testing_dataset(model_idx, nfold, testing_results, model.model.get_params(), filepath_testing)
                 self.obj.learning_cost.insert_cost(model_name, nfold, -1)
             else:
                 if model_name.find("deep") > -1 and nfold != 0:
@@ -440,7 +445,7 @@ class LearningThread(threading.Thread):
 
                     #Copy the prediction results of testing dataset to other folds
                     layer_two_testing_dataset = self.obj.layer_two_testing_dataset[:, model_idx, 0]
-                    self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, layer_two_testing_dataset)
+                    self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, layer_two_testing_dataset, model.model.get_params(), filepath_testing)
 
                     # Copy the cost of 0th fold into other folds
                     cost = self.obj.learning_cost[model_name][0]
@@ -450,10 +455,10 @@ class LearningThread(threading.Thread):
                     model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])
 
                     results = model.predict(self.obj.train_x[test_x_idx])
-                    self.obj.insert_layer_two_training_dataset(test_x_idx, model.name, model_idx, results)
+                    self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, results, model.model.get_params(), filepath_training)
 
                     layer_two_testing_dataset = model.predict(self.obj.test_x)
-                    self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, layer_two_testing_dataset)
+                    self.obj.insert_layer_two_testing_dataset(model_idx, nfold, layer_two_testing_dataset, model.model.get_params(), filepath_testing)
 
                     cost = model.cost(self.obj.train_x[test_x_idx], self.obj.train_y[test_x_idx])
                     if np.isnan(cost):
