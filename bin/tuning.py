@@ -74,7 +74,7 @@ def tuning(methodology, nfold, is_testing, feature_importance, thread, conf):
 
     log("{} data records with {} features".format(len(train_x), len(train_x.columns)))
 
-    algorithm, is_classifier = None, False
+    algorithm, is_xgboosting, is_classifier = None, False, False
     if methodology.find("xg") > -1:
         if methodology[-1] == "c":
             algorithm = XGBoostingTuning("Target", "ID", "classifier", cost=cost, n_jobs=thread, cv=nfold)
@@ -82,6 +82,8 @@ def tuning(methodology, nfold, is_testing, feature_importance, thread, conf):
             is_classifier = True
         elif methodology[-1] == "r":
             algorithm = XGBoostingTuning("Target", "ID", "regressor", cost=cost, n_jobs=thread, cv=nfold)
+
+        is_xgboosting = True
     elif methodology.find("rf") > -1:
         if methodology[-1] == "c":
             algorithm = RandomForestTuning("Target", "ID", "classifier", cost=cost,n_jobs=thread, cv=nfold)
@@ -110,7 +112,7 @@ def tuning(methodology, nfold, is_testing, feature_importance, thread, conf):
     if os.path.exists(filepath_tuning):
         algorithm.load()
 
-    if is_feature_importance:
+    if not is_xgboosting and is_classifier:
         algorithm.enable_feature_importance(filepath_feature_importance, top_feature)
 
     algorithm.process()
