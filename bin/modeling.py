@@ -64,10 +64,12 @@ def learning(conf, thread, is_feature_importance):
                 log("Skip {} due to {} not in columns".format(layers, breaking_layer), WARN)
                 break
 
+    columns = train_x.columns
     if is_feature_importance:
         predictors = load_feature_importance(filepath_feature_importance, top_feature)
+
         drop_fields = [column for column in columns if column not in predictors]
-        log("Due to the opening of feature importance so dropping {}".format(drop_fields), INFO)
+        log("Due to the opening of feature importance so dropping {} columns".format(len(drop_fields)), INFO)
 
         train_x = train_x.drop(drop_fields, axis=1)
         test_x = test_x.drop(drop_fields, axis=1)
