@@ -126,8 +126,8 @@ def learning(conf, thread, is_feature_importance):
 
         last_model.append((method, setting))
 
-    model_folder = "{}/prediction_model/ensemble_learning/nfold={}_layer1={}_layer2={}_feature={}_binsize={}_top={}".format(\
-                        BASEPATH, nfold, len(layer1_models), len(layer2_models), number_of_feature, binsize, top)
+    model_folder = "{}/prediction_model/ensemble_learning/is_feature_importance={}_nfold={}_layer1={}_layer2={}_feature={}_binsize={}_top={}".format(\
+                        BASEPATH, is_feature_importance, nfold, len(layer1_models), len(layer2_models), number_of_feature, binsize, top)
     if not os.path.exists(model_folder):
         os.makedirs(model_folder)
 
