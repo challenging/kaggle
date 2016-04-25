@@ -66,11 +66,11 @@ def learning(conf, thread, is_feature_importance):
 
     if is_feature_importance:
         predictors = load_feature_importance(filepath_feature_importance, top_feature)
-        drop_fields = [column for column in train_x.columns if column not in predictors]
+        drop_fields = [column for column in columns if column not in predictors]
         log("Due to the opening of feature importance so dropping {}".format(drop_fields), INFO)
 
-        train_x = train_x.drop(drop_fields, axis=0)
-        test_x = test_x.drop(drop_fields, axis=0)
+        train_x = train_x.drop(drop_fields, axis=1)
+        test_x = test_x.drop(drop_fields, axis=1)
 
     train_X, test_X = train_x.values, test_x.values
 
