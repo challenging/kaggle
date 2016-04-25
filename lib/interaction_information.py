@@ -53,14 +53,14 @@ class FeatureProfile(object):
         def glob_ranking(folder):
             ranking = {}
 
-            for f in glob.iglob("{}/*.pkl".format(folder)):
+            for f in glob.iglob("{}*.pkl".format(folder)):
                 ranking.update(load_cache(f))
 
             return ranking
 
         while True:
             timestamp_start = time.time()
-            done_ranking = glob_ranking(os.path.dirname(filepath))
+            done_ranking = glob_ranking(filepath)
 
             key, model, coef, order = FeatureProfile.queue.get()
             if key in done_ranking:
