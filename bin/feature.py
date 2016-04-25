@@ -35,6 +35,7 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
     parser = ModelConfParser(conf)
     BASEPATH = parser.get_workspace()
     binsize, top = parser.get_interaction_information()
+    top_feature = parser.get_top_feature()
 
     if feature_importance:
         filepath_training = "{}/input/train.csv".format(BASEPATH)
@@ -62,11 +63,11 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
                     log("Skip {} due to {} not in columns".format(layers, breaking_layer), WARN)
                     break
 
-        names = list(train_x.columns.values)
+        names = train_x.columns
         print "Data Distribution is ({}, {}), and then the number of feature is {}".format(np.sum(train_y==0), np.sum(train_y==1), len(names))
 
         fp = FeatureProfile()
-        fp.profile(train_x.values, train_y, names, folder_feature, int(len(train_x.columns)*0.5))
+        fp.profile(train_x.values, train_y, names, folder_feature, top_feature)
 
     if interaction_information:
         log("Try to calculate the interaction information", INFO)

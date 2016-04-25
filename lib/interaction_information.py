@@ -48,7 +48,7 @@ class FeatureProfile(object):
 
     @staticmethod
     def run(names, X, Y, filepath):
-        filepath = filepath.replace(".pkl", "{}.pkl".format(current_thread().name))
+        filepath = filepath.replace(".pkl", "_{}.pkl".format(current_thread().name))
 
         def glob_ranking(folder):
             ranking = {}
