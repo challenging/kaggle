@@ -15,7 +15,7 @@ import numpy as np
 
 sys.path.append("{}/../lib".format(os.path.dirname(os.path.abspath(__file__))))
 from utils import log, INFO, WARN
-from load import load_data, load_advanced_data, load_cache, save_cache, save_kaggle_submission, load_interaction_information
+from load import load_data, load_advanced_data, load_cache, save_cache, save_kaggle_submission, load_interaction_information, load_feature_importance
 from learning import LearningFactory
 from configuration import ModelConfParser
 from deep_learning import KaggleCheckpoint
@@ -27,7 +27,8 @@ BASEPATH = os.path.dirname(os.path.abspath(__file__))
 @click.command()
 @click.option("--conf", required=True, help="Configureation File to this model")
 @click.option("--thread", default=1, help="Number of thread")
-def learning(conf, thread):
+@click.option("--is-feature-importance", is_flag=True, help="Turn on the feature importance")
+def learning(conf, thread, is_feature_importance):
     drop_fields = []
 
     parser = ModelConfParser(conf)
@@ -62,6 +63,14 @@ def learning(conf, thread):
             else:
                 log("Skip {} due to {} not in columns".format(layers, breaking_layer), WARN)
                 break
+
+    if is_feature_importance:
+        predictors = load_feature_importance(filepath_feature_importance, top_feature)
+        drop_fields = [column for column in train_x.columns if column not in predictors]
+        log("Due to the opening of feature importance so dropping {}".format(drop_fields), INFO)
+
+        train_x = train_x.drop(drop_fields, axis=0)
+        test_x = test_x.drop(drop_fields, axis=0)
 
     train_X, test_X = train_x.values, test_x.values
 
