@@ -104,6 +104,7 @@ class ParameterTuning(object):
 
     def enable_feature_importance(self, filepath_pkl, top_feature=512):
         self.predictors = load_feature_importance(filepath_pkl, top_feature)
+        self.predictors = list(set(self.predictors))
 
     def phase(self, phase, params, is_micro_tuning=False):
         gsearch1 = None
@@ -222,12 +223,14 @@ class RandomForestTuning(ParameterTuning):
         criterion = self.get_value("criterion")
         max_features = self.get_value("max_features")
         max_depth = self.get_value("max_depth")
+        class_weight = self.get_value("class_weight")
 
         if self.method == "classifier":
             return RandomForestClassifier(n_estimators=n_estimator,
                                           #criterion=criterion,
                                           max_features=max_features,
-                                          max_depth=max_depth)
+                                          max_depth=max_depth,
+                                          class_weight=class_weight)
         elif self.method == "regressor":
             return RandomForestRegressor(n_estimators=n_estimator,
                                          #criterion=criterion,
@@ -254,12 +257,14 @@ class ExtraTreeTuning(RandomForestTuning):
         criterion = self.get_value("criterion")
         max_features = self.get_value("max_features")
         max_depth = self.get_value("max_depth")
+        class_weight = self.get_value("class_weight")
 
         if self.method == "classifier":
             return ExtraTreesClassifier(n_estimators=n_estimator,
                                           #criterion=criterion,
                                           max_features=max_features,
-                                          max_depth=max_depth)
+                                          max_depth=max_depth,
+                                          class_weight=class_weight)
         elif self.method == "regressor":
             return ExtraTreesRegressor(n_estimators=n_estimator,
                                          #criterion=criterion,
