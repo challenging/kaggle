@@ -26,7 +26,7 @@ class ParameterTuning(object):
 
         self.n_estimator = n_estimator
         self.cost = cost
-        if self.cost == "logloss":
+        if self.cost == "log_loss":
             self.cost_function = log_loss
         elif self.cost == "auc":
             self.cost_function = roc_auc_score
@@ -135,7 +135,7 @@ class ParameterTuning(object):
             log("Training by {} features".format(len(self.predictors)), INFO)
 
             best_cost, best_params, scores = self.get_best_params(gsearch1, self.train[self.predictors], self.train[self.target])
-            log("The cost of {}-model is {:.8f} based on {}".format(phase, best_cost, best_params.keys()))
+            log("The {} of {}-model is {:.8f} based on {}".format(self.cost_function.__name__, phase, best_cost, best_params.keys()))
             self.improve(phase, best_cost, best_params)
 
             self.done[phase] = best_cost, best_params, scores, gsearch1
@@ -230,24 +230,27 @@ class RandomForestTuning(ParameterTuning):
 
         if self.method == "classifier":
             return RandomForestClassifier(n_estimators=n_estimator,
-                                          #criterion=criterion,
+                                          criterion=criterion,
                                           max_features=max_features,
                                           max_depth=max_depth,
                                           min_samples_split=min_samples_split,
                                           min_samples_leaf=min_samples_leaf,
-                                          class_weight=class_weight)
+                                          class_weight=class_weight,
+                                          n_jobs=-1)
         elif self.method == "regressor":
             return RandomForestRegressor(n_estimators=n_estimator,
                                          #criterion=criterion,
                                          max_features=max_features,
                                          max_depth=max_depth,
                                          min_samples_split=min_samples_split,
-                                         min_samples_leaf=min_samples_leaf)
+                                         min_samples_leaf=min_samples_leaf,
+                                         n_jobs=-1)
 
     def process(self):
         self.phase("phase1", {})
 
-        param2 = {'max_depth': range(6, 11, 2), 'max_features': [ratio for ratio in [0.75, 0.1, 0.25]]}
+        size_feature = len(self.predictors)
+        param2 = {'max_depth': range(6, 11, 2), 'max_features': [ratio for ratio in [0.75, 0.1, 0.25, np.sqrt(size_feature)/size_feature]]}
         self.phase("phase2", param2, True)
 
         param3 = {"min_samples_leaf": range(2, 5, 2), "min_samples_split": range(4, 9, 2)}
@@ -270,22 +273,24 @@ class ExtraTreeTuning(RandomForestTuning):
 
         if self.method == "classifier":
             return ExtraTreesClassifier(n_estimators=n_estimator,
-                                          #criterion=criterion,
-                                          max_features=max_features,
-                                          max_depth=max_depth,
-                                          min_samples_split=min_samples_split,
-                                          min_samples_leaf=min_samples_leaf,
-                                          class_weight=class_weight)
+                                        criterion=criterion,
+                                        max_features=max_features,
+                                        max_depth=max_depth,
+                                        min_samples_split=min_samples_split,
+                                        min_samples_leaf=min_samples_leaf,
+                                        class_weight=class_weight,
+                                        n_jobs=-1)
         elif self.method == "regressor":
             return ExtraTreesRegressor(n_estimators=n_estimator,
-                                         #criterion=criterion,
-                                         max_features=max_features,
-                                         max_depth=max_depth,
-                                         min_samples_split=min_samples_split,
-                                         min_samples_leaf=min_samples_leaf)
+                                       #criterion=criterion,
+                                       max_features=max_features,
+                                       max_depth=max_depth,
+                                       min_samples_split=min_samples_split,
+                                       min_samples_leaf=min_samples_leaf,
+                                       n_jobs=-1)
 
 class XGBoostingTuning(ParameterTuning):
-    def __init__(self, target, data_id, method, n_estimator=200, cost="logloss", objective="binary:logistic", cv=10, n_jobs=-1):
+    def __init__(self, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1):
         ParameterTuning.__init__(self, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
 
         self.default_learning_rate, self.learning_rate = 0.1, None
@@ -353,5 +358,5 @@ class XGBoostingTuning(ParameterTuning):
         param4 = {'subsample':[i/10.0 for i in range(6, 11, 2)], 'colsample_bytree':[i/10.0 for i in range(6, 11, 2)]}
         self.phase("phase4", param4, True)
 
-        param5 = {'reg_alpha':[1e-5, 1e-2, 0.1, 1.0, 100.0]}
+        param5 = {'reg_alpha':[1e-5, 1e-2, 0.1, 1.0]}
         self.phase("phase5", param5, True)
