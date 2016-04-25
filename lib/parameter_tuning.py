@@ -86,15 +86,16 @@ class ParameterTuning(object):
             for key, value in params.items():
                 setattr(self, key, value)
                 log("Set {} to be {}".format(key, getattr(self, key)))
-
-            self.save()
         else:
             if not micro_tuning:
-                log("Fail so terminate due to the {} of phase2-model is {}(< {}), and the params is {}".format(self.cost, cost, old_cost, params), WARN)
+                log("Fail because of the {} of phase2-model is {}(< {}) so setting the params as default".format(self.cost, cost, old_cost), WARN)
 
                 for key, value in params.items():
                     setattr(self, key, getattr(self, "default_{}".format(key)))
+            else:
+                log("Fail in {}".format(phase), WARN)
 
+        self.save()
 
     def get_value(self, name):
         return getattr(self, name) if getattr(self, name) else getattr(self, "default_{}".format(name))
@@ -223,6 +224,8 @@ class RandomForestTuning(ParameterTuning):
         criterion = self.get_value("criterion")
         max_features = self.get_value("max_features")
         max_depth = self.get_value("max_depth")
+        min_samples_split = self.get_value("min_samples_split")
+        min_samples_leaf = self.get_value("min_samples_leaf")
         class_weight = self.get_value("class_weight")
 
         if self.method == "classifier":
@@ -230,12 +233,16 @@ class RandomForestTuning(ParameterTuning):
                                           #criterion=criterion,
                                           max_features=max_features,
                                           max_depth=max_depth,
+                                          min_samples_split=min_samples_split,
+                                          min_samples_leaf=min_samples_leaf,
                                           class_weight=class_weight)
         elif self.method == "regressor":
             return RandomForestRegressor(n_estimators=n_estimator,
                                          #criterion=criterion,
                                          max_features=max_features,
-                                         max_depth=max_depth)
+                                         max_depth=max_depth,
+                                         min_samples_split=min_samples_split,
+                                         min_samples_leaf=min_samples_leaf)
 
     def process(self):
         self.phase("phase1", {})
@@ -257,6 +264,8 @@ class ExtraTreeTuning(RandomForestTuning):
         criterion = self.get_value("criterion")
         max_features = self.get_value("max_features")
         max_depth = self.get_value("max_depth")
+        min_samples_split = self.get_value("min_samples_split")
+        min_samples_leaf = self.get_value("min_samples_leaf")
         class_weight = self.get_value("class_weight")
 
         if self.method == "classifier":
@@ -264,12 +273,16 @@ class ExtraTreeTuning(RandomForestTuning):
                                           #criterion=criterion,
                                           max_features=max_features,
                                           max_depth=max_depth,
+                                          min_samples_split=min_samples_split,
+                                          min_samples_leaf=min_samples_leaf,
                                           class_weight=class_weight)
         elif self.method == "regressor":
             return ExtraTreesRegressor(n_estimators=n_estimator,
                                          #criterion=criterion,
                                          max_features=max_features,
-                                         max_depth=max_depth)
+                                         max_depth=max_depth,
+                                         min_samples_split=min_samples_split,
+                                         min_samples_leaf=min_samples_leaf)
 
 class XGBoostingTuning(ParameterTuning):
     def __init__(self, target, data_id, method, n_estimator=200, cost="logloss", objective="binary:logistic", cv=10, n_jobs=-1):
