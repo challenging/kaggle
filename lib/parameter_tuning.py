@@ -343,10 +343,7 @@ class XGBoostingTuning(ParameterTuning):
                                     scale_pos_weight=1,
                                     seed=self.random_state)
 
-    def process(self, is_feature_importance=False):
-        if is_feature_importance:
-            self.enable_feature_importance()
-
+    def process(self):
         self.phase("phase1", {})
 
         param2 = {'max_depth':range(7, 14, 2), 'min_child_weight':range(1, 4, 2)}
