@@ -29,7 +29,6 @@ BASEPATH = os.path.dirname(os.path.abspath(__file__))
 @click.option("--thread", default=1, help="Number of thread")
 def learning(conf, thread):
     drop_fields = []
-    N = 650 - len(drop_fields)
 
     parser = ModelConfParser(conf)
 
@@ -41,7 +40,7 @@ def learning(conf, thread):
 
     filepath_training = "{}/input/train.csv".format(BASEPATH)
     filepath_testing = "{}/input/test.csv".format(BASEPATH)
-    filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
+    filepath_cache_1 = "{}/input/train.pkl".format(BASEPATH)
     folder_ii = "{}/input/interaction_information/transform2=True_testing=-1_binsize={}".format(BASEPATH, binsize)
     filepath_feature_importance = "{}/etc/feature_profile/transform2=True_binsize={}_top={}.pkl".format(BASEPATH, binsize, top)
 

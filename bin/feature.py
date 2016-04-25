@@ -30,8 +30,7 @@ from configuration import ModelConfParser
 @click.option("--combinations-size", default=3, help="size of combinations")
 def feature_engineer(conf, thread, feature_importance, interaction_information, merge_ii, split_idx, split_num, testing, combinations_size):
     drop_fields = []
-
-    N, transform2 = 650, True
+    transform2 = True
 
     parser = ModelConfParser(conf)
     BASEPATH = parser.get_workspace()
@@ -40,7 +39,7 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
     if feature_importance:
         filepath_training = "{}/input/train.csv".format(BASEPATH)
         filepath_testing = "{}/input/test.csv".format(BASEPATH)
-        filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
+        filepath_cache_1 = "{}/input/train.pkl".format(BASEPATH)
         folder_ii = "{}/input/interaction_information/transform2=True_testing=-1_binsize={}".format(BASEPATH, binsize)
         folder_feature = "{}/etc/feature_profile/transform2=True_binsize={}_top={}".format(BASEPATH, binsize, top)
 

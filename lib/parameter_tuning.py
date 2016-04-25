@@ -186,8 +186,8 @@ class ParameterTuning(object):
             model = gsearch1
             a, b, c = best_cost, best_params, scores
 
-        if model:
-            self.get_training_score(model)
+        #if model:
+        #    self.get_training_score(model)
 
         return a, b, c, model
 
@@ -215,7 +215,7 @@ class RandomForestTuning(ParameterTuning):
         self.default_max_depth, self.max_depth = 8, None
         self.default_min_samples_split, self.min_samples_split = 4, None
         self.default_min_samples_leaf, self.min_samples_leaf = 2, None
-        self.default_class_weight, self.class_weight = "balanced", None
+        self.default_class_weight, self.class_weight = None, None
 
     def get_model_instance(self):
         n_estimator = self.get_value("n_estimator")
@@ -247,7 +247,7 @@ class RandomForestTuning(ParameterTuning):
         self.phase("phase3", param3, True)
 
         if self.method == "classifier":
-            param4 = {"class_weight": [{0: 1, 1: 1}, {0: 1.5, 1: 1}, {0: 2, 1: 1}]}
+            param4 = {"class_weight": ["balanced", {0: 1.5, 1: 1}, {0: 2, 1: 1}]}
             self.phase("phase4", param4)
 
 class ExtraTreeTuning(RandomForestTuning):

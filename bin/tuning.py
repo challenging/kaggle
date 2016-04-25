@@ -27,7 +27,6 @@ from configuration import ModelConfParser
 @click.option("--nfold", default=5, help="the number of nfold")
 def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
     drop_fields = []
-    N = 650 - len(drop_fields)
 
     parser = ModelConfParser(conf)
     BASEPATH = parser.get_workspace()
@@ -41,7 +40,7 @@ def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
 
     filepath_training = "{}/input/train.csv".format(BASEPATH)
     filepath_testing = "{}/input/test.csv".format(BASEPATH)
-    filepath_cache_1 = "{}/input/{}_training_dataset.cache".format(BASEPATH, N)
+    filepath_cache_1 = "{}/input/train.pkl".format(BASEPATH)
     folder_ii = "{}/input/interaction_information/transform2=True_testing=-1_binsize={}".format(BASEPATH, binsize)
     filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_nfold={}_top={}_binsize={}_topfeature={}.pkl".format(BASEPATH, methodology, is_testing, nfold, top, binsize, top_feature)
     filepath_feature_importance = "{}/etc/feature_profile/transform2=True_binsize={}_top={}.pkl".format(BASEPATH, binsize, top)
