@@ -14,7 +14,7 @@ from keras.layers import Dense, Dropout, Activation, Merge
 from keras.optimizers import RMSprop
 from keras.callbacks import ModelCheckpoint
 
-from utils import log, DEBUG, INFO
+from utils import log, DEBUG, INFO, ERROR
 
 class KaggleCheckpoint(ModelCheckpoint):
     def __init__(self, filepath, save_best_only=True, training_set=(None, None), testing_set=(None, None), folder=None, cost_string="log_loss", verbose=1):
@@ -28,6 +28,9 @@ class KaggleCheckpoint(ModelCheckpoint):
             self.cost_function = cost_string
         elif cost_string == "auc":
             self.cost_function = roc_auc_score
+        else:
+            log("Found undefined cost function - {}".format(cost_string), ERROR)
+            raise NotImplementError
 
     def save_results(self, filepath, proba, is_testing=False):
         probas = [prob[0] if prob[0] else 0.0 for prob in proba]
@@ -86,23 +89,20 @@ def get_newest_model(folder):
     return newest
 
 def logistic_regression(model_folder, layer, dimension, number_of_feature,
-       learning_rate=1e-6, dropout_rate=0.5, nepoch=10, activate_function="sigmoid"):
+       cost="binary_crossentropy", learning_rate=1e-6, dropout_rate=0.5, nepoch=10, activation="tanh"):
 
     model = Sequential()
-    model.add(Dense(dimension, input_dim=number_of_feature, init="uniform"))
-    model.add(Activation(activate_function))
+    model.add(Dense(dimension, input_dim=number_of_feature, init="uniform", activation=activation))
     model.add(Dropout(dropout_rate))
 
     for idx in range(0, layer-2, 1):
-        model.add(Dense(dimension, input_dim=dimension, init="uniform"))
-        model.add(Activation(activate_function))
+        model.add(Dense(dimension, input_dim=dimension, init="uniform", activation=activation))
         model.add(Dropout(dropout_rate))
 
-    model.add(Dense(1, init="uniform"))
-    model.add(Activation("sigmoid"))
+    model.add(Dense(1, init="uniform", activation="sigmoid"))
 
     optimizer = RMSprop(lr=learning_rate, rho=0.9, epsilon=1e-06)
-    model.compile(loss="binary_crossentropy", optimizer=optimizer)
+    model.compile(loss=cost, optimizer=optimizer, metrics=['accuracy'])
 
     filepath_model = get_newest_model(model_folder)
     if filepath_model:
@@ -115,7 +115,7 @@ def logistic_regression(model_folder, layer, dimension, number_of_feature,
     return model
 
 def logistic_regression_2(model_folder, layer, dimension, input_dims,
-       learning_rate=1e-6, dropout_rate=0.5, nepoch=10, init="uniform", activation="tanh"):
+       cost="binary_crossentropy", learning_rate=1e-6, dropout_rate=0.5, nepoch=10, init="uniform", activation="tanh"):
 
     sources = []
     for input_dim in input_dims:
@@ -142,10 +142,10 @@ def logistic_regression_2(model_folder, layer, dimension, input_dims,
         model.add(Dense(dimension, input_dim=dimension, init=init, activation=activation))
         model.add(Dropout(dropout_rate))
 
-    model.add(Dense(1, init=init, activation=activation))
+    model.add(Dense(1, init=init, activation="softmax"))
 
     optimizer = RMSprop(lr=learning_rate, rho=0.9, epsilon=1e-06)
-    model.compile(loss="binary_crossentropy", optimizer=optimizer)
+    model.compile(loss=cost, optimizer=optimizer, metrics=['accuracy'])
 
     filepath_model = get_newest_model(model_folder)
     if filepath_model:

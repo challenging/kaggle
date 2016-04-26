@@ -249,11 +249,8 @@ def load_feature_importance(filepath_pkl, top=512):
 
     return columns
 
-def save_kaggle_submission(test_id, results, filepath, normalization=False):
-    if normalization:
-        results = (results - results.min()) / (results.max() - results.min())
-
-    pd.DataFrame({"ID": test_id, "PredictedProb": results}).to_csv(filepath, index=False)
+def save_kaggle_submission(results, filepath):
+    pd.DataFrame(results).to_csv(filepath, index=False)
 
 def save_cache(obj, filepath):
     parent_folder = os.path.dirname(filepath)
@@ -283,4 +280,4 @@ def load_cache(filepath):
     return obj
 
 if __name__ == "__main__":
-    load_feature_importance("/Users/RungChiChen/Documents/kaggle/Santander Customer Satisfaction/etc/feature_profile/transform2=True_binsize=4_top=500.pkl", 512)
+    load_feature_importance("/Users/RungChiChen/Documents/kaggle/Santander Customer Satisfaction/etc/feature_profile/transform2=True_binsize=4_top=500.pkl", 1024)

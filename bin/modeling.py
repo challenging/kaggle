@@ -58,6 +58,7 @@ def learning(conf, thread, is_feature_importance):
                 else:
                     breaking_layer = layer
                     break
+
             if breaking_layer == None:
                 df[";".join(layers)] = t
             else:
@@ -107,7 +108,6 @@ def learning(conf, thread, is_feature_importance):
             setting["input_dims"] = number_of_feature
             setting["callbacks"] = [checkpointer]
             setting["number_of_layer"] = setting.pop("layer_number")
-            setting["dimension"] = 2048#int(number_of_feature*0.5)
 
             del setting["n_jobs"]
 

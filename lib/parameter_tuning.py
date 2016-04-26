@@ -14,7 +14,7 @@ from sklearn.metrics import roc_auc_score, log_loss, make_scorer
 from sklearn.feature_selection import SelectFromModel
 
 from utils import log, INFO, WARN
-from load import load_data, data_transform_2, load_cache, save_cache, load_interaction_information, load_feature_importance
+from load import load_data, data_transform_2, load_cache, save_cache, load_interaction_information, load_feature_importance, save_kaggle_submission
 
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -44,11 +44,14 @@ class ParameterTuning(object):
 
         self.done = {}
 
-    def set_filepath(self, filepath):
+    def set_filepath(self, filepath, filepath_testing):
         self.filepath = filepath
+        self.filepath_testing = filepath_testing
 
-    def set_train(self, train):
+    def set_dataset(self, train, test_id, test_x):
         self.train = train
+        self.test_id = test_id
+        self.test_x = test_x
 
         predictors = [x for x in self.train.columns if x not in [self.target, self.data_id]]
         self.predictors = predictors
@@ -78,7 +81,7 @@ class ParameterTuning(object):
 
         return grid_model.best_score_, grid_model.best_params_, grid_model.grid_scores_
 
-    def improve(self, phase, cost, params, micro_tuning=False):
+    def improve(self, model, phase, cost, params, micro_tuning=False):
         old_cost = self.best_cost
 
         if self.compare(cost):
@@ -86,6 +89,11 @@ class ParameterTuning(object):
             for key, value in params.items():
                 setattr(self, key, value)
                 log("Set {} to be {}".format(key, getattr(self, key)))
+
+            filepath_testing = self.filepath_testing.replace("submission", phase)
+            log("Compile a submission results for kaggle in {}".format(filepath_testing), INFO)
+
+            self.submit(model, filepath_testing)
         else:
             if not micro_tuning:
                 log("Fail because of the {} of phase2-model is {}(< {}) so setting the params as default".format(self.cost, cost, old_cost), WARN)
@@ -104,7 +112,7 @@ class ParameterTuning(object):
         raise NotImeplementError
 
     def enable_feature_importance(self, filepath_pkl, top_feature=512):
-        self.predictors = load_feature_importance(filepath_pkl, top_feature)
+        self.predictors += load_feature_importance(filepath_pkl, top_feature)
         self.predictors = list(set(self.predictors))
 
     def phase(self, phase, params, is_micro_tuning=False):
@@ -119,7 +127,7 @@ class ParameterTuning(object):
             if infos:
                 best_cost, best_params, scores, gsearch1 = infos
 
-                self.improve(phase, best_cost, best_params)
+                self.improve(gsearch1, phase, best_cost, best_params)
         else:
             model = self.get_model_instance()
             log("The params are {}".format(model.get_params()), INFO)
@@ -136,7 +144,7 @@ class ParameterTuning(object):
 
             best_cost, best_params, scores = self.get_best_params(gsearch1, self.train[self.predictors], self.train[self.target])
             log("The {} of {}-model is {:.8f} based on {}".format(self.cost_function.__name__, phase, best_cost, best_params.keys()))
-            self.improve(phase, best_cost, best_params)
+            self.improve(gsearch1, phase, best_cost, best_params)
 
             self.done[phase] = best_cost, best_params, scores, gsearch1
 
@@ -152,7 +160,7 @@ class ParameterTuning(object):
                 infos = self.done[key]
                 if infos:
                     micro_cost, micro_params, micro_scores, gsearch2 = infos
-                    self.improve(key, micro_cost, micro_params, True)
+                    self.improve(gsearch2, key, micro_cost, micro_params, True)
             else:
                 advanced_params = {}
                 for name, value in best_params.items():
@@ -172,7 +180,7 @@ class ParameterTuning(object):
 
                     micro_cost, micro_params, micro_scores = self.get_best_params(gsearch2, self.train[self.predictors], self.train[self.target])
                     log("Finish the micro-tuning of {}, and then get best params is {}".format(phase, micro_params))
-                    self.improve(key, micro_cost, micro_params, True)
+                    self.improve(gsearch2, key, micro_cost, micro_params, True)
 
                     self.done[key] = micro_cost, micro_params, micro_scores, gsearch2
                 else:
@@ -186,9 +194,6 @@ class ParameterTuning(object):
         else:
             model = gsearch1
             a, b, c = best_cost, best_params, scores
-
-        #if model:
-        #    self.get_training_score(model)
 
         return a, b, c, model
 
@@ -206,6 +211,19 @@ class ParameterTuning(object):
 
     def process(self):
         raise NotImplementError
+
+    def submit(self, model, filepath_testing):
+        predicted_proba = None
+
+        if self.method == "classifier":
+            predicted_proba = model.predict_proba(self.test_x[self.predictors])[:,1]
+        elif self.method == "regressor":
+            predicted_proba = model.predict(self.test_x[self.predictors])
+        else:
+            raise NotImplementError
+
+        results = {"ID": self.test_id, "TARGET": predicted_proba}
+        save_kaggle_submission(results, filepath_testing)
 
 class RandomForestTuning(ParameterTuning):
     def __init__(self, target, data_id, method, n_estimator=200, cost="logloss", objective="entropy", cv=10, n_jobs=-1):

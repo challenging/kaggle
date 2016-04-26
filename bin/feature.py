@@ -67,7 +67,7 @@ def feature_engineer(conf, thread, feature_importance, interaction_information, 
         print "Data Distribution is ({}, {}), and then the number of feature is {}".format(np.sum(train_y==0), np.sum(train_y==1), len(names))
 
         fp = FeatureProfile()
-        fp.profile(train_x.values, train_y, names, folder_feature, top_feature)
+        fp.profile(train_x.values, train_y, names, folder_feature, int(min(512, len(names))))
 
     if interaction_information:
         log("Try to calculate the interaction information", INFO)
