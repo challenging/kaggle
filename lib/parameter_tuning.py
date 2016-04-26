@@ -48,8 +48,9 @@ class ParameterTuning(object):
         self.filepath = filepath
         self.filepath_testing = filepath_testing
 
-    def set_dataset(self, train, test_id, test_x):
+    def set_dataset(self, train, train_y, test_id, test_x):
         self.train = train
+        self.train_y = train_y
         self.test_id = test_id
         self.test_x = test_x
 
@@ -92,8 +93,11 @@ class ParameterTuning(object):
 
             filepath_testing = self.filepath_testing.replace("submission", phase)
             log("Compile a submission results for kaggle in {}".format(filepath_testing), INFO)
+            self.submit(model, filepath_testing, "testing")
 
-            self.submit(model, filepath_testing)
+            filepath_training = self.filepath_testing.replace("submission", "training_{}".format(phase))
+            log("Compile a training results for kaggle in {}".format(filepath_training), INFO)
+            self.submit(model, filepath_training, "training")
         else:
             if not micro_tuning:
                 log("Fail because of the {} of phase2-model is {}(< {}) so setting the params as default".format(self.cost, cost, old_cost), WARN)
@@ -112,7 +116,11 @@ class ParameterTuning(object):
         raise NotImeplementError
 
     def enable_feature_importance(self, filepath_pkl, top_feature=512):
-        self.predictors += load_feature_importance(filepath_pkl, top_feature)
+        if self.method == "classifier":
+            self.predictors += load_feature_importance(filepath_pkl, top_feature)
+        else:
+            self.predictors = load_feature_importance(filepath_pkl, top_feature)
+
         self.predictors = list(set(self.predictors))
 
     def phase(self, phase, params, is_micro_tuning=False):
@@ -126,7 +134,6 @@ class ParameterTuning(object):
             infos = self.done[phase]
             if infos:
                 best_cost, best_params, scores, gsearch1 = infos
-
                 self.improve(gsearch1, phase, best_cost, best_params)
         else:
             model = self.get_model_instance()
@@ -144,9 +151,9 @@ class ParameterTuning(object):
 
             best_cost, best_params, scores = self.get_best_params(gsearch1, self.train[self.predictors], self.train[self.target])
             log("The {} of {}-model is {:.8f} based on {}".format(self.cost_function.__name__, phase, best_cost, best_params.keys()))
-            self.improve(gsearch1, phase, best_cost, best_params)
 
             self.done[phase] = best_cost, best_params, scores, gsearch1
+            self.improve(gsearch1, phase, best_cost, best_params)
 
         gsearch2 = None
         micro_cost, micro_params, micro_scores = -np.inf, -np.inf, None
@@ -180,9 +187,9 @@ class ParameterTuning(object):
 
                     micro_cost, micro_params, micro_scores = self.get_best_params(gsearch2, self.train[self.predictors], self.train[self.target])
                     log("Finish the micro-tuning of {}, and then get best params is {}".format(phase, micro_params))
-                    self.improve(gsearch2, key, micro_cost, micro_params, True)
 
                     self.done[key] = micro_cost, micro_params, micro_scores, gsearch2
+                    self.improve(gsearch2, key, micro_cost, micro_params, True)
                 else:
                     log("Due to the empty advanced_params so skipping the micro-tunnung", WARN)
 
@@ -212,17 +219,28 @@ class ParameterTuning(object):
     def process(self):
         raise NotImplementError
 
-    def submit(self, model, filepath_testing):
-        predicted_proba = None
+    def submit(self, model, filepath_testing, mode="training"):
+        results, predicted_proba = None, None
 
-        if self.method == "classifier":
-            predicted_proba = model.predict_proba(self.test_x[self.predictors])[:,1]
-        elif self.method == "regressor":
-            predicted_proba = model.predict(self.test_x[self.predictors])
+        if mode == "training":
+            if self.method == "classifier":
+                predicted_proba = model.predict_proba(self.train[self.predictors])[:,1]
+            elif self.method == "regressor":
+                predicted_proba = model.predict(self.train[self.predictors])
+            else:
+                raise NotImplementError
+
+            results = {"Target": self.train_y, "Predicted_Proba": predicted_proba}
         else:
-            raise NotImplementError
+            if self.method == "classifier":
+                predicted_proba = model.predict_proba(self.test_x[self.predictors])[:,1]
+            elif self.method == "regressor":
+                predicted_proba = model.predict(self.test_x[self.predictors])
+            else:
+                raise NotImplementError
 
-        results = {"ID": self.test_id, "TARGET": predicted_proba}
+            results = {"ID": self.test_id, "TARGET": predicted_proba}
+
         save_kaggle_submission(results, filepath_testing)
 
 class RandomForestTuning(ParameterTuning):
@@ -265,18 +283,22 @@ class RandomForestTuning(ParameterTuning):
                                          n_jobs=-1)
 
     def process(self):
-        self.phase("phase1", {})
+        model = None
+
+        _, _, _, model = self.phase("phase1", {})
 
         size_feature = len(self.predictors)
         param2 = {'max_depth': range(6, 11, 2), 'max_features': [ratio for ratio in [0.75, 0.1, 0.25, np.sqrt(size_feature)/size_feature]]}
-        self.phase("phase2", param2, True)
+        _, _, _, model = self.phase("phase2", param2, True)
 
         param3 = {"min_samples_leaf": range(2, 5, 2), "min_samples_split": range(4, 9, 2)}
-        self.phase("phase3", param3, True)
+        _, _, _, model = self.phase("phase3", param3, True)
 
         if self.method == "classifier":
             param4 = {"class_weight": ["balanced", {0: 1.5, 1: 1}, {0: 2, 1: 1}]}
-            self.phase("phase4", param4)
+            _, _, _, model = self.phase("phase4", param4)
+
+        log("The best params are {}".format(model.get_params()), INFO)
 
 class ExtraTreeTuning(RandomForestTuning):
     def get_model_instance(self):

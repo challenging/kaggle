@@ -102,7 +102,7 @@ def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
         log("Not support this algorithm - {}".format(methodology), ERROR)
         sys.exit(1)
 
-    algorithm.set_dataset(train_x, test_id, test_x)
+    algorithm.set_dataset(train_x, train_y, test_id, test_x)
     if is_feature_importance:
         algorithm.enable_feature_importance(filepath_feature_importance, top_feature)
 
