@@ -301,7 +301,6 @@ class RandomForestTuning(ParameterTuning):
         log("The best params are {}".format(model.get_params()), INFO)
 
         # Use CalibratedClassifierCV
-        clf = 
 
 class ExtraTreeTuning(RandomForestTuning):
     def get_model_instance(self):
