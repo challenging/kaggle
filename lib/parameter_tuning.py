@@ -116,10 +116,10 @@ class ParameterTuning(object):
         raise NotImeplementError
 
     def enable_feature_importance(self, filepath_pkl, top_feature=512):
-        if self.method == "classifier":
-            self.predictors += load_feature_importance(filepath_pkl, top_feature)
-        else:
-            self.predictors = load_feature_importance(filepath_pkl, top_feature)
+        #if self.method == "classifier":
+        #    self.predictors += load_feature_importance(filepath_pkl, top_feature)
+        #else:
+        self.predictors = load_feature_importance(filepath_pkl, top_feature)
 
         self.predictors = list(set(self.predictors))
 
@@ -299,6 +299,9 @@ class RandomForestTuning(ParameterTuning):
             _, _, _, model = self.phase("phase4", param4)
 
         log("The best params are {}".format(model.get_params()), INFO)
+
+        # Use CalibratedClassifierCV
+        clf = 
 
 class ExtraTreeTuning(RandomForestTuning):
     def get_model_instance(self):
