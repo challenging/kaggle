@@ -307,9 +307,8 @@ class RandomForestTuning(ParameterTuning):
             clf.fit(self.train[self.predictors], self.train_y)
 
             filepath_testing = self.filepath_testing.replace("submission", "calibrated")
-            predicted_proba = clf.predict_proba(self.test_x[self.predictors])[:,1]
-
-            results = {"ID": self.test_id, "TARGET": predicted_proba}
+            log("Save calibrated results in {}".format(filepath_testing), INFO)
+            self.submit(clf, filepath_testing, "testing")
 
 class ExtraTreeTuning(RandomForestTuning):
     def get_model_instance(self):
@@ -408,3 +407,11 @@ class XGBoostingTuning(ParameterTuning):
 
         param5 = {'reg_alpha':[1e-5, 1e-2, 0.1, 1.0]}
         self.phase("phase5", param5, True)
+
+        if self.method == "classifier":
+            clf = CalibratedClassifierCV(base_estimator=self.get_model_instance(), cv=10)
+            clf.fit(self.train[self.predictors], self.train_y)
+
+            filepath_testing = self.filepath_testing.replace("submission", "calibrated")
+            log("Save calibrated results in {}".format(filepath_testing), INFO)
+            self.submit(clf, filepath_testing, "testing")

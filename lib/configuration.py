@@ -12,6 +12,9 @@ class ModelConfParser(object):
     def get_workspace(self):
         return self.config.get("MAIN", "workspace")
 
+    def get_objective(self):
+        return self.config.get("MAIN", "objective")
+
     def get_cost(self):
         return self.config.get("MAIN", "cost")
 

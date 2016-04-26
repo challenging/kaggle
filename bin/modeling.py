@@ -28,12 +28,14 @@ BASEPATH = os.path.dirname(os.path.abspath(__file__))
 @click.option("--conf", required=True, help="Configureation File to this model")
 @click.option("--thread", default=1, help="Number of thread")
 @click.option("--is-feature-importance", is_flag=True, help="Turn on the feature importance")
-def learning(conf, thread, is_feature_importance):
+@click.option("--is-testing", is_flag=True, help="Turn on the testing mode")
+def learning(conf, thread, is_feature_importance, is_testing):
     drop_fields = []
 
     parser = ModelConfParser(conf)
 
     BASEPATH = parser.get_workspace()
+    objective = parser.get_objective()
     binsize, top = parser.get_interaction_information()
     cost = parser.get_cost()
     nfold = parser.get_nfold()
@@ -46,6 +48,9 @@ def learning(conf, thread, is_feature_importance):
     filepath_feature_importance = "{}/etc/feature_profile/transform2=True_binsize={}_top={}.pkl".format(BASEPATH, binsize, top)
 
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
+    if is_testing:
+        train_x = train_x.head(1000)
+        train_y = train_y.head(1000)
 
     columns = train_x.columns
     for layers, value in load_interaction_information(folder_ii, threshold=top):
@@ -128,8 +133,8 @@ def learning(conf, thread, is_feature_importance):
 
         last_model.append((method, setting))
 
-    model_folder = "{}/prediction_model/ensemble_learning/is_feature_importance={}_nfold={}_layer1={}_layer2={}_feature={}_binsize={}_top={}".format(\
-                        BASEPATH, is_feature_importance, nfold, len(layer1_models), len(layer2_models), number_of_feature, binsize, top)
+    model_folder = "{}/prediction_model/ensemble_learning/is_testing={}_is_feature_importance={}_nfold={}_layer1={}_layer2={}_feature={}_binsize={}_top={}".format(\
+                        BASEPATH, is_testing, is_feature_importance, nfold, len(layer1_models), len(layer2_models), number_of_feature, binsize, top)
     if not os.path.exists(model_folder):
         os.makedirs(model_folder)
 
@@ -139,14 +144,18 @@ def learning(conf, thread, is_feature_importance):
     # Phase 1. --> Model Training
     filepath_queue = "{}/layer1_queue.pkl".format(model_folder)
     filepath_nfold = "{}/layer1_nfold.pkl".format(model_folder)
-    layer2_train_x, layer2_test_x, learning_loss = layer_model(model_folder, train_X, train_Y, test_X, layer1_models,
+    layer2_train_x, layer2_test_x, learning_loss = layer_model(\
+                             objective,
+                             model_folder, train_X, train_Y, test_X, layer1_models,
                              filepath_queue, filepath_nfold,
                              n_folds=nfold, cost_string=cost, number_of_thread=thread)
 
     # Phase 2. --> Model Training
     filepath_queue = "{}/layer2_queue.pkl".format(model_folder)
     filepath_nfold = "{}/layer2_nfold.pkl".format(model_folder)
-    layer3_train_x, layer3_test_x, learning_loss = layer_model(model_folder, layer2_train_x, train_Y, layer2_test_x, layer2_models,
+    layer3_train_x, layer3_test_x, learning_loss = layer_model(\
+                             objective,
+                             model_folder, layer2_train_x, train_Y, layer2_test_x, layer2_models,
                              filepath_queue, filepath_nfold,
                              n_folds=nfold, cost_string=cost, number_of_thread=thread)
 

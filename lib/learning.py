@@ -39,7 +39,7 @@ BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
 class LearningFactory(object):
     @staticmethod
-    def get_model(pair, cost_function):
+    def get_model(objective, pair, cost_function):
         model = None
         method, setting = pair
 
@@ -53,21 +53,21 @@ class LearningFactory(object):
                 if "cost" in setting:
                     del setting["cost"]
 
-                model = Learning(method, LogisticRegression(**setting), cost_function, extend_class_proba)
+                model = Learning(objective, method, LogisticRegression(**setting), cost_function, extend_class_proba)
             elif method.find("linear_regressor") > -1:
-                model = Learning(method, LinearRegression(), cost_function, extend_class_proba)
+                model = Learning(objective, method, LinearRegression(), cost_function, extend_class_proba)
             elif method.find("regressor") > -1:
                 if method.find("extratree") > -1:
-                    model = Learning(method, ExtraTreesRegressor(**setting), cost_function, extend_class_proba)
+                    model = Learning(objective, method, ExtraTreesRegressor(**setting), cost_function, extend_class_proba)
                 elif method.find("randomforest") > -1:
-                    model = Learning(method, RandomForestRegressor(**setting), cost_function, extend_class_proba)
+                    model = Learning(objective, method, RandomForestRegressor(**setting), cost_function, extend_class_proba)
                 elif method.find("gradientboosting") > -1:
-                    model = Learning(method, GradientBoostingRegressor(**setting), cost_function, extend_class_proba)
+                    model = Learning(objective, method, GradientBoostingRegressor(**setting), cost_function, extend_class_proba)
                 elif method.find("xgboosting") > -1:
                     if "n_jobs" in setting:
                         log("Delete n_jobs={} from the setting for {}".format(setting.pop("n_jobs"), method), INFO)
 
-                    model = Learning(method, xgb.XGBRegressor(**setting), cost_function, extend_class_proba)
+                    model = Learning(objective, method, xgb.XGBRegressor(**setting), cost_function, extend_class_proba)
                 else:
                     log("1. Can't create model based on {}".format(method), ERROR)
             elif method.find("classifier") > -1:
@@ -76,25 +76,25 @@ class LearningFactory(object):
                         if key.lower() not in ["base_estimator", "method", "cv"]:
                             del setting[key]
 
-                    model = Learning(method, CalibratedClassifierCV(**setting), cost_function, extend_class_proba)
+                    model = Learning(objective, method, CalibratedClassifierCV(**setting), cost_function, extend_class_proba)
                 elif method.find("extratree") > -1:
-                    model = Learning(method, ExtraTreesClassifier(**setting), cost_function, extend_class_proba)
+                    model = Learning(objective, method, ExtraTreesClassifier(**setting), cost_function, extend_class_proba)
                 elif method.find("randomforest") > -1:
-                    model = Learning(method, RandomForestClassifier(**setting), cost_function, extend_class_proba)
+                    model = Learning(objective, method, RandomForestClassifier(**setting), cost_function, extend_class_proba)
                 elif method.find("gradientboosting") > -1:
-                    model = Learning(method, GradientBoostingClassifier(**setting), cost_function, extend_class_proba)
+                    model = Learning(objective, method, GradientBoostingClassifier(**setting), cost_function, extend_class_proba)
                 elif method.find("xgboosting") > -1:
                     if "n_jobs" in setting:
                         log("Delete n_jobs={} from the setting for {}".format(setting.pop("n_jobs"), method), INFO)
 
-                    model = Learning(method, xgb.XGBClassifier(**setting), cost_function, extend_class_proba)
+                    model = Learning(objective, method, xgb.XGBClassifier(**setting), cost_function, extend_class_proba)
                 else:
                    log("2. Can't create model based on {}".format(method), ERROR)
             else:
                 log("3. Can't create model based on {}".format(method), ERROR)
         elif method.find("cluster") > -1:
             if method.find("kmeans") > -1:
-                model = Learning(method, KMeans(**setting))
+                model = Learning(objective, method, KMeans(**setting))
             else:
                 log("4. Can't create model based on {}".format(method), ERROR)
         elif method.find("deep") > -1:
@@ -107,7 +107,7 @@ class LearningFactory(object):
 
             log("The folder of deep learning is in {}".format(setting["folder"]), INFO)
 
-            model = Learning(method, None, cost_function)
+            model = Learning(objective, method, None, cost_function)
             model.init_deep_params(**setting)
         elif method.find("customized") > -1:
             log("1. {}".format(setting), INFO)
@@ -121,9 +121,9 @@ class LearningFactory(object):
             setting["cost_func"] = cost_function
 
             if method.find("class") > -1:
-                model = Learning(method, CustomizedClassEstimator(**setting), cost_function, extend_class_proba)
+                model = Learning(objective, method, CustomizedClassEstimator(**setting), cost_function, extend_class_proba)
             elif method.find("proba") > -1:
-                model = Learning(method, CustomizedProbaEstimator(**setting), cost_function, extend_class_proba)
+                model = Learning(objective, method, CustomizedProbaEstimator(**setting), cost_function, extend_class_proba)
             else:
                 log("5. Can't create model based on {}".format(method), ERROR)
         else:
@@ -132,7 +132,8 @@ class LearningFactory(object):
         return model
 
 class Learning(object):
-    def __init__(self, name, model, cost_function=log_loss, extend_class_proba=False):
+    def __init__(self, objective, name, model, cost_function=log_loss, extend_class_proba=False):
+        self.objective = objective
         self.name = name.lower()
         self.model = model
 
@@ -263,16 +264,28 @@ class Learning(object):
         if self.is_shallow_learning():
             if self.is_regressor():
                 if self.name.find("logistic_regressor") > -1:
-                    return self.model.predict_proba(data)[:, 1]
+                    if self.objective == "binary_classification":
+                        return self.model.predict_proba(data)[:, 1]
+                    else:
+                        return self.model.predict_proba(data)
                 else:
                     return self.model.predict(data)
             elif self.is_classifier():
                 # Only care the probability of class '1'
-                return self.model.predict_proba(data)[:,1]
+                if self.objective == "binary_classification":
+                    return self.model.predict_proba(data)[:, 1]
+                else:
+                    return self.model.predict_proba(data)
             elif self.is_svm():
-                return self.model.predict_proba(data)[:,1]
+                if self.objective == "binary_classification":
+                    return self.model.predict_proba(data)[:, 1]
+                else:
+                    return self.model.predict_proba(data)
         elif self.is_customized():
-            return self.model.predict_proba(data)[:,1]
+            if self.objective == "binary_classification":
+                return self.model.predict_proba(data)[:, 1]
+            else:
+                return self.model.predict_proba(data)
         elif self.is_cluster():
             return self.model.predict(data)
         elif self.is_deep_learning():
@@ -328,8 +341,8 @@ class LearningQueue(object):
         self.layer_two_testing_dataset = layer_two_testing_dataset
         self.learning_cost = learning_cost
 
-    def put(self, folder, nfold, model_idx, dataset_idxs, model):
-        self.learning_queue.put((folder, nfold, model_idx, dataset_idxs, model))
+    def put(self, objective, folder, nfold, model_idx, dataset_idxs, model):
+        self.learning_queue.put((objective, folder, nfold, model_idx, dataset_idxs, model))
 
     def starts(self, cost_func, number_of_thread=1):
         for idx in range(0, number_of_thread):
@@ -396,7 +409,7 @@ class LearningThread(threading.Thread):
         previous_models = {}
 
         while True:
-            (model_folder, nfold, model_idx, (train_x_idx, test_x_idx), p) = self.obj.learning_queue.get()
+            (objective, model_folder, nfold, model_idx, (train_x_idx, test_x_idx), p) = self.obj.learning_queue.get()
             timestamp_start = time.time()
             pair = copy.deepcopy(p)
 
@@ -428,7 +441,7 @@ class LearningThread(threading.Thread):
             filepath_training = "{}/{}_{}.pkl".format(model_folder, model_name, nfold)
             filepath_testing = "{}/{}_{}.pkl".format(model_folder, model_name, nfold)
 
-            model = LearningFactory.get_model(pair, self.cost_func)
+            model = LearningFactory.get_model(objective, pair, self.cost_func)
             if model == None or model.model == None:
                 log("Can't init this model({})".format(model_name), WARN)
             elif model.is_cluster():
