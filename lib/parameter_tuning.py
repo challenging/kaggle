@@ -9,6 +9,7 @@ import xgboost as xgb
 
 from sklearn import cross_validation, metrics   #Additional scklearn functions
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, ExtraTreesClassifier, ExtraTreesRegressor
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.grid_search import GridSearchCV   #Perforing grid search
 from sklearn.metrics import roc_auc_score, log_loss, make_scorer
 from sklearn.feature_selection import SelectFromModel
@@ -116,10 +117,10 @@ class ParameterTuning(object):
         raise NotImeplementError
 
     def enable_feature_importance(self, filepath_pkl, top_feature=512):
-        #if self.method == "classifier":
-        #    self.predictors += load_feature_importance(filepath_pkl, top_feature)
-        #else:
-        self.predictors = load_feature_importance(filepath_pkl, top_feature)
+        if self.method == "classifier":
+            self.predictors += load_feature_importance(filepath_pkl, top_feature)
+        else:
+            self.predictors = load_feature_importance(filepath_pkl, top_feature)
 
         self.predictors = list(set(self.predictors))
 
@@ -301,6 +302,14 @@ class RandomForestTuning(ParameterTuning):
         log("The best params are {}".format(model.get_params()), INFO)
 
         # Use CalibratedClassifierCV
+        if self.method == "classifier":
+            clf = CalibratedClassifierCV(base_estimator=self.get_model_instance(), cv=10)
+            clf.fit(self.train[self.predictors], self.train_y)
+
+            filepath_testing = self.filepath_testing.replace("submission", "calibrated")
+            predicted_proba = clf.predict_proba(self.test_x[self.predictors])[:,1]
+
+            results = {"ID": self.test_id, "TARGET": predicted_proba}
 
 class ExtraTreeTuning(RandomForestTuning):
     def get_model_instance(self):
