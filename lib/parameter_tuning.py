@@ -175,7 +175,7 @@ class ParameterTuning(object):
                     if isinstance(value, int):
                         advanced_params[name] = [i for i in range(max(0, value-1), value+1) if i != value]
                     elif value != 0 and isinstance(value, float):
-                        if type(self).__name__.lower().find("xgb") != -1 and name == "gamma":
+                        if type(self).__name__.lower().find("xgb") != -1 and name in ["gamma", "subsample", "colsample_bytree"]:
                             advanced_params[name] = [min(value*i, 1.0) for i in [0.25, 0.75, 1.25]]
                         else:
                             advanced_params[name] = [value*i for i in [0.25, 0.75, 1.25]]
