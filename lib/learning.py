@@ -43,6 +43,15 @@ class LearningFactory(object):
         model = None
         method, setting = pair
 
+        if isinstance(cost_function, str):
+            if cost_function == "log_loss":
+                cost_function = log_loss
+            elif cost_function == "auc":
+                cost_function = roc_auc_score
+            else:
+                log("Wrong cost_function - {}".format(cost_function), ERROR)
+                sys.exit(100)
+
         log("Try to create model based on {}".format(method), INFO)
         if method.find("shallow") > -1:
             if method.find("logistic_regressor") > -1:
@@ -147,7 +156,8 @@ class Learning(object):
         self.nepoch = nepoch
 
         self.callbacks = callbacks
-        self.callbacks[-1].folder = folder
+        if self.callbacks:
+            self.callbacks[-1].folder = folder
 
         self.class_weight = class_weight
         self.validation_split = validation_split

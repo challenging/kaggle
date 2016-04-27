@@ -10,7 +10,6 @@ import os
 import sys
 import click
 import shutil
-import ConfigParser
 
 import numpy as np
 
@@ -115,8 +114,6 @@ def learning(conf, thread, is_feature_importance, is_testing):
                 setting["input_dims"] = number_of_feature
                 setting["callbacks"] = [checkpointer]
                 setting["number_of_layer"] = setting.pop("layer_number")
-
-                del setting["n_jobs"]
 
             layer_models.append((method, setting))
             log("Get the configuration of {} from {}".format(method, conf), INFO)

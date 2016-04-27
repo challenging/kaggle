@@ -66,9 +66,10 @@ class ModelConfParser(object):
                 except:
                     d[option.lower()] = v
 
-        d.setdefault("n_jobs", self.get_n_jobs())
-
         method = d.pop("method")
+
+        if method.find("deep") == -1:
+            d.setdefault("n_jobs", self.get_n_jobs())
 
         if "kernal" in d:
             d["method"] = d.pop("kernal")
