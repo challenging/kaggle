@@ -118,7 +118,7 @@ class ParameterTuning(object):
 
     def enable_feature_importance(self, filepath_pkl, top_feature=512):
         if self.method == "classifier":
-            self.predictors += load_feature_importance(filepath_pkl, top_feature)
+            self.predictors = load_feature_importance(filepath_pkl, top_feature)
         else:
             self.predictors = load_feature_importance(filepath_pkl, top_feature)
 
