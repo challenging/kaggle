@@ -175,7 +175,10 @@ class ParameterTuning(object):
                     if isinstance(value, int):
                         advanced_params[name] = [i for i in range(max(0, value-1), value+1) if i != value]
                     elif value != 0 and isinstance(value, float):
-                        advanced_params[name] = [value*i for i in [0.25, 0.75, 1.25]]
+                        if type(self).__name.lower().find("xgb") and name == "gamma":
+                            advanced_params[name] = [min(value*i, 1.0) for i in [0.25, 0.75, 1.25]]
+                        else:
+                            advanced_params[name] = [value*i for i in [0.25, 0.75, 1.25]]
 
                 if advanced_params:
                     gsearch2 = GridSearchCV(estimator=self.get_model_instance(),
