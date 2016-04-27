@@ -17,12 +17,13 @@ from keras.callbacks import ModelCheckpoint
 from utils import log, DEBUG, INFO, ERROR
 
 class KaggleCheckpoint(ModelCheckpoint):
-    def __init__(self, filepath, save_best_only=True, training_set=(None, None), testing_set=(None, None), folder=None, cost_string="log_loss", verbose=1):
+    def __init__(self, filepath, save_best_only=True, training_set=(None, None), testing_set=(None, None), folder=None, cost_string="log_loss", save_training_dataset=False, verbose=1):
         ModelCheckpoint.__init__(self, filepath=filepath, save_best_only=save_best_only, verbose=1)
 
         self.training_x, self.training_y = training_set
         self.testing_x, self.testing_id, = testing_set
         self.folder = folder
+        self.save_training_dataset = save_training_dataset
 
         if cost_string == "log_loss":
             self.cost_function = cost_string
@@ -59,7 +60,7 @@ class KaggleCheckpoint(ModelCheckpoint):
                     self.model.save_weights(filepath, overwrite=True)
 
                     # Save the prediction results for testing set
-                    if self.folder:
+                    if self.save_training_dataset and self.folder:
                         # Save the training results
                         proba_training = self.model.predict_proba(self.training_x)
 

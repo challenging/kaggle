@@ -96,7 +96,7 @@ def learning(conf, thread, is_feature_importance, is_testing):
                                     testing_set=(testing_dataset, test_id),
                                     folder=None,
                                     cost_string=cost,
-                                    verbose=0, save_best_only=True)
+                                    verbose=0, save_best_only=True, save_training_dataset=False)
 
     # Init the parameters of cluster
     for model_section in parser.get_layer_models(1):

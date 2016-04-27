@@ -217,7 +217,7 @@ class ParameterTuning(object):
         else:
             log("???? {}".format(self.method))
 
-    def process(self):
+    def process(self, method_calibation="sigmoid"):
         raise NotImplementError
 
     def submit(self, model, filepath_testing, mode="training"):
@@ -283,7 +283,7 @@ class RandomForestTuning(ParameterTuning):
                                          min_samples_leaf=min_samples_leaf,
                                          n_jobs=-1)
 
-    def process(self):
+    def process(self, method_calibation="sigmoid"):
         model = None
 
         _, _, _, model = self.phase("phase1", {})
@@ -303,10 +303,10 @@ class RandomForestTuning(ParameterTuning):
 
         # Use CalibratedClassifierCV
         if self.method == "classifier":
-            clf = CalibratedClassifierCV(base_estimator=self.get_model_instance(), cv=10)
+            clf = CalibratedClassifierCV(base_estimator=self.get_model_instance(), cv=5, method=method_calibation)
             clf.fit(self.train[self.predictors], self.train_y)
 
-            filepath_testing = self.filepath_testing.replace("submission", "calibrated")
+            filepath_testing = self.filepath_testing.replace("submission", "calibrated={}".format(method_calibation))
             log("Save calibrated results in {}".format(filepath_testing), INFO)
             self.submit(clf, filepath_testing, "testing")
 
@@ -393,7 +393,7 @@ class XGBoostingTuning(ParameterTuning):
                                     scale_pos_weight=1,
                                     seed=self.random_state)
 
-    def process(self):
+    def process(self, method_calibation="sigmoid"):
         self.phase("phase1", {})
 
         param2 = {'max_depth':range(7, 14, 2), 'min_child_weight':range(1, 4, 2)}
@@ -409,9 +409,9 @@ class XGBoostingTuning(ParameterTuning):
         self.phase("phase5", param5, True)
 
         if self.method == "classifier":
-            clf = CalibratedClassifierCV(base_estimator=self.get_model_instance(), cv=10)
+            clf = CalibratedClassifierCV(base_estimator=self.get_model_instance(), cv=5, method=method_calibation)
             clf.fit(self.train[self.predictors], self.train_y)
 
-            filepath_testing = self.filepath_testing.replace("submission", "calibrated")
+            filepath_testing = self.filepath_testing.replace("submission", "calibrated={}".format(method_calibation))
             log("Save calibrated results in {}".format(filepath_testing), INFO)
             self.submit(clf, filepath_testing, "testing")
