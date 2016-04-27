@@ -109,7 +109,7 @@ def learning(conf, thread, is_feature_importance, is_testing):
                 else:
                     try:
                         setting["class_weight"] = {0: float(setting["class_weight"]), 1: 1}
-                    except as e:
+                    except:
                         setting["class_weight"] = "balanced"
 
             if method.find("deep") > -1:
