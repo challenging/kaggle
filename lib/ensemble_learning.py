@@ -77,17 +77,17 @@ def start_learning(objective, model_folder, train_x, train_y, test_x, models, n_
                 log("fold-{:02d} data to '{}' model is done".format(nfold, model_name))
             else:
                 if model_name.find("deep") == -1:
-                    learning_queue.put(objective, model_folder, nfold, model_idx, (train, test), m)
+                    learning_queue.put(nfold, model_idx, (train, test), m)
                 else:
                     if nfold == 0:
                         idxs = [idx for idx in range(0, len(train_x))]
-                        learning_queue.put(objective, model_folder, nfold, model_idx, (idxs, idxs), m)
+                        learning_queue.put(nfold, model_idx, (idxs, idxs), m)
                     else:
                         continue
 
                 log("Put fold-{:02d} data into this '{}' model".format(nfold, model_name))
 
-    learning_queue.starts(cost_func, number_of_thread=number_of_thread)
+    learning_queue.starts(models, objective, model_folder, cost_func, number_of_thread=number_of_thread)
 
     layer_two_testing_dataset = np.zeros((test_x.shape[0], len(models)))
     for idx in range(0, len(learning_queue.layer_two_testing_dataset)):
@@ -114,7 +114,7 @@ def layer_model(objective, model_folder, train_x, train_y, test_x, models,
 
     return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_queue.learning_cost
 
-def final_model(pair, train_x, train_y, test_x, cost_string="log_loss"):
+def final_model(objective, pair, train_x, train_y, test_x, cost_string="log_loss"):
     log("The phase 3 starts...", INFO)
 
     cost_function = None
@@ -126,7 +126,7 @@ def final_model(pair, train_x, train_y, test_x, cost_string="log_loss"):
         log("Please set the cost function", ERROR)
         sys.exit(1)
 
-    model = LearningFactory.get_model(pair)
+    model = LearningFactory.get_model(objective, pair, cost_function)
     model.train(train_x, train_y)
 
     log("The weights of {} are {}".format(model.name, model.coef()), INFO)

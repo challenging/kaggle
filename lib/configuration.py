@@ -9,6 +9,8 @@ class ModelConfParser(object):
         self.config = ConfigParser.RawConfigParser()
         self.config.read(filepath)
 
+        self.models = {}
+
     def get_workspace(self):
         return self.config.get("MAIN", "workspace")
 
@@ -71,6 +73,12 @@ class ModelConfParser(object):
         if "kernal" in d:
             d["method"] = d.pop("kernal")
 
+        if "model_id" in d:
+            self.models[d.pop("model_id")] = (method, d)
+
+        if "dependency_model_id" in d:
+            d["dependency"] = self.models[d.pop("dependency_model_id")]
+
         return method, d
 
     def get_layer_models(self, layer_number):
@@ -79,7 +87,7 @@ class ModelConfParser(object):
                 yield section
 
 if __name__ == "__main__":
-    parser = ModelConfParser("../etc/conf/BNP_model.cfg")
+    parser = ModelConfParser("../etc/conf/Santander_testing.cfg")
     for model_section in parser.get_layer_models(1):
         cfg = parser.get_model_setting(model_section)
         print cfg

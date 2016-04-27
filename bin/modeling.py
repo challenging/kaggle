@@ -9,6 +9,7 @@
 import os
 import sys
 import click
+import shutil
 import ConfigParser
 
 import numpy as np
@@ -99,34 +100,26 @@ def learning(conf, thread, is_feature_importance, is_testing):
                                     verbose=0, save_best_only=True, save_training_dataset=False)
 
     # Init the parameters of cluster
-    for model_section in parser.get_layer_models(1):
-        method, setting = parser.get_model_setting(model_section)
+    for idx, layer_models in enumerate([layer1_models, layer2_models]):
+        for model_section in parser.get_layer_models(1):
+            method, setting = parser.get_model_setting(model_section)
 
-        if "class_weight" in setting:
-            if isinstance(setting["class_weight"], int) or isinstance(setting["class_weight"], float):
-                setting["class_weight"] = {0: setting["class_weight"], 1: 1}
-            else:
-                setting["class_weight"] = "balanced"
+            if "class_weight" in setting:
+                if isinstance(setting["class_weight"], int) or isinstance(setting["class_weight"], float):
+                    setting["class_weight"] = {0: setting["class_weight"], 1: 1}
+                else:
+                    setting["class_weight"] = "balanced"
 
-        if method.find("deep") > -1:
-            setting["folder"] = None
-            setting["input_dims"] = number_of_feature
-            setting["callbacks"] = [checkpointer]
-            setting["number_of_layer"] = setting.pop("layer_number")
+            if method.find("deep") > -1:
+                setting["folder"] = None
+                setting["input_dims"] = number_of_feature
+                setting["callbacks"] = [checkpointer]
+                setting["number_of_layer"] = setting.pop("layer_number")
 
-            del setting["n_jobs"]
+                del setting["n_jobs"]
 
-        layer1_models.append((method, setting))
-        log("Get the configuration of {} from {}".format(method, conf), INFO)
-
-    for model_section in parser.get_layer_models(2):
-        method, setting = parser.get_model_setting(model_section)
-
-        setting["cost"] = parser.get_cost()
-
-        log(setting)
-
-        layer2_models.append((method, setting))
+            layer_models.append((method, setting))
+            log("Get the configuration of {} from {}".format(method, conf), INFO)
 
     for model_section in parser.get_layer_models(3):
         method, setting = parser.get_model_setting(model_section)
@@ -135,6 +128,11 @@ def learning(conf, thread, is_feature_importance, is_testing):
 
     model_folder = "{}/prediction_model/ensemble_learning/is_testing={}_is_feature_importance={}_nfold={}_layer1={}_layer2={}_feature={}_binsize={}_top={}".format(\
                         BASEPATH, is_testing, is_feature_importance, nfold, len(layer1_models), len(layer2_models), number_of_feature, binsize, top)
+
+    if is_testing:
+        log("Due to the testing mode, remove the {} firstly".format(model_folder), INFO)
+        shutil.rmtree(model_folder)
+
     if not os.path.exists(model_folder):
         os.makedirs(model_folder)
 
@@ -168,7 +166,7 @@ def learning(conf, thread, is_feature_importance, is_testing):
     store_layer_output([m[0] for m in layer1_models+layer2_models], testing_dataset_proba, filepath_testing, optional=testing_targets)
 
     # Phase 3. --> Model Training
-    submission_results = final_model(last_model[0], layer3_train_x, train_Y, layer3_test_x, cost_string=cost)
+    submission_results = final_model(objective, last_model[0], layer3_train_x, train_Y, layer3_test_x, cost_string=cost)
 
     '''
     # Save the cost
