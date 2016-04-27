@@ -103,7 +103,7 @@ class LearningFactory(object):
             else:
                 log("4. Can't create model based on {}".format(method), ERROR)
         elif method.find("deep") > -1:
-            setting["folder"] = "{}/nn_layer={}_neurno={}_nfold={}_class_weight={}".format(setting["folder"], setting["number_of_layer"], setting["dimension"], setting["nfold"]. setting["class_weight"]["0"])
+            setting["folder"] = "{}/nn_layer={}_neurno={}_nfold={}_class_weight={}".format(setting["folder"], setting["number_of_layer"], setting["dimension"], setting["nfold"], setting["class_weight"]["0"])
             if not os.path.isdir(setting["folder"]):
                 try:
                     os.makedirs(setting["folder"])
