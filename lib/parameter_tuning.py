@@ -304,10 +304,10 @@ class RandomForestTuning(ParameterTuning):
         # Use CalibratedClassifierCV
         if self.method == "classifier":
             for method_calibration in ["sigmoid", "isotonic"]:
-                clf = CalibratedClassifierCV(base_estimator=self.get_model_instance(), cv=5, method=method_calibation)
+                clf = CalibratedClassifierCV(base_estimator=self.get_model_instance(), cv=5, method=method_calibration)
                 clf.fit(self.train[self.predictors], self.train_y)
 
-                filepath_testing = self.filepath_testing.replace("submission", "calibrated={}".format(method_calibation))
+                filepath_testing = self.filepath_testing.replace("submission", "calibrated={}".format(method_calibration))
                 log("Save calibrated results in {}".format(filepath_testing), INFO)
                 self.submit(clf, filepath_testing, "testing")
 
@@ -410,10 +410,10 @@ class XGBoostingTuning(ParameterTuning):
         self.phase("phase5", param5, True)
 
         if self.method == "classifier":
-            for method_calibation in ["sigmoid", "isotonic"]:
-                clf = CalibratedClassifierCV(base_estimator=self.get_model_instance(), cv=5, method=method_calibation)
+            for method_calibration in ["sigmoid", "isotonic"]:
+                clf = CalibratedClassifierCV(base_estimator=self.get_model_instance(), cv=5, method=method_calibration)
                 clf.fit(self.train[self.predictors], self.train_y)
 
-                filepath_testing = self.filepath_testing.replace("submission", "calibrated={}".format(method_calibation))
+                filepath_testing = self.filepath_testing.replace("submission", "calibrated={}".format(method_calibration))
                 log("Save calibrated results in {}".format(filepath_testing), INFO)
                 self.submit(clf, filepath_testing, "testing")
