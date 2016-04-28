@@ -338,9 +338,9 @@ class LearningQueue(object):
     def put(self, nfold, model_idx, dataset_idxs, model):
         self.learning_queue.put((nfold, model_idx, dataset_idxs, model))
 
-    def starts(self, models, objective, model_folder, cost_func, number_of_thread=1):
+    def starts(self, models, objective, folder_model, folder_middle, cost_func, number_of_thread=1):
         for idx in range(0, number_of_thread):
-            worker = LearningThread(kwargs={"obj": self, "cost_func": cost_func, "models": models, "objective": objective, "model_folder": model_folder})
+            worker = LearningThread(kwargs={"obj": self, "cost_func": cost_func, "models": models, "objective": objective, "model_folder": folder_model, "folder_middle": folder_middle})
             worker.setDaemon(True)
             worker.start()
 
@@ -416,8 +416,8 @@ class LearningThread(threading.Thread):
             if "dependency" in model_setting:
                 model_setting["base_estimator"] = LearningFactory.get_model(self.objective, model_setting.pop("dependency"), self.cost_func).model
 
-            filepath_training = "{}/{}_{}.pkl".format(self.model_folder, model_name, nfold)
-            filepath_testing = "{}/{}_{}.pkl".format(self.model_folder, model_name, nfold)
+            filepath_training = "{}/training_{}_{}.pkl".format(self.folder_middle, model_name, nfold)
+            filepath_testing = "{}/testing_{}_{}.pkl".format(self.folder_middle, model_name, nfold)
 
             model = LearningFactory.get_model(self.objective, pair, self.cost_func)
             if model == None or model.model == None:

@@ -127,34 +127,35 @@ def learning(conf, thread, is_feature_importance, is_testing):
 
         last_model.append((method, setting))
 
-    model_folder = "{}/prediction_model/ensemble_learning/is_testing={}_is_feature_importance={}_nfold={}_layer1={}_layer2={}_feature={}_binsize={}_top={}".format(\
+    folder_model = "{}/prediction_model/ensemble_learning/is_testing={}_is_feature_importance={}_nfold={}_layer1={}_layer2={}_feature={}_binsize={}_top={}".format(\
                         BASEPATH, is_testing, is_feature_importance, nfold, len(layer1_models), len(layer2_models), number_of_feature, binsize, top)
 
+    folder_middle = "{}/etc/middle_layer/is_testing={}_is_feature_importance={}_nfold={}_feature={}_binsize={}_top={}".format(\
+                        BASEPATH, is_testing, is_feature_importance, nfold, number_of_feature, binsize, top)
+
     if is_testing:
-        log("Due to the testing mode, remove the {} firstly".format(model_folder), INFO)
-        shutil.rmtree(model_folder)
+        log("Due to the testing mode, remove the {} firstly".format(folder_model), INFO)
+        shutil.rmtree(folder_model)
 
-    if not os.path.exists(model_folder):
-        os.makedirs(model_folder)
+    if not os.path.exists(folder_model):
+        os.makedirs(folder_model)
 
-    filepath_training = "{}/training_proba_tracking.csv".format(model_folder)
-    filepath_testing = "{}/testing_proba_tracking.csv".format(model_folder)
+    filepath_training = "{}/training_proba_tracking.csv".format(folder_model)
+    filepath_testing = "{}/testing_proba_tracking.csv".format(folder_model)
 
     # Phase 1. --> Model Training
-    filepath_queue = "{}/layer1_queue.pkl".format(model_folder)
-    filepath_nfold = "{}/layer1_nfold.pkl".format(model_folder)
+    filepath_queue = "{}/layer1_queue.pkl".format(folder_model)
+    filepath_nfold = "{}/layer1_nfold.pkl".format(folder_model)
     layer2_train_x, layer2_test_x, learning_loss = layer_model(\
-                             objective,
-                             model_folder, train_X, train_Y, test_X, layer1_models,
+                             objective, folder_model, folder_middle, train_X, train_Y, test_X, layer1_models,
                              filepath_queue, filepath_nfold,
                              n_folds=nfold, cost_string=cost, number_of_thread=thread)
 
     # Phase 2. --> Model Training
-    filepath_queue = "{}/layer2_queue.pkl".format(model_folder)
-    filepath_nfold = "{}/layer2_nfold.pkl".format(model_folder)
+    filepath_queue = "{}/layer2_queue.pkl".format(folder_model)
+    filepath_nfold = "{}/layer2_nfold.pkl".format(folder_model)
     layer3_train_x, layer3_test_x, learning_loss = layer_model(\
-                             objective,
-                             model_folder, layer2_train_x, train_Y, layer2_test_x, layer2_models,
+                             objective, folder_model, folder_middle, layer2_train_x, train_Y, layer2_test_x, layer2_models,
                              filepath_queue, filepath_nfold,
                              n_folds=nfold, cost_string=cost, number_of_thread=thread)
 
@@ -168,15 +169,6 @@ def learning(conf, thread, is_feature_importance, is_testing):
 
     # Phase 3. --> Model Training
     submission_results = final_model(objective, last_model[0], layer3_train_x, train_Y, layer3_test_x, cost_string=cost)
-
-    '''
-    # Save the cost
-    save_cache(learning_loss, "{}/logloss.pickle".format(model_folder))
-
-    # Save the submission CSV file
-    filepath_output = "{}/kaggle_BNP_submission_{}.csv".format(model_folder)
-    save_kaggle_submission(test_id, results, filepath_output)
-    '''
 
 if __name__ == "__main__":
     learning()
