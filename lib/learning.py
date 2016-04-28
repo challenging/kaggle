@@ -318,7 +318,7 @@ class LearningCost(object):
         else:
             log("Found {} in self.cost, so just inserting it".format(model_name), INFO)
 
-        self.cost[model_name][nfold] += cost
+        self.cost[model_name][nfold] = cost
 
 class LearningQueue(object):
     def __init__(self, train_x, train_y, test_x, filepath=None):
@@ -370,6 +370,11 @@ class LearningQueue(object):
         finally:
             self.lock.release()
 
+    def insert_cost(self, model_name, nfold, cost, filepath):
+        self.learning_cost.insert_cost(model_name, nfold, cost)
+
+        save_cache((model_name, nfold, cost), filepath)
+
     def dump(self):
         self.lock.acquire()
 
@@ -418,46 +423,58 @@ class LearningThread(threading.Thread):
 
             filepath_training = "{}/training_{}_{}.pkl".format(self.folder_middle, model_name, nfold)
             filepath_testing = "{}/testing_{}_{}.pkl".format(self.folder_middle, model_name, nfold)
+            filepath_cost = "{}/cost_{}_{}.pkl".format(self.folder_middle, model_name, nfold)
 
-            model = LearningFactory.get_model(self.objective, pair, self.cost_func)
-            if model == None or model.model == None:
-                log("Can't init this model({})".format(model_name), WARN)
-            elif model.is_cluster():
-                model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])
-                training_results, testing_results = model.get_cluster_results(self.obj.train_x[test_x_idx], self.obj.test_x)
+            if os.path.exists(filepath_training) and os.path.exists(filepath_testing) and os.path.exists(filepath_cost):
+                training_params, training_layer_two_training_idx, _, training_results = load_cache(filepath_training)
+                testing_params, _, _, testing_results = load_cache(filepath_testing)
+                _, _, cost = load_cache(filepath_cost)
 
-                self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, training_results, model.model.get_params(), filepath_training)
-                self.obj.insert_layer_two_testing_dataset(model_idx, nfold, testing_results, model.model.get_params(), filepath_testing)
-                self.obj.learning_cost.insert_cost(model_name, nfold, -1)
+                self.obj.insert_layer_two_training_dataset(training_layer_two_training_idx, model_idx, training_results, training_params, filepath_training)
+                self.obj.insert_layer_two_testing_dataset(model_idx, nfold, testing_results, testing_params, filepath_testing)
+                self.obj.insert_cost(model_name, nfold, cost, filepath_cost)
+
+                log("Hit cache, the cost is {} based on {}'s {} nfold".format(cost, model_name, nfold), INFO)
             else:
-                if model_name.find("deep") > -1 and nfold != 0:
-                    # Copy the prediction results of training dataset to other folds
-                    # All of them are already inserted when nfold equals zero
-
-                    #Copy the prediction results of testing dataset to other folds
-                    layer_two_testing_dataset = self.obj.layer_two_testing_dataset[:, model_idx, 0]
-                    self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, layer_two_testing_dataset, model.model.get_params(), filepath_testing)
-
-                    # Copy the cost of 0th fold into other folds
-                    cost = self.obj.learning_cost[model_name][0]
-                    self.obj.learning_cost.insert_cost(model_name, nfold, cost)
-                else:
-                    log("{} - {}, {}".format(model_name, self.obj.train_x[train_x_idx].shape, self.obj.train_y[train_x_idx].shape))
+                model = LearningFactory.get_model(self.objective, pair, self.cost_func)
+                if model == None or model.model == None:
+                    log("Can't init this model({})".format(model_name), WARN)
+                elif model.is_cluster():
                     model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])
+                    training_results, testing_results = model.get_cluster_results(self.obj.train_x[test_x_idx], self.obj.test_x)
 
-                    results = model.predict(self.obj.train_x[test_x_idx])
-                    self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, results, model.model.get_params(), filepath_training)
+                    self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, training_results, model.model.get_params(), filepath_training)
+                    self.obj.insert_layer_two_testing_dataset(model_idx, nfold, testing_results, model.model.get_params(), filepath_testing)
+                    self.obj.insert_cost(model_name, nfold, -1, filepath_cost)
+                else:
+                    if model_name.find("deep") > -1 and nfold != 0:
+                        # Copy the prediction results of training dataset to other folds
+                        # All of them are already inserted when nfold equals zero
 
-                    layer_two_testing_dataset = model.predict(self.obj.test_x)
-                    self.obj.insert_layer_two_testing_dataset(model_idx, nfold, layer_two_testing_dataset, model.model.get_params(), filepath_testing)
+                        #Copy the prediction results of testing dataset to other folds
+                        layer_two_testing_dataset = self.obj.layer_two_testing_dataset[:, model_idx, 0]
+                        self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, layer_two_testing_dataset, model.model.get_params(), filepath_testing)
 
-                    cost = model.cost(self.obj.train_x[test_x_idx], self.obj.train_y[test_x_idx])
-                    if np.isnan(cost):
-                        log("The {} of '{}' model for {}th fold is NaN".format(self.cost_func.__name__, model_name, nfold), WARN)
+                        # Copy the cost of 0th fold into other folds
+                        cost = self.obj.learning_cost[model_name][0]
+                        self.obj.insert_cost(model_name, nfold, cost, filepath_cost)
                     else:
-                        self.obj.learning_cost.insert_cost(model_name, nfold, cost)
+                        log("{} - {}, {}".format(model_name, self.obj.train_x[train_x_idx].shape, self.obj.train_y[train_x_idx].shape))
+                        model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])
 
-                    log("The grid score is {}".format(model.grid_scores()), DEBUG)
+                        results = model.predict(self.obj.train_x[test_x_idx])
+                        self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, results, model.model.get_params(), filepath_training)
+
+                        layer_two_testing_dataset = model.predict(self.obj.test_x)
+                        self.obj.insert_layer_two_testing_dataset(model_idx, nfold, layer_two_testing_dataset, model.model.get_params(), filepath_testing)
+
+                        cost = model.cost(self.obj.train_x[test_x_idx], self.obj.train_y[test_x_idx])
+                        if np.isnan(cost):
+                            log("The {} of '{}' model for {}th fold is NaN".format(self.cost_func.__name__, model_name, nfold), WARN)
+                        else:
+                            self.obj.insert_cost(model_name, nfold, cost, filepath_cost)
+
+                        log("The grid score is {}".format(model.grid_scores()), DEBUG)
 
             timestamp_end = time.time()
             log("Cost {:02f} secends to train '{}' model for fold-{:02d}, and cost is {:.8f}".format(\
