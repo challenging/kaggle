@@ -2,6 +2,7 @@
 
 import os
 import sys
+import md5
 import numpy as np
 import xgboost as xgb
 
@@ -17,7 +18,7 @@ from keras.layers import Dense, Dropout, Activation
 from keras.optimizers import RMSprop
 from keras.callbacks import ModelCheckpoint
 
-# For Shadow Learning
+# For Shallow Learning
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, GradientBoostingRegressor
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression, LinearRegression
@@ -338,9 +339,9 @@ class LearningQueue(object):
     def put(self, nfold, model_idx, dataset_idxs, model):
         self.learning_queue.put((nfold, model_idx, dataset_idxs, model))
 
-    def starts(self, models, objective, folder_model, folder_middle, cost_func, number_of_thread=1):
+    def starts(self, models, objective, folder_model, folder_middle, cost_func, number_of_thread=1, saving_results=False):
         for idx in range(0, number_of_thread):
-            worker = LearningThread(kwargs={"obj": self, "cost_func": cost_func, "models": models, "objective": objective, "model_folder": folder_model, "folder_middle": folder_middle})
+            worker = LearningThread(kwargs={"obj": self, "cost_func": cost_func, "models": models, "objective": objective, "model_folder": folder_model, "folder_middle": folder_middle, "saving_results": False})
             worker.setDaemon(True)
             worker.start()
 
@@ -421,11 +422,13 @@ class LearningThread(threading.Thread):
             if "dependency" in model_setting:
                 model_setting["base_estimator"] = LearningFactory.get_model(self.objective, model_setting.pop("dependency"), self.cost_func).model
 
-            filepath_training = "{}/training_{}_{}.pkl".format(self.folder_middle, model_name, nfold)
-            filepath_testing = "{}/testing_{}_{}.pkl".format(self.folder_middle, model_name, nfold)
-            filepath_cost = "{}/cost_{}_{}.pkl".format(self.folder_middle, model_name, nfold)
+            stamp = make_a_stamp(make_a_stamp)
 
-            if os.path.exists(filepath_training) and os.path.exists(filepath_testing) and os.path.exists(filepath_cost):
+            filepath_training = "{}/training_{}_{}_{}.pkl".format(self.folder_middle, model_name, nfold, stamp)
+            filepath_testing = "{}/testing_{}_{}_{}.pkl".format(self.folder_middle, model_name, nfold, stamp)
+            filepath_cost = "{}/cost_{}_{}_{}.pkl".format(self.folder_middle, model_name, nfold, stamp)
+
+            if self.saving_results and os.path.exists(filepath_training) and os.path.exists(filepath_testing) and os.path.exists(filepath_cost):
                 training_params, training_layer_two_training_idx, _, training_results = load_cache(filepath_training)
                 testing_params, _, _, testing_results = load_cache(filepath_testing)
                 _, _, cost = load_cache(filepath_cost)
@@ -482,3 +485,8 @@ class LearningThread(threading.Thread):
 
             self.obj.learning_queue.task_done()
             self.obj.dump()
+
+def make_a_stamp(model_setting):
+    m = md5.new()
+    m.update(str(model_setting))
+    return m.hexdigest()

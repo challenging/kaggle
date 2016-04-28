@@ -149,7 +149,7 @@ def learning(conf, thread, is_feature_importance, is_testing):
     layer2_train_x, layer2_test_x, learning_loss = layer_model(\
                              objective, folder_model, folder_middle, train_X, train_Y, test_X, layer1_models,
                              filepath_queue, filepath_nfold,
-                             n_folds=nfold, cost_string=cost, number_of_thread=thread)
+                             n_folds=nfold, cost_string=cost, number_of_thread=thread, saving_results=True)
 
     # Phase 2. --> Model Training
     filepath_queue = "{}/layer2_queue.pkl".format(folder_model)
@@ -157,7 +157,7 @@ def learning(conf, thread, is_feature_importance, is_testing):
     layer3_train_x, layer3_test_x, learning_loss = layer_model(\
                              objective, folder_model, folder_middle, layer2_train_x, train_Y, layer2_test_x, layer2_models,
                              filepath_queue, filepath_nfold,
-                             n_folds=nfold, cost_string=cost, number_of_thread=thread)
+                             n_folds=nfold, cost_string=cost, number_of_thread=thread, saving_results=False)
 
     training_dataset_proba = np.hstack((layer2_train_x, layer3_train_x))
     training_targets = [{"Target": train_y}]
