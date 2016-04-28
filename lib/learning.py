@@ -453,7 +453,7 @@ class LearningThread(threading.Thread):
 
                         #Copy the prediction results of testing dataset to other folds
                         layer_two_testing_dataset = self.obj.layer_two_testing_dataset[:, model_idx, 0]
-                        self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, layer_two_testing_dataset, model.model.get_params(), filepath_testing)
+                        self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, layer_two_testing_dataset, {}, filepath_testing)
 
                         # Copy the cost of 0th fold into other folds
                         cost = self.obj.learning_cost[model_name][0]

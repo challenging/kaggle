@@ -117,11 +117,7 @@ class ParameterTuning(object):
         raise NotImeplementError
 
     def enable_feature_importance(self, filepath_pkl, top_feature=512):
-        if self.method == "classifier":
-            self.predictors = load_feature_importance(filepath_pkl, top_feature)
-        else:
-            self.predictors = load_feature_importance(filepath_pkl, top_feature)
-
+        self.predictors = load_feature_importance(filepath_pkl, top_feature)
         self.predictors = list(set(self.predictors))
 
     def phase(self, phase, params, is_micro_tuning=False):
@@ -279,7 +275,6 @@ class RandomForestTuning(ParameterTuning):
                                           n_jobs=-1)
         elif self.method == "regressor":
             return RandomForestRegressor(n_estimators=n_estimator,
-                                         #criterion=criterion,
                                          max_features=max_features,
                                          max_depth=max_depth,
                                          min_samples_split=min_samples_split,
@@ -299,7 +294,7 @@ class RandomForestTuning(ParameterTuning):
         _, _, _, model = self.phase("phase3", param3, True)
 
         if self.method == "classifier":
-            param4 = {"class_weight": ["balanced", {0: 1.5, 1: 1}, {0: 2, 1: 1}]}
+            param4 = {"class_weight": ["balanced", {0: 1.5, 1: 1}, {0: 2, 1: 1}, {0: 2.5, 1: 1}]}
             _, _, _, model = self.phase("phase4", param4)
 
         log("The best params are {}".format(model.get_params()), INFO)
@@ -336,7 +331,6 @@ class ExtraTreeTuning(RandomForestTuning):
                                         n_jobs=-1)
         elif self.method == "regressor":
             return ExtraTreesRegressor(n_estimators=n_estimator,
-                                       #criterion=criterion,
                                        max_features=max_features,
                                        max_depth=max_depth,
                                        min_samples_split=min_samples_split,
