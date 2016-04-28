@@ -107,7 +107,8 @@ def layer_model(objective, folder_model, folder_middle, train_x, train_y, test_x
         cost_func = roc_auc_score
 
     number_of_feature = len(train_x[0])
-    log("Data Distribution is ({}, {}), and then the number of feature is {}, and then prepare to save data in {}".format(np.sum(train_y==0), np.sum(train_y==1), number_of_feature, folder_model), INFO)
+    log("Data Distribution is ({}, {}), and then the number of feature is {}, and then prepare to save data in {}, and the saving_results is {}".format(\
+            np.sum(train_y==0), np.sum(train_y==1), number_of_feature, folder_model, saving_results), INFO)
 
     learning_queue = get_learning_queue(models, n_folds, train_x, train_y, test_x, filepath_queue)
     layer_two_testing_dataset = start_learning(objective, folder_model, folder_middle, train_x, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, cost_func, number_of_thread, random_state, saving_results)

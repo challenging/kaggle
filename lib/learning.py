@@ -341,7 +341,7 @@ class LearningQueue(object):
 
     def starts(self, models, objective, folder_model, folder_middle, cost_func, number_of_thread=1, saving_results=False):
         for idx in range(0, number_of_thread):
-            worker = LearningThread(kwargs={"obj": self, "cost_func": cost_func, "models": models, "objective": objective, "model_folder": folder_model, "folder_middle": folder_middle, "saving_results": False})
+            worker = LearningThread(kwargs={"obj": self, "cost_func": cost_func, "models": models, "objective": objective, "model_folder": folder_model, "folder_middle": folder_middle, "saving_results": saving_results})
             worker.setDaemon(True)
             worker.start()
 
@@ -422,11 +422,16 @@ class LearningThread(threading.Thread):
             if "dependency" in model_setting:
                 model_setting["base_estimator"] = LearningFactory.get_model(self.objective, model_setting.pop("dependency"), self.cost_func).model
 
-            stamp = make_a_stamp(make_a_stamp)
+            stamp = make_a_stamp(model_setting)
 
             filepath_training = "{}/training_{}_{}_{}.pkl".format(self.folder_middle, model_name, nfold, stamp)
             filepath_testing = "{}/testing_{}_{}_{}.pkl".format(self.folder_middle, model_name, nfold, stamp)
             filepath_cost = "{}/cost_{}_{}_{}.pkl".format(self.folder_middle, model_name, nfold, stamp)
+
+            log("The flag of self.saving_results is {}".format(self.saving_results), INFO)
+            log("The filepath_training is {}({})".format(filepath_training, os.path.exists(filepath_training)), INFO)
+            log("The filepath_testing is {}({})".format(filepath_testing, os.path.exists(filepath_testing)), INFO)
+            log("The filepath_cost is {}({})".format(filepath_cost, os.path.exists(filepath_cost)), INFO)
 
             if self.saving_results and os.path.exists(filepath_training) and os.path.exists(filepath_testing) and os.path.exists(filepath_cost):
                 training_params, training_layer_two_training_idx, _, training_results = load_cache(filepath_training)
