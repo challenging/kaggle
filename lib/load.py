@@ -270,7 +270,7 @@ def load_cache(filepath):
         with open(filepath, "rb") as INPUT:
             obj = pickle.load(INPUT)
 
-        log("Load {} from cache, {}".format(obj.__class__, filepath), INFO)
+        log("Load {} from cache, {}".format(obj.__class__, filepath), DEBUG)
     except ValueError as e:
         log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
 

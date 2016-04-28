@@ -486,7 +486,7 @@ class LearningThread(threading.Thread):
 
             timestamp_end = time.time()
             log("Cost {:02f} secends to train '{}' model for fold-{:02d}, and cost is {:.8f}".format(\
-                    timestamp_end-timestamp_start, model.name, nfold, cost), INFO)
+                    timestamp_end-timestamp_start, model_name, nfold, cost), INFO)
 
             self.obj.learning_queue.task_done()
             self.obj.dump()

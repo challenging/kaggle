@@ -73,19 +73,19 @@ def start_learning(objective, folder_model, folder_middle, train_x, train_y, tes
     for model_idx, m in enumerate(models):
         model_name = m[0]
         for nfold, (train, test) in enumerate(skf):
-            if learning_queue.is_done_layer_two_training_dataset(test, model_idx):
-                log("fold-{:02d} data to '{}' model is done".format(nfold, model_name))
+            #if learning_queue.is_done_layer_two_training_dataset(test, model_idx):
+            #    log("fold-{:02d} data to '{}' model is done".format(nfold, model_name))
+            #else:
+            if model_name.find("deep") == -1:
+                learning_queue.put(nfold, model_idx, (train, test), m)
             else:
-                if model_name.find("deep") == -1:
-                    learning_queue.put(nfold, model_idx, (train, test), m)
+                if nfold == 0:
+                    idxs = [idx for idx in range(0, len(train_x))]
+                    learning_queue.put(nfold, model_idx, (idxs, idxs), m)
                 else:
-                    if nfold == 0:
-                        idxs = [idx for idx in range(0, len(train_x))]
-                        learning_queue.put(nfold, model_idx, (idxs, idxs), m)
-                    else:
-                        continue
+                    continue
 
-                log("Put fold-{:02d} data into this '{}' model".format(nfold, model_name))
+            log("Put fold-{:02d} data into this '{}' model".format(nfold, model_name))
 
     learning_queue.starts(models, objective, folder_model, folder_middle, cost_func, number_of_thread=number_of_thread, saving_results=saving_results)
 
