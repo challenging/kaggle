@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 
+import copy
 import ConfigParser
 
 import numpy as np
-
-from utils import log, INFO
 
 class ModelConfParser(object):
     def __init__(self, filepath):
@@ -77,7 +76,7 @@ class ModelConfParser(object):
             d["method"] = d.pop("kernal")
 
         if "model_id" in d:
-            self.models[d.pop("model_id")] = (method, d)
+            self.models[d.pop("model_id")] = (method, copy.deepcopy(d))
 
         if "dependency_model_id" in d:
             d["dependency"] = self.models[d.pop("dependency_model_id")]
