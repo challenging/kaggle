@@ -55,7 +55,16 @@ class ModelConfParser(object):
         d = {}
         for option in self.config.options(model_section):
             v = self.config.get(model_section, option).strip("\"")
-            if v.isdigit():
+
+            if option == "class_weight":
+                if v.isdigit():
+                    d["class_weight"] = {0: int(v), 1: 1}
+                else:
+                    try:
+                        d["class_weight"] = {0: float(v), 1: 1}
+                    except Exception as e:
+                        setting["class_weight"] = "balanced"
+            elif v.isdigit():
                 d[option.lower()] = int(v)
             elif v == "nan":
                 d[option.lower()] = np.nan
