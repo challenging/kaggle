@@ -52,7 +52,7 @@ def learning(conf, thread, is_testing):
         train_y = train_y.head(1000)
     basic_columns = train_x.columns
 
-    for layers, value in load_interaction_information(folder_ii, threshold=top_feature):
+    for layers, value in load_interaction_information(folder_ii, threshold=str(top_feature)):
         for df in [train_x, test_x]:
             t = value
             breaking_layer = None
