@@ -423,10 +423,9 @@ class LearningThread(threading.Thread):
                     predictors = sorted(self.obj.predictors[data_dimension])
 
                     log("Pop data_dimension from setting for {}".format(model_name), INFO)
+                    log("{} gets {} features by {}".format(model_name, len(predictors), data_dimension), INFO)
                 else:
                     log("Not found data_dimension from {}".format(model_name), INFO)
-
-                log("{} gets {} features by {}".format(model_name, len(predictors), data_dimension), INFO)
             else:
                 log("{} gets {} features by 'all'".format(model_name, len(self.obj.train_x[train_x_idx][0])), INFO)
 
