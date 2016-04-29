@@ -3,6 +3,7 @@
 import os
 import sys
 import md5
+import pandas as pd
 import numpy as np
 import xgboost as xgb
 
@@ -421,10 +422,10 @@ class LearningThread(threading.Thread):
                 if "data_dimension" in model_setting:
                     data_dimensions = model_setting.pop("data_dimension")
 
-                    predictors = []
+                    predictors = pd.Index([])
                     for data_dimension in data_dimensions.split(","):
                         predictors += self.obj.predictors[data_dimension]
-                    predictors = list(set(sorted(predictors)))
+                    predictors = list(set(sorted(predictors.values)))
 
                     log("Pop data_dimension from setting for {}".format(model_name), INFO)
                     log("{} gets {} features by {}".format(model_name, len(predictors), data_dimensions), INFO)
