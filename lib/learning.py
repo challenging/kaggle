@@ -422,7 +422,7 @@ class LearningThread(threading.Thread):
                     data_dimensions = model_setting.pop("data_dimension")
 
                     predictors = []
-                    for data_dimension in data_dimensions:
+                    for data_dimension in data_dimensions.split(","):
                         predictors += self.obj.predictors[data_dimension]
                     predictors = list(set(sorted(predictors)))
 
