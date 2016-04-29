@@ -322,10 +322,11 @@ class LearningCost(object):
         self.cost[model_name][nfold] = cost
 
 class LearningQueue(object):
-    def __init__(self, train_x, train_y, test_x, filepath=None):
+    def __init__(self, predictors, train_x, train_y, test_x, filepath=None):
         self.lock = threading.Lock()
         self.learning_queue = Queue.Queue()
 
+        self.predictors = predictors
         self.train_x = train_x
         self.train_y = train_y
         self.test_x = test_x
@@ -415,6 +416,14 @@ class LearningThread(threading.Thread):
             model_name = pair[0]
             model_setting = pair[1]
 
+            data_dimension, predictors = None, None
+            if self.obj.predictors:
+                if "data_dimension" in model_setting:
+                    data_dimension = model_setting.pop("data_dimension")
+                    predictors = sorted(self.obj.predictors[data_dimension])
+
+            log("Get {} features by {}".format(len(predictors), data_dimension), INFO)
+
             if model_name.find("deep") > -1:
                 model_setting["folder"] = self.model_folder
                 model_setting["nfold"] = nfold
@@ -422,16 +431,27 @@ class LearningThread(threading.Thread):
             if "dependency" in model_setting:
                 model_setting["base_estimator"] = LearningFactory.get_model(self.objective, model_setting.pop("dependency"), self.cost_func).model
 
-            stamp = make_a_stamp(model_setting)
+            model_stamp = make_a_stamp(model_setting)
+            feature_stamp = make_a_stamp(predictors)
 
-            filepath_training = "{}/training_{}_{}_{}.pkl".format(self.folder_middle, model_name, nfold, stamp)
-            filepath_testing = "{}/testing_{}_{}_{}.pkl".format(self.folder_middle, model_name, nfold, stamp)
-            filepath_cost = "{}/cost_{}_{}_{}.pkl".format(self.folder_middle, model_name, nfold, stamp)
+            filepath_training = "{}/training_name={}_nfold={}_feature={}_setting={}.pkl".format(self.folder_middle, model_name, nfold, feature_stamp, model_stamp)
+            filepath_testing = "{}/testing_name={}_nfold={}_feature={}_setting={}.pkl".format(self.folder_middle, model_name, nfold, feature_stamp, model_stamp)
+            filepath_cost = "{}/cost_name={}_nfold={}_feature={}_setting={}.pkl".format(self.folder_middle, model_name, nfold, feature_stamp, model_stamp)
 
-            log("The flag of self.saving_results is {}".format(self.saving_results), INFO)
-            log("The filepath_training is {}({})".format(filepath_training, os.path.exists(filepath_training)), INFO)
-            log("The filepath_testing is {}({})".format(filepath_testing, os.path.exists(filepath_testing)), INFO)
-            log("The filepath_cost is {}({})".format(filepath_cost, os.path.exists(filepath_cost)), INFO)
+            log("The flag of self.saving_results is {}, and parent_folder is in {}".format(self.saving_results, os.path.dirname(filepath_training)), INFO)
+            log("The filepath_training is {}({})".format(os.path.basename(filepath_training), os.path.exists(filepath_training)), INFO)
+            log("The filepath_testing is {}({})".format(os.path.basename(filepath_testing), os.path.exists(filepath_testing)), INFO)
+            log("The filepath_cost is {}({})".format(os.path.basename(filepath_cost), os.path.exists(filepath_cost)), INFO)
+
+            train_x, train_y, validate_x, validate_y, test_x = None, self.obj.train_y[train_x_idx], None, self.obj.train_y[test_x_idx], None
+            if self.obj.predictors and data_dimension:
+                train_x = self.obj.train_x[predictors].values[train_x_idx]
+                validate_x = self.obj.train_x[predictors].values[test_x_idx]
+                test_x = self.obj.test_x[predictors]
+            else:
+                train_x = self.obj.train_x[train_x_idx]
+                validate_x = self.obj.train_x[test_x_idx]
+                test_x = self.obj.test_x
 
             if self.saving_results and os.path.exists(filepath_training) and os.path.exists(filepath_testing) and os.path.exists(filepath_cost):
                 training_params, training_layer_two_training_idx, _, training_results = load_cache(filepath_training)
@@ -448,8 +468,8 @@ class LearningThread(threading.Thread):
                 if model == None or model.model == None:
                     log("Can't init this model({})".format(model_name), WARN)
                 elif model.is_cluster():
-                    model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])
-                    training_results, testing_results = model.get_cluster_results(self.obj.train_x[test_x_idx], self.obj.test_x)
+                    model.train(train_x, train_y)
+                    training_results, testing_results = model.get_cluster_results(validate_x, test_x)
 
                     self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, training_results, model.model.get_params(), filepath_training)
                     self.obj.insert_layer_two_testing_dataset(model_idx, nfold, testing_results, model.model.get_params(), filepath_testing)
@@ -467,16 +487,16 @@ class LearningThread(threading.Thread):
                         cost = self.obj.learning_cost[model_name][0]
                         self.obj.insert_cost(model_name, nfold, cost, filepath_cost)
                     else:
-                        log("{} - {}, {}".format(model_name, self.obj.train_x[train_x_idx].shape, self.obj.train_y[train_x_idx].shape))
-                        model.train(self.obj.train_x[train_x_idx], self.obj.train_y[train_x_idx])
+                        log("{} - {}, {}".format(model_name, train_x.shape, train_y.shape))
+                        model.train(train_x, train_y)
 
-                        results = model.predict(self.obj.train_x[test_x_idx])
+                        results = model.predict(validate_x)
                         self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, results, model.model.get_params(), filepath_training)
 
-                        layer_two_testing_dataset = model.predict(self.obj.test_x)
+                        layer_two_testing_dataset = model.predict(test_x)
                         self.obj.insert_layer_two_testing_dataset(model_idx, nfold, layer_two_testing_dataset, model.model.get_params(), filepath_testing)
 
-                        cost = model.cost(self.obj.train_x[test_x_idx], self.obj.train_y[test_x_idx])
+                        cost = model.cost(train_y, validate_y)
                         if np.isnan(cost):
                             log("The {} of '{}' model for {}th fold is NaN".format(self.cost_func.__name__, model_name, nfold), WARN)
                         else:

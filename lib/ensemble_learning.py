@@ -36,11 +36,11 @@ def store_layer_output(models, dataset, filepath, optional=[]):
 
     pd.DataFrame(results_of_layer).to_csv(filepath, index=False)
 
-def get_learning_queue(models, n_folds, train_x, train_y, test_x, filepath_queue):
+def get_learning_queue(predictors, models, n_folds, train_x, train_y, test_x, filepath_queue):
     layer_two_training_dataset = np.zeros((train_x.shape[0], len(models)))
     layer_two_testing_dataset = np.zeros((test_x.shape[0], len(models), n_folds))
 
-    learning_cost, learning_queue = None, LearningQueue(train_x, train_y, test_x, filepath_queue)
+    learning_cost, learning_queue = None, LearningQueue(predictors, train_x, train_y, test_x, filepath_queue)
     if filepath_queue and os.path.exists(filepath_queue):
         (layer_two_training_dataset, layer_two_testing_dataset, learning_cost) = load_cache(filepath_queue)
         learning_queue.setup_layer_info(layer_two_training_dataset, layer_two_testing_dataset, learning_cost)
@@ -54,7 +54,8 @@ def get_learning_queue(models, n_folds, train_x, train_y, test_x, filepath_queue
 
     return learning_queue
 
-def start_learning(objective, folder_model, folder_middle, train_x, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, cost_func, number_of_thread=4, random_state=1201, saving_results=False):
+def start_learning(objective, folder_model, folder_middle, train_x, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, cost_func,
+                    number_of_thread=4, random_state=1201, saving_results=False):
     skf = None
     if filepath_nfold and os.path.exists(filepath_nfold):
         skf = load_cache(filepath_nfold)
@@ -95,23 +96,23 @@ def start_learning(objective, folder_model, folder_middle, train_x, train_y, tes
 
     return layer_two_testing_dataset
 
-def layer_model(objective, folder_model, folder_middle, train_x, train_y, test_x, models,
-                filepath_queue, filepath_nfold,
-                n_folds=10, cost_string="log_loss", number_of_thread=1,
-                random_state=1201, saving_results=False):
+def layer_model(objective, folder_model, folder_middle, predictors, train_x, train_y, test_x, models, filepath_queue, filepath_nfold,
+                n_folds=10, cost_string="log_loss", number_of_thread=1, random_state=1201, saving_results=False):
 
     cost_func = None
-    if cost_string == "log_loss":
-        cost_func = log_loss
-    elif cost_string == "auc":
+    if cost_string == "auc":
         cost_func = roc_auc_score
+    else:
+        cost_func = log_loss
+    log("The cost function is {}".format(cost_func.__name__), INFO)
 
-    number_of_feature = len(train_x[0])
-    log("Data Distribution is ({}, {}), and then the number of feature is {}, and then prepare to save data in {}, and the saving_results is {}".format(\
-            np.sum(train_y==0), np.sum(train_y==1), number_of_feature, folder_model, saving_results), INFO)
+    log("Data Distribution is ({}, {}), and then prepare to save data in {}, and the saving_results is {}".format(\
+            np.sum(train_y==0), np.sum(train_y==1), folder_model, saving_results), INFO)
 
-    learning_queue = get_learning_queue(models, n_folds, train_x, train_y, test_x, filepath_queue)
-    layer_two_testing_dataset = start_learning(objective, folder_model, folder_middle, train_x, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, cost_func, number_of_thread, random_state, saving_results)
+    learning_queue = get_learning_queue(predictors, models, n_folds, train_x, train_y, test_x, filepath_queue)
+    layer_two_testing_dataset = start_learning(objective, folder_model, folder_middle, train_x, train_y, test_x,
+                                               models, n_folds, learning_queue, filepath_nfold, cost_func,
+                                               number_of_thread, random_state, saving_results)
 
     return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_queue.learning_cost
 

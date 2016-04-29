@@ -51,14 +51,14 @@ def learning(conf, thread, is_feature_importance, is_testing):
     if is_testing:
         train_x = train_x.head(1000)
         train_y = train_y.head(1000)
+    basic_columns = train_x.columns
 
-    columns = train_x.columns
     for layers, value in load_interaction_information(folder_ii, threshold=top):
         for df in [train_x, test_x]:
             t = value
             breaking_layer = None
             for layer in layers:
-                if layer in columns:
+                if layer in basic_columns:
                     t *= df[layer].values
                 else:
                     breaking_layer = layer
@@ -69,31 +69,27 @@ def learning(conf, thread, is_feature_importance, is_testing):
             else:
                 log("Skip {} due to {} not in columns".format(layers, breaking_layer), WARN)
                 break
+    ii_columns = train_x.columns
 
-    columns = train_x.columns
+    importance_columns = []
     if is_feature_importance:
-        predictors = load_feature_importance(filepath_feature_importance, top_feature)
+        importance_columns = load_feature_importance(filepath_feature_importance, top_feature)
 
-        drop_fields = [column for column in columns if column not in predictors]
-        log("Due to the opening of feature importance so dropping {} columns".format(len(drop_fields)), INFO)
-
-        train_x = train_x.drop(drop_fields, axis=1)
-        test_x = test_x.drop(drop_fields, axis=1)
-
-    train_X, test_X = train_x.values, test_x.values
+    predictors = {"basic": basic_columns,
+                  "interaction-information-3": [column for column in ii_columns if column.count(";") == 1],
+                  "interaction-information-4": [column for column in ii_columns if column.count(";") == 2],
+                  "feature-importance": importance_columns}
 
     train_y = train_y.values
     test_id = test_id.values
     train_Y = train_y.astype(float)
-    number_of_feature = len(train_X[0])
 
     layer1_models, layer2_models, last_model = [], [], []
 
     # Init the parameters of deep learning
-    training_dataset, testing_dataset = [train_X], [test_X]
     checkpointer = KaggleCheckpoint(filepath="{epoch}.weights.hdf5",
-                                    training_set=(training_dataset, train_Y),
-                                    testing_set=(testing_dataset, test_id),
+                                    training_set=([train_x], train_Y),
+                                    testing_set=([test_x], test_id),
                                     folder=None,
                                     cost_string=cost,
                                     verbose=0, save_best_only=True, save_training_dataset=False)
@@ -114,7 +110,17 @@ def learning(conf, thread, is_feature_importance, is_testing):
 
             if method.find("deep") > -1:
                 setting["folder"] = None
-                setting["input_dims"] = number_of_feature
+
+                if setting["data_dimension"] == "basic":
+                    setting["input_dims"] = len(basic_columns)
+                elif setting["data_dimension"] == "importance":
+                    setting["input_dims"] = len(importance_columns)
+                elif setting["data_dimension"].find("interaction-information") != -1:
+                    setting["input_dims"] = top_feature
+                else:
+                    log("Wrong Setting for input_dims because the data_dimension is {}".format(setting["data_dimension"]), ERRPR)
+                    sys.exit(100)
+
                 setting["callbacks"] = [checkpointer]
                 setting["number_of_layer"] = setting.pop("layer_number")
 
@@ -127,11 +133,11 @@ def learning(conf, thread, is_feature_importance, is_testing):
 
         last_model.append((method, setting))
 
-    folder_model = "{}/prediction_model/ensemble_learning/is_testing={}_is_feature_importance={}_nfold={}_layer1={}_layer2={}_feature={}_binsize={}_top={}".format(\
-                        BASEPATH, is_testing, is_feature_importance, nfold, len(layer1_models), len(layer2_models), number_of_feature, binsize, top)
+    folder_model = "{}/prediction_model/ensemble_learning/is_testing={}_is_feature_importance={}_nfold={}_layer1={}_layer2={}_binsize={}_top={}".format(\
+                        BASEPATH, is_testing, is_feature_importance, nfold, len(layer1_models), len(layer2_models), binsize, top)
 
-    folder_middle = "{}/etc/middle_layer/is_testing={}_is_feature_importance={}_nfold={}_feature={}_binsize={}_top={}".format(\
-                        BASEPATH, is_testing, is_feature_importance, nfold, number_of_feature, binsize, top)
+    folder_middle = "{}/etc/middle_layer/is_testing={}_is_feature_importance={}_nfold={}_binsize={}_top={}".format(\
+                        BASEPATH, is_testing, is_feature_importance, nfold, binsize, top)
 
     if is_testing:
         log("Due to the testing mode, remove the {} firstly".format(folder_model), INFO)
@@ -147,7 +153,7 @@ def learning(conf, thread, is_feature_importance, is_testing):
     filepath_queue = "{}/layer1_queue.pkl".format(folder_model)
     filepath_nfold = "{}/layer1_nfold.pkl".format(folder_model)
     layer2_train_x, layer2_test_x, learning_loss = layer_model(\
-                             objective, folder_model, folder_middle, train_X, train_Y, test_X, layer1_models,
+                             objective, folder_model, folder_middle, predictors, train_x, train_Y, test_x, layer1_models,
                              filepath_queue, filepath_nfold,
                              n_folds=nfold, cost_string=cost, number_of_thread=thread, saving_results=True)
 
@@ -155,7 +161,7 @@ def learning(conf, thread, is_feature_importance, is_testing):
     filepath_queue = "{}/layer2_queue.pkl".format(folder_model)
     filepath_nfold = "{}/layer2_nfold.pkl".format(folder_model)
     layer3_train_x, layer3_test_x, learning_loss = layer_model(\
-                             objective, folder_model, folder_middle, layer2_train_x, train_Y, layer2_test_x, layer2_models,
+                             objective, folder_model, folder_middle, None, layer2_train_x, train_Y, layer2_test_x, layer2_models,
                              filepath_queue, filepath_nfold,
                              n_folds=nfold, cost_string=cost, number_of_thread=thread, saving_results=False)
 
