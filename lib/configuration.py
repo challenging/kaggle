@@ -4,6 +4,8 @@ import ConfigParser
 
 import numpy as np
 
+from utils import log, INFO
+
 class ModelConfParser(object):
     def __init__(self, filepath):
         self.config = ConfigParser.RawConfigParser()
@@ -79,6 +81,8 @@ class ModelConfParser(object):
 
         if "dependency_model_id" in d:
             d["dependency"] = self.models[d.pop("dependency_model_id")]
+            if "data_dimension" in d["dependency"][1]:
+                del d["dependency"][1]["data_dimension"]
 
         return method, d
 

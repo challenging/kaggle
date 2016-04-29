@@ -422,7 +422,13 @@ class LearningThread(threading.Thread):
                     data_dimension = model_setting.pop("data_dimension")
                     predictors = sorted(self.obj.predictors[data_dimension])
 
-            log("Get {} features by {}".format(len(predictors), data_dimension), INFO)
+                    log("Pop data_dimension from setting for {}".format(model_name), INFO)
+                else:
+                    log("Not found data_dimension from {}".format(model_name), INFO)
+
+                log("{} gets {} features by {}".format(model_name, len(predictors), data_dimension), INFO)
+            else:
+                log("{} gets {} features by 'all'".format(model_name, len(self.obj.train_x[train_x_idx][0])), INFO)
 
             if model_name.find("deep") > -1:
                 model_setting["folder"] = self.model_folder
