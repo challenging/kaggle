@@ -424,7 +424,7 @@ class LearningThread(threading.Thread):
 
                     predictors = pd.Index([])
                     for data_dimension in data_dimensions.split(","):
-                        predictors += self.obj.predictors[data_dimension]
+                        predictors |= self.obj.predictors[data_dimension]
                     predictors = list(set(sorted(predictors.values)))
 
                     log("Pop data_dimension from setting for {}".format(model_name), INFO)

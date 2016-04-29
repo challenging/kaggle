@@ -52,7 +52,7 @@ def learning(conf, thread, is_testing):
         train_y = train_y.head(1000)
     basic_columns = train_x.columns
 
-    for layers, value in load_interaction_information(folder_ii, threshold=top):
+    for layers, value in load_interaction_information(folder_ii, threshold=top_feature):
         for df in [train_x, test_x]:
             t = value
             breaking_layer = None
@@ -122,10 +122,10 @@ def learning(conf, thread, is_testing):
         last_model.append((method, setting))
 
     folder_model = "{}/prediction_model/ensemble_learning/conf={}_is_testing={}_nfold={}_layer1={}_layer2={}_binsize={}_top={}".format(\
-                        BASEPATH, os.path.basename(conf), is_testing, nfold, len(layer1_models), len(layer2_models), binsize, top)
+                        BASEPATH, os.path.basename(conf), is_testing, nfold, len(layer1_models), len(layer2_models), binsize, top_feature)
 
     folder_middle = "{}/etc/middle_layer/is_testing={}_nfold={}_binsize={}_top={}".format(\
-                        BASEPATH, is_testing, nfold, binsize, top)
+                        BASEPATH, is_testing, nfold, binsize, top_feature)
 
     if is_testing:
         log("Due to the testing mode, remove the {} firstly".format(folder_model), INFO)
