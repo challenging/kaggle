@@ -80,8 +80,10 @@ class ModelConfParser(object):
 
         if "dependency_model_id" in d:
             d["dependency"] = self.models[d.pop("dependency_model_id")]
-            if "data_dimension" in d["dependency"][1]:
-                del d["dependency"][1]["data_dimension"]
+
+            for key in ["data_dimension", "model_id"]:
+                if key in d["dependency"][1]:
+                    del d["dependency"][1][key]
 
         return method, d
 
