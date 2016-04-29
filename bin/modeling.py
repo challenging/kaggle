@@ -27,9 +27,8 @@ BASEPATH = os.path.dirname(os.path.abspath(__file__))
 @click.command()
 @click.option("--conf", required=True, help="Configureation File to this model")
 @click.option("--thread", default=1, help="Number of thread")
-@click.option("--is-feature-importance", is_flag=True, help="Turn on the feature importance")
 @click.option("--is-testing", is_flag=True, help="Turn on the testing mode")
-def learning(conf, thread, is_feature_importance, is_testing):
+def learning(conf, thread, is_testing):
     drop_fields = []
 
     parser = ModelConfParser(conf)
@@ -69,11 +68,9 @@ def learning(conf, thread, is_feature_importance, is_testing):
             else:
                 log("Skip {} due to {} not in columns".format(layers, breaking_layer), WARN)
                 break
-    ii_columns = train_x.columns
 
-    importance_columns = []
-    if is_feature_importance:
-        importance_columns = load_feature_importance(filepath_feature_importance, top_feature)
+    ii_columns = train_x.columns
+    importance_columns = load_feature_importance(filepath_feature_importance, top_feature)
 
     predictors = {"basic": basic_columns,
                   "interaction-information-3": [column for column in ii_columns if column.count(";") == 1],
@@ -133,11 +130,11 @@ def learning(conf, thread, is_feature_importance, is_testing):
 
         last_model.append((method, setting))
 
-    folder_model = "{}/prediction_model/ensemble_learning/is_testing={}_is_feature_importance={}_nfold={}_layer1={}_layer2={}_binsize={}_top={}".format(\
-                        BASEPATH, is_testing, is_feature_importance, nfold, len(layer1_models), len(layer2_models), binsize, top)
+    folder_model = "{}/prediction_model/ensemble_learning/is_testing={}_nfold={}_layer1={}_layer2={}_binsize={}_top={}".format(\
+                        BASEPATH, is_testing, nfold, len(layer1_models), len(layer2_models), binsize, top)
 
-    folder_middle = "{}/etc/middle_layer/is_testing={}_is_feature_importance={}_nfold={}_binsize={}_top={}".format(\
-                        BASEPATH, is_testing, is_feature_importance, nfold, binsize, top)
+    folder_middle = "{}/etc/middle_layer/is_testing={}_nfold={}_binsize={}_top={}".format(\
+                        BASEPATH, is_testing, nfold, binsize, top)
 
     if is_testing:
         log("Due to the testing mode, remove the {} firstly".format(folder_model), INFO)
