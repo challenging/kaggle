@@ -96,15 +96,6 @@ def learning(conf, thread, is_testing):
         for model_section in parser.get_layer_models(1):
             method, setting = parser.get_model_setting(model_section)
 
-            if "class_weight" in setting:
-                if isinstance(setting["class_weight"], int):
-                    setting["class_weight"] = {0: setting["class_weight"], 1: 1}
-                else:
-                    try:
-                        setting["class_weight"] = {0: float(setting["class_weight"]), 1: 1}
-                    except:
-                        setting["class_weight"] = "balanced"
-
             if method.find("deep") > -1:
                 setting["folder"] = None
 

@@ -416,14 +416,18 @@ class LearningThread(threading.Thread):
             model_name = pair[0]
             model_setting = pair[1]
 
-            data_dimension, predictors = None, None
+            data_dimensions, predictors = None, None
             if self.obj.predictors:
                 if "data_dimension" in model_setting:
-                    data_dimension = model_setting.pop("data_dimension")
-                    predictors = sorted(self.obj.predictors[data_dimension])
+                    data_dimensions = model_setting.pop("data_dimension")
+
+                    predictors = []
+                    for data_dimension in data_dimensions:
+                        predictors += self.obj.predictors[data_dimension]
+                    predictors = list(set(sorted(predictors)))
 
                     log("Pop data_dimension from setting for {}".format(model_name), INFO)
-                    log("{} gets {} features by {}".format(model_name, len(predictors), data_dimension), INFO)
+                    log("{} gets {} features by {}".format(model_name, len(predictors), data_dimensions), INFO)
                 else:
                     log("Not found data_dimension from {}".format(model_name), INFO)
             else:
@@ -449,7 +453,7 @@ class LearningThread(threading.Thread):
             log("The filepath_cost is {}({})".format(os.path.basename(filepath_cost), os.path.exists(filepath_cost)), INFO)
 
             train_x, train_y, validate_x, validate_y, test_x = None, self.obj.train_y[train_x_idx], None, self.obj.train_y[test_x_idx], None
-            if self.obj.predictors and data_dimension:
+            if self.obj.predictors and data_dimensions:
                 train_x = self.obj.train_x[predictors].values[train_x_idx]
                 validate_x = self.obj.train_x[predictors].values[test_x_idx]
                 test_x = self.obj.test_x[predictors]
