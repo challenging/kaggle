@@ -127,7 +127,7 @@ def learning(conf, thread, is_testing):
     folder_middle = "{}/etc/middle_layer/is_testing={}_nfold={}_binsize={}_top={}".format(\
                         BASEPATH, is_testing, nfold, binsize, top_feature)
 
-    folder_submission = "{}/submission"
+    folder_submission = "{}/submission".format(folder_model)
     if not os.path.isdir(folder_submission):
         os.makedirs(folder_submission)
 
