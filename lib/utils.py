@@ -1,6 +1,7 @@
 import logging
 import os
 import copy
+import md5
 
 CRITICAL = logging.CRITICAL
 ERROR = logging.ERROR
