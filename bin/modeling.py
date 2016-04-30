@@ -14,7 +14,7 @@ import shutil
 import numpy as np
 
 sys.path.append("{}/../lib".format(os.path.dirname(os.path.abspath(__file__))))
-from utils import log, INFO, WARN
+from utils import make_a_stamp, log, INFO, WARN
 from load import load_data, load_advanced_data, load_cache, save_cache, save_kaggle_submission, load_interaction_information, load_feature_importance
 from learning import LearningFactory
 from configuration import ModelConfParser
@@ -127,6 +127,10 @@ def learning(conf, thread, is_testing):
     folder_middle = "{}/etc/middle_layer/is_testing={}_nfold={}_binsize={}_top={}".format(\
                         BASEPATH, is_testing, nfold, binsize, top_feature)
 
+    folder_submission = "{}/submission"
+    if not os.path.isdir(folder_submission):
+        os.makedirs(folder_submission)
+
     if is_testing:
         log("Due to the testing mode, remove the {} firstly".format(folder_model), INFO)
         shutil.rmtree(folder_model)
@@ -145,6 +149,10 @@ def learning(conf, thread, is_testing):
                              filepath_queue, filepath_nfold,
                              n_folds=nfold, cost_string=cost, number_of_thread=thread, saving_results=True)
 
+    for idx, submission in enumerate(layer2_test_x):
+        filepath_submission = "{}/layer=1_model={}_params={}.csv".format(folder_submission, layer1_models[idx][0], make_a_stamp(layer1_models[idx][1]))
+        save_kaggle_submission({"ID": test_id, "Target": submission}, filepath_submission)
+
     # Phase 2. --> Model Training
     filepath_queue = "{}/layer2_queue.pkl".format(folder_model)
     filepath_nfold = "{}/layer2_nfold.pkl".format(folder_model)
@@ -161,8 +169,15 @@ def learning(conf, thread, is_testing):
     testing_targets = [{"ID": test_id}]
     store_layer_output([m[0] for m in layer1_models+layer2_models], testing_dataset_proba, filepath_testing, optional=testing_targets)
 
+    for idx in submission in enumerate(layer3_test_x):
+        filepath_submission = "{}/layer=1_model={}_params={}.csv".format(folder_submission, layer2_models[idx][0], make_a_stamp(layer2_models[idx][1]))
+        save_kaggle_submission({"ID": test_id, "Target": submission}, filepath_submission)
+
     # Phase 3. --> Model Training
     submission_results = final_model(objective, last_model[0], layer3_train_x, train_Y, layer3_test_x, cost_string=cost)
+
+    filepath_final_submission = "{}/submission/final_submission_model={}.csv".format(folder_model, last_model[0][0])
+    save_kaggle_submission({"ID": test_id, "Target": submission_results}, filepath_final_submission)
 
 if __name__ == "__main__":
     learning()

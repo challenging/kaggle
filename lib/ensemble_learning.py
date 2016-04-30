@@ -54,7 +54,8 @@ def get_learning_queue(predictors, models, n_folds, train_x, train_y, test_x, fi
 
     return learning_queue
 
-def start_learning(objective, folder_model, folder_middle, train_x, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, cost_func,
+def start_learning(objective, folder_model, folder_middle,
+                    train_x, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, cost_func,
                     number_of_thread=4, random_state=1201, saving_results=False):
     skf = None
     if filepath_nfold and os.path.exists(filepath_nfold):
@@ -110,8 +111,8 @@ def layer_model(objective, folder_model, folder_middle, predictors, train_x, tra
             np.sum(train_y==0), np.sum(train_y==1), folder_model, saving_results), INFO)
 
     learning_queue = get_learning_queue(predictors, models, n_folds, train_x, train_y, test_x, filepath_queue)
-    layer_two_testing_dataset = start_learning(objective, folder_model, folder_middle, train_x, train_y, test_x,
-                                               models, n_folds, learning_queue, filepath_nfold, cost_func,
+    layer_two_testing_dataset = start_learning(objective, folder_model, folder_middle,
+                                               train_x, train_y, test_x,cmodels, n_folds, learning_queue, filepath_nfold, cost_func,
                                                number_of_thread, random_state, saving_results)
 
     return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_queue.learning_cost

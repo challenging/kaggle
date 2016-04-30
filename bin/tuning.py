@@ -33,23 +33,19 @@ def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
     n_jobs = parser.get_n_jobs()
     cost = parser.get_cost()
     binsize, top = parser.get_interaction_information()
-
-    top_feature = -1
-    if is_feature_importance:
-        top_feature = parser.get_top_feature()
+    top_feature = parser.get_top_feature()
 
     filepath_training = "{}/input/train.csv".format(BASEPATH)
     filepath_testing = "{}/input/test.csv".format(BASEPATH)
     filepath_cache_1 = "{}/input/train.pkl".format(BASEPATH)
     folder_ii = "{}/input/interaction_information/transform2=True_testing=-1_binsize={}".format(BASEPATH, binsize)
-    filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_nfold={}_top={}_binsize={}_topfeature={}.pkl".format(BASEPATH, methodology, is_testing, nfold, top, binsize, top_feature)
     filepath_feature_importance = "{}/etc/feature_profile/transform2=True_binsize={}_top={}.pkl".format(BASEPATH, binsize, top)
     filepath_testing = "{}/etc/parameter_tuning/{}_transform2=True_binsize={}_top={}.submission.csv".format(BASEPATH, methodology, binsize, top)
 
     train_x = None
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
 
-    for layers, value in load_interaction_information(folder_ii, top):
+    for layers, value in load_interaction_information(folder_ii, str(top_feature)):
         for df in [train_x, test_x]:
             t = value
             breaking_layer = None
@@ -71,6 +67,7 @@ def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
     if is_testing:
         train_x = train_x.head(1000)
 
+    filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_nfold={}_top={}_binsize={}_feature={}.pkl".format(BASEPATH, methodology, is_testing, nfold, top_feature, binsize, len(train_x.columns))
     log("{} data records with {} features".format(len(train_x), len(train_x.columns)))
 
     algorithm, is_xgboosting, is_classifier = None, False, False

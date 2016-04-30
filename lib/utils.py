@@ -1,5 +1,6 @@
 import logging
 import os
+import copy
 
 CRITICAL = logging.CRITICAL
 ERROR = logging.ERROR
@@ -44,6 +45,13 @@ def log(msg, level=logging.INFO):
     else:
         logger.notset(msg)
 
-def create_directory(directory):
-    if not os.path.exists(directory):
-        os.makedirs(directory)
+def make_a_stamp(model_setting):
+    setting = copy.deepcopy(model_setting)
+
+    for k, v in setting.items():
+        if type(v).__name__ == "function":
+            v = v.__name__
+
+    m = md5.new()
+    m.update(str(setting))
+    return m.hexdigest()

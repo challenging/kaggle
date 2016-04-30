@@ -33,7 +33,7 @@ from sklearn.neighbors import NearestCentroid, kneighbors_graph
 from sklearn.preprocessing import MinMaxScaler, Imputer, StandardScaler
 
 from load import save_cache, load_cache
-from utils import log, DEBUG, INFO, WARN, ERROR
+from utils import make_a_stamp, log, DEBUG, INFO, WARN, ERROR
 from deep_learning import logistic_regression, logistic_regression_2, KaggleCheckpoint
 from customized_estimators import CustomizedClassEstimator, CustomizedProbaEstimator
 
@@ -520,8 +520,3 @@ class LearningThread(threading.Thread):
 
             self.obj.learning_queue.task_done()
             self.obj.dump()
-
-def make_a_stamp(model_setting):
-    m = md5.new()
-    m.update(str(model_setting))
-    return m.hexdigest()
