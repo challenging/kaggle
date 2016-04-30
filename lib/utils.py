@@ -49,9 +49,10 @@ def log(msg, level=logging.INFO):
 def make_a_stamp(model_setting):
     setting = copy.deepcopy(model_setting)
 
-    for k, v in setting.items():
-        if type(v).__name__ == "function":
-            v = v.__name__
+    if isinstance(setting. dict):
+        for k, v in setting.items():
+            if type(v).__name__ == "function":
+                v = v.__name__
 
     m = md5.new()
     m.update(str(setting))
