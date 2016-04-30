@@ -47,13 +47,6 @@ def log(msg, level=logging.INFO):
         logger.notset(msg)
 
 def make_a_stamp(model_setting):
-    setting = copy.deepcopy(model_setting)
-
-    if isinstance(setting, dict):
-        for k, v in setting.items():
-            if type(v).__name__ == "function":
-                v = v.__name__
-
     m = md5.new()
-    m.update(str(setting))
+    m.update(str(model_setting))
     return m.hexdigest()
