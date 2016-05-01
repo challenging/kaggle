@@ -506,7 +506,7 @@ class LearningThread(threading.Thread):
                         layer_two_testing_dataset = model.predict(test_x)
                         self.obj.insert_layer_two_testing_dataset(model_idx, nfold, layer_two_testing_dataset, model.model.get_params(), filepath_testing)
 
-                        cost = model.cost(validate_x, validate_y)
+                        cost = model.cost_function(validate_y, results)
                         if np.isnan(cost):
                             log("The {} of '{}' model for {}th fold is NaN".format(self.cost_func.__name__, model_name, nfold), WARN)
                         else:
