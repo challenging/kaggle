@@ -93,11 +93,9 @@ class ParameterTuning(object):
                 log("Set {} to be {}".format(key, getattr(self, key)))
 
             filepath_testing = self.filepath_testing.replace("submission", phase)
-            log("Compile a submission results for kaggle in {}".format(filepath_testing), INFO)
             self.submit(model, filepath_testing, "testing")
 
             filepath_training = self.filepath_testing.replace("submission", "training_{}".format(phase))
-            log("Compile a training results for kaggle in {}".format(filepath_training), INFO)
             self.submit(model, filepath_training, "training")
         else:
             if not micro_tuning:
@@ -241,7 +239,27 @@ class ParameterTuning(object):
 
             results = {"ID": self.test_id, "TARGET": predicted_proba}
 
-        save_kaggle_submission(results, filepath_testing)
+        if not os.path.exists(filepath_testing):
+            log("Compile a submission results for kaggle in {}".format(filepath_testing), INFO)
+            save_kaggle_submission(results, filepath_testing)
+
+    def calibrated_prediction(self):
+        if self.method == "classifier":
+            for method_calibration in ["sigmoid", "isotonic"]:
+                filepath_testing = self.filepath_testing.replace("submission", "calibrated={}".format(method_calibration))
+                filepath_calibration = filepath_testing.replace("csv", "pkl")
+                if not os.path.exists(filepath_testing):
+                    clf = CalibratedClassifierCV(base_estimator=self.get_model_instance(), cv=self.cv, method=method_calibration)
+                    if os.path.exists(filepath_calibration):
+                        clf = load_cache(filepath_calibration)
+                    else:
+                        clf.fit(self.train[self.predictors], self.train_y)
+                        save_cache(filepath_calibration)
+
+                    log("Save calibrated results in {}".format(filepath_testing), INFO)
+                    self.submit(clf, filepath_testing, "testing")
+        else:
+            log("Not support calibrated prediction model for {}".format(self.method), WARN)
 
 class RandomForestTuning(ParameterTuning):
     def __init__(self, target, data_id, method, n_estimator=200, cost="logloss", objective="entropy", cv=10, n_jobs=-1):
@@ -298,16 +316,7 @@ class RandomForestTuning(ParameterTuning):
             _, _, _, model = self.phase("phase4", param4)
 
         log("The best params are {}".format(model.get_params()), INFO)
-
-        # Use CalibratedClassifierCV
-        if self.method == "classifier":
-            for method_calibration in ["sigmoid", "isotonic"]:
-                clf = CalibratedClassifierCV(base_estimator=self.get_model_instance(), cv=self.cv, method=method_calibration)
-                clf.fit(self.train[self.predictors], self.train_y)
-
-                filepath_testing = self.filepath_testing.replace("submission", "calibrated={}".format(method_calibration))
-                log("Save calibrated results in {}".format(filepath_testing), INFO)
-                self.submit(clf, filepath_testing, "testing")
+        self.calibrated_prediction()
 
 class ExtraTreeTuning(RandomForestTuning):
     def get_model_instance(self):
@@ -406,11 +415,4 @@ class XGBoostingTuning(ParameterTuning):
         param5 = {'reg_alpha':[1e-5, 1e-2, 0.1, 1.0]}
         self.phase("phase5", param5, True)
 
-        if self.method == "classifier":
-            for method_calibration in ["sigmoid", "isotonic"]:
-                clf = CalibratedClassifierCV(base_estimator=self.get_model_instance(), cv=self.cv, method=method_calibration)
-                clf.fit(self.train[self.predictors], self.train_y)
-
-                filepath_testing = self.filepath_testing.replace("submission", "calibrated={}".format(method_calibration))
-                log("Save calibrated results in {}".format(filepath_testing), INFO)
-                self.submit(clf, filepath_testing, "testing")
+        self.calibrated_prediction()
