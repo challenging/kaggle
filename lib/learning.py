@@ -360,7 +360,9 @@ class LearningQueue(object):
 
         try:
             self.layer_two_training_dataset[layer_two_training_idx, model_idx] = results
-            save_cache((params, layer_two_training_idx, model_idx, results), filepath)
+
+            if self.saving_results:
+                save_cache((params, layer_two_training_idx, model_idx, results), filepath)
         finally:
             self.lock.release()
 
@@ -369,14 +371,17 @@ class LearningQueue(object):
 
         try:
             self.layer_two_testing_dataset[:, model_idx, nfold] = results
-            save_cache((params, model_idx, nfold, results), filepath)
+
+            if self.saving_results:
+                save_cache((params, model_idx, nfold, results), filepath)
         finally:
             self.lock.release()
 
     def insert_cost(self, model_name, nfold, cost, filepath):
         self.learning_cost.insert_cost(model_name, nfold, cost)
 
-        save_cache((model_name, nfold, cost), filepath)
+        if self.saving_results:
+            save_cache((model_name, nfold, cost), filepath)
 
     def dump(self):
         self.lock.acquire()
