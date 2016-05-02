@@ -512,8 +512,6 @@ class LearningThread(threading.Thread):
                         else:
                             self.obj.insert_cost(model_name, nfold, cost, filepath_cost)
 
-                        log("The grid score is {}".format(model.grid_scores()), DEBUG)
-
             timestamp_end = time.time()
             log("Cost {:02f} secends to train '{}' model for fold-{:02d}, and cost is {:.8f}".format(\
                     timestamp_end-timestamp_start, model_name, nfold, cost), INFO)
