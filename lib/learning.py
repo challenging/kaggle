@@ -355,32 +355,32 @@ class LearningQueue(object):
         else:
             return True
 
-    def insert_layer_two_training_dataset(self, layer_two_training_idx, model_idx, results, params, filepath):
+    def insert_layer_two_training_dataset(self, layer_two_training_idx, model_idx, results, params, filepath, is_saving=True):
         self.lock.acquire()
 
         try:
             self.layer_two_training_dataset[layer_two_training_idx, model_idx] = results
 
-            if self.saving_results:
+            if is_saving:
                 save_cache((params, layer_two_training_idx, model_idx, results), filepath)
         finally:
             self.lock.release()
 
-    def insert_layer_two_testing_dataset(self, model_idx, nfold, results, params, filepath):
+    def insert_layer_two_testing_dataset(self, model_idx, nfold, results, params, filepath, is_saving=True):
         self.lock.acquire()
 
         try:
             self.layer_two_testing_dataset[:, model_idx, nfold] = results
 
-            if self.saving_results:
+            if is_saving:
                 save_cache((params, model_idx, nfold, results), filepath)
         finally:
             self.lock.release()
 
-    def insert_cost(self, model_name, nfold, cost, filepath):
+    def insert_cost(self, model_name, nfold, cost, filepath, is_saving=True):
         self.learning_cost.insert_cost(model_name, nfold, cost)
 
-        if self.saving_results:
+        if is_saving:
             save_cache((model_name, nfold, cost), filepath)
 
     def dump(self):
@@ -473,9 +473,9 @@ class LearningThread(threading.Thread):
                 testing_params, _, _, testing_results = load_cache(filepath_testing)
                 _, _, cost = load_cache(filepath_cost)
 
-                self.obj.insert_layer_two_training_dataset(training_layer_two_training_idx, model_idx, training_results, training_params, filepath_training)
-                self.obj.insert_layer_two_testing_dataset(model_idx, nfold, testing_results, testing_params, filepath_testing)
-                self.obj.insert_cost(model_name, nfold, cost, filepath_cost)
+                self.obj.insert_layer_two_training_dataset(training_layer_two_training_idx, model_idx, training_results, training_params, filepath_training, is_saving=False)
+                self.obj.insert_layer_two_testing_dataset(model_idx, nfold, testing_results, testing_params, filepath_testing, is_saving=False)
+                self.obj.insert_cost(model_name, nfold, cost, filepath_cost, is_saving=False)
 
                 log("Hit cache, the cost is {} based on {}'s {} nfold".format(cost, model_name, nfold), INFO)
             else:
@@ -486,9 +486,9 @@ class LearningThread(threading.Thread):
                     model.train(train_x, train_y)
                     training_results, testing_results = model.get_cluster_results(validate_x, test_x)
 
-                    self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, training_results, model.model.get_params(), filepath_training)
-                    self.obj.insert_layer_two_testing_dataset(model_idx, nfold, testing_results, model.model.get_params(), filepath_testing)
-                    self.obj.insert_cost(model_name, nfold, -1, filepath_cost)
+                    self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, training_results, model.model.get_params(), filepath_training, is_saving=self.saving_results)
+                    self.obj.insert_layer_two_testing_dataset(model_idx, nfold, testing_results, model.model.get_params(), filepath_testing, is_saving=self.saving_results)
+                    self.obj.insert_cost(model_name, nfold, -1, filepath_cost, is_saving=self.saving_results)
                 else:
                     if model_name.find("deep") > -1 and nfold != 0:
                         # Copy the prediction results of training dataset to other folds
@@ -496,26 +496,26 @@ class LearningThread(threading.Thread):
 
                         #Copy the prediction results of testing dataset to other folds
                         layer_two_testing_dataset = self.obj.layer_two_testing_dataset[:, model_idx, 0]
-                        self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, layer_two_testing_dataset, {}, filepath_testing)
+                        self.obj.insert_layer_two_testing_dataset(model.name, model_idx, nfold, layer_two_testing_dataset, {}, filepath_testing, is_saving=self.saving_results)
 
                         # Copy the cost of 0th fold into other folds
                         cost = self.obj.learning_cost[model_name][0]
-                        self.obj.insert_cost(model_name, nfold, cost, filepath_cost)
+                        self.obj.insert_cost(model_name, nfold, cost, filepath_cost, is_saving=self.saving_results)
                     else:
                         log("{} - {}, {}".format(model_name, train_x.shape, train_y.shape))
                         model.train(train_x, train_y)
 
                         results = model.predict(validate_x)
-                        self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, results, model.model.get_params(), filepath_training)
+                        self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, results, model.model.get_params(), filepath_training, is_saving=self.saving_results)
 
                         layer_two_testing_dataset = model.predict(test_x)
-                        self.obj.insert_layer_two_testing_dataset(model_idx, nfold, layer_two_testing_dataset, model.model.get_params(), filepath_testing)
+                        self.obj.insert_layer_two_testing_dataset(model_idx, nfold, layer_two_testing_dataset, model.model.get_params(), filepath_testing, is_saving=self.saving_results)
 
                         cost = model.cost_function(validate_y, results)
                         if np.isnan(cost):
                             log("The {} of '{}' model for {}th fold is NaN".format(self.cost_func.__name__, model_name, nfold), WARN)
                         else:
-                            self.obj.insert_cost(model_name, nfold, cost, filepath_cost)
+                            self.obj.insert_cost(model_name, nfold, cost, filepath_cost, is_saving=self.saving_results)
 
             timestamp_end = time.time()
             log("Cost {:02f} secends to train '{}' model for fold-{:02d}, and cost is {:.8f}".format(\
