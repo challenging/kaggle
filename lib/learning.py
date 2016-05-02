@@ -432,7 +432,7 @@ class LearningThread(threading.Thread):
                 else:
                     log("Not found data_dimension from {}".format(model_name), INFO)
             else:
-                log("{} gets {} features by 'all'".format(model_name, len(self.obj.train_x[train_x_idx][0])), INFO)
+                log("{} gets {} features by 'all'".format(model_name, self.obj.train_x[train_x_idx].shape), INFO)
 
             if model_name.find("deep") > -1:
                 model_setting["folder"] = self.model_folder

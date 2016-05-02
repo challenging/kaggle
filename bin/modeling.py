@@ -93,21 +93,24 @@ def learning(conf, thread, is_testing):
 
     # Init the parameters of cluster
     for idx, layer_models in enumerate([layer1_models, layer2_models]):
-        for model_section in parser.get_layer_models(1):
+        for model_section in parser.get_layer_models(idx+1):
             method, setting = parser.get_model_setting(model_section)
 
             if method.find("deep") > -1:
                 setting["folder"] = None
 
-                if setting["data_dimension"] == "basic":
-                    setting["input_dims"] = len(basic_columns)
-                elif setting["data_dimension"] == "importance":
-                    setting["input_dims"] = len(importance_columns)
-                elif setting["data_dimension"].find("interaction-information") != -1:
-                    setting["input_dims"] = top_feature
+                if "data_dimension" in setting:
+                    if setting["data_dimension"] == "basic":
+                        setting["input_dims"] = len(basic_columns)
+                    elif setting["data_dimension"] == "importance":
+                        setting["input_dims"] = len(importance_columns)
+                    elif setting["data_dimension"].find("interaction-information") != -1:
+                        setting["input_dims"] = top_feature
+                    else:
+                        log("Wrong Setting for input_dims because the data_dimension is {}".format(setting["data_dimension"]), ERRPR)
+                        sys.exit(100)
                 else:
-                    log("Wrong Setting for input_dims because the data_dimension is {}".format(setting["data_dimension"]), ERRPR)
-                    sys.exit(100)
+                    log("Not found data_dimension in LAYER{}".format(idx+1), INFO)
 
                 setting["callbacks"] = [checkpointer]
                 setting["number_of_layer"] = setting.pop("layer_number")
@@ -148,9 +151,13 @@ def learning(conf, thread, is_testing):
                              objective, folder_model, folder_middle, predictors, train_x, train_Y, test_x, layer1_models,
                              filepath_queue, filepath_nfold,
                              n_folds=nfold, cost_string=cost, number_of_thread=thread, saving_results=True)
+    log("Layer1 is done...", INFO)
 
-    for idx, submission in enumerate(layer2_test_x):
+    col = layer2_test_x.shape[1]
+    for idx in range(0, col):
+        submission = layer2_test_x[:,idx]
         filepath_submission = "{}/layer=1_model={}_params={}.csv".format(folder_submission, layer1_models[idx][0], make_a_stamp(layer1_models[idx][1]))
+
         save_kaggle_submission({"ID": test_id, "Target": submission}, filepath_submission)
 
     # Phase 2. --> Model Training
@@ -169,8 +176,11 @@ def learning(conf, thread, is_testing):
     testing_targets = [{"ID": test_id}]
     store_layer_output([m[0] for m in layer1_models+layer2_models], testing_dataset_proba, filepath_testing, optional=testing_targets)
 
-    for idx in submission in enumerate(layer3_test_x):
+    col = layer3_test_x.shape[1]
+    for idx in range(0, col):
+        submission = layer3_test_x[:, idx]
         filepath_submission = "{}/layer=1_model={}_params={}.csv".format(folder_submission, layer2_models[idx][0], make_a_stamp(layer2_models[idx][1]))
+
         save_kaggle_submission({"ID": test_id, "Target": submission}, filepath_submission)
 
     # Phase 3. --> Model Training
