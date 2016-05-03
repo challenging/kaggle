@@ -82,6 +82,7 @@ def learning(conf, thread, is_testing):
     train_Y = train_y.astype(float)
 
     layer1_models, layer2_models, last_model = [], [], []
+    data_dimension = []
 
     # Init the parameters of deep learning
     checkpointer = KaggleCheckpoint(filepath="{epoch}.weights.hdf5",
@@ -93,6 +94,8 @@ def learning(conf, thread, is_testing):
 
     # Init the parameters of cluster
     for idx, layer_models in enumerate([layer1_models, layer2_models, last_model]):
+        data_dimension.append([])
+
         for model_section in parser.get_layer_models(idx+1):
             method, setting = parser.get_model_setting(model_section)
 
@@ -109,15 +112,26 @@ def learning(conf, thread, is_testing):
                     else:
                         log("Wrong Setting for input_dims because the data_dimension is {}".format(setting["data_dimension"]), ERRPR)
                         sys.exit(100)
+
+                    data_dimension[idx].append(setting["data_dimension"])
                 else:
                     log("Not found data_dimension in LAYER{}".format(idx+1), INFO)
 
+                    data_dimension[idx].append("all")
+
                 setting["callbacks"] = [checkpointer]
                 setting["number_of_layer"] = setting.pop("layer_number")
+            else:
+                if "data_dimension" in setting:
+                    data_dimension[idx].append(setting["data_dimension"])
+                else:
+                    data_dimension[idx].append("all")
 
             layer_models.append((method, setting))
             log("Get the configuration of {} from {}".format(method, conf), INFO)
             log("The setting is {}".format(setting), INFO)
+
+    log(data_dimension)
 
     folder_model = "{}/prediction_model/ensemble_learning/conf={}_is_testing={}_nfold={}_layer1={}_layer2={}_binsize={}_top={}".format(\
                         BASEPATH, os.path.basename(conf), is_testing, nfold, len(layer1_models), len(layer2_models), binsize, top_feature)
@@ -125,7 +139,7 @@ def learning(conf, thread, is_testing):
     folder_middle = "{}/etc/middle_layer/is_testing={}_nfold={}_binsize={}_top={}".format(\
                         BASEPATH, is_testing, nfold, binsize, top_feature)
 
-    if is_testing:
+    if is_testing and os.path.isdir(folder_model):
         log("Due to the testing mode, remove the {} firstly".format(folder_model), INFO)
         shutil.rmtree(folder_model)
 
@@ -156,7 +170,7 @@ def learning(conf, thread, is_testing):
         col = layer_test_x.shape[1]
         for idx_col in range(0, col):
             submission = layer_test_x[:,idx_col]
-            filepath_submission = "{}/layer={}_model={}_params={}.csv".format(folder_submission, idx+1, models[idx_col][0], make_a_stamp(models[idx_col][1]))
+            filepath_submission = "{}/layer={}_dimension={}_model={}_params={}.csv".format(folder_submission, idx+1, data_dimension[idx][idx_col], models[idx_col][0], make_a_stamp(models[idx_col][1]))
             save_kaggle_submission({"ID": test_id, "Target": submission}, filepath_submission)
 
             prediction_history["layer={}_method={}".format(idx+1, models[idx_col][0])] = layer_train_x[:, idx_col]
@@ -168,7 +182,7 @@ def learning(conf, thread, is_testing):
 
     filepath_history_prediction = "{}/history.csv".format(folder_model)
     filepath_history_learning_loss = "{}/learning_loss.pkl".format(folder_model)
-    pd.DataFrame(prediction_history).to_csv(filepath, index=False)
+    save_kaggle_submission(prediction_history, filepath_history_prediction)
 
 if __name__ == "__main__":
     learning()

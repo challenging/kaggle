@@ -453,11 +453,6 @@ class LearningThread(threading.Thread):
             filepath_testing = "{}/testing_name={}_nfold={}_feature={}_setting={}.pkl".format(self.folder_middle, model_name, nfold, feature_stamp, model_stamp)
             filepath_cost = "{}/cost_name={}_nfold={}_feature={}_setting={}.pkl".format(self.folder_middle, model_name, nfold, feature_stamp, model_stamp)
 
-            log("The flag of self.saving_results is {}, and parent_folder is in {}".format(self.saving_results, os.path.dirname(filepath_training)), INFO)
-            log("The filepath_training is {}({})".format(os.path.basename(filepath_training), os.path.exists(filepath_training)), INFO)
-            log("The filepath_testing is {}({})".format(os.path.basename(filepath_testing), os.path.exists(filepath_testing)), INFO)
-            log("The filepath_cost is {}({})".format(os.path.basename(filepath_cost), os.path.exists(filepath_cost)), INFO)
-
             train_x, train_y, validate_x, validate_y, test_x = None, self.obj.train_y[train_x_idx], None, self.obj.train_y[test_x_idx], None
             if self.obj.predictors and data_dimensions:
                 train_x = self.obj.train_x[predictors].values[train_x_idx]
@@ -469,6 +464,11 @@ class LearningThread(threading.Thread):
                 test_x = self.obj.test_x
 
             if self.saving_results and os.path.exists(filepath_training) and os.path.exists(filepath_testing) and os.path.exists(filepath_cost):
+                log("The flag of self.saving_results is {}, and parent_folder is in {}".format(self.saving_results, os.path.dirname(filepath_training)), INFO)
+                log("The filepath_training is {}({})".format(os.path.basename(filepath_training), os.path.exists(filepath_training)), INFO)
+                log("The filepath_testing is {}({})".format(os.path.basename(filepath_testing), os.path.exists(filepath_testing)), INFO)
+                log("The filepath_cost is {}({})".format(os.path.basename(filepath_cost), os.path.exists(filepath_cost)), INFO)
+
                 training_params, training_layer_two_training_idx, _, training_results = load_cache(filepath_training)
                 testing_params, _, _, testing_results = load_cache(filepath_testing)
                 _, _, cost = load_cache(filepath_cost)
