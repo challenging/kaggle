@@ -40,7 +40,11 @@ def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
     filepath_cache_1 = "{}/input/train.pkl".format(BASEPATH)
     folder_ii = "{}/input/interaction_information/transform2=True_testing=-1_binsize={}".format(BASEPATH, binsize)
     filepath_feature_importance = "{}/etc/feature_profile/transform2=True_binsize={}_top={}.pkl".format(BASEPATH, binsize, top)
-    filepath_testing = "{}/etc/parameter_tuning/{}_transform2=True_binsize={}_top={}_topfeature={}.submission.csv".format(BASEPATH, methodology, binsize, top, top_feature)
+    filepath_submission = "{}/etc/parameter_tuning/{}_transform2=True_binsize={}_top={}_topfeature={}.submission.csv".format(BASEPATH, methodology, binsize, top, top_feature)
+
+    parent_folder = os.path.dirname(filepath_submission)
+    if not os.path.isdir(parent_folder):
+        os.makedirs(parent_folder)
 
     train_x = None
     train_x, test_x, train_y, test_id, train_id = load_data(filepath_cache_1, filepath_training, filepath_testing, drop_fields)
@@ -103,7 +107,7 @@ def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
     if is_feature_importance:
         algorithm.enable_feature_importance(filepath_feature_importance, top_feature)
 
-    algorithm.set_filepath(filepath_tuning, filepath_testing)
+    algorithm.set_filepath(filepath_tuning, filepath_submission)
 
     if os.path.exists(filepath_tuning):
         algorithm.load()

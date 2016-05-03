@@ -91,7 +91,9 @@ def data_transform_2(filepath_training, filepath_testing, drop_fields=[], keep_n
 
         return ret_fill_nan_null
 
-    id_train = train["ID"]
+    id_train = None
+    if "ID" in train.columns:
+        id_train = train["ID"]
 
     df_all = pd.concat((train, test), axis=0, ignore_index=True)
     df_all['null_count'] = df_all.isnull().sum(axis=1).tolist()
