@@ -42,6 +42,22 @@ class ModelConfParser(object):
 
         return top_feature
 
+    def get_n_estimators(self):
+        value = 1000
+
+        if self.config.has_option("MAIN", "n_estimators"):
+            value = self.config.getint("MAIN", "n_estimators")
+
+        return value
+
+    def get_learning_rate(self):
+        value = 0.05
+
+        if self.config.has_option("MAIN", "learning_rate"):
+            value = self.config.getfloat("MAIN", "learning_rate")
+
+        return value
+
     def get_interaction_information(self):
         return self.config.getint("INTERACTION_INFORMATION", "binsize"), self.config.get("INTERACTION_INFORMATION", "top")
 

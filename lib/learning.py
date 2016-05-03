@@ -65,6 +65,7 @@ class LearningFactory(object):
                 model = Learning(objective, method, LinearRegression(), cost_function)
             elif method.find("regressor") > -1:
                 if method.find("extratree") > -1:
+                    log(setting)
                     model = Learning(objective, method, ExtraTreesRegressor(**setting), cost_function)
                 elif method.find("randomforest") > -1:
                     model = Learning(objective, method, RandomForestRegressor(**setting), cost_function)
@@ -144,8 +145,10 @@ class Learning(object):
         self.name = name.lower()
         self.model = model
 
-        if self.model:
+        if self.model != None:
             log("The parameters of {} are {}".format(self.name, self.model.get_params()), INFO)
+        else:
+            log("Not found model instance of {}".format(self.name), INFO)
 
         self.cost_function = cost_function
 

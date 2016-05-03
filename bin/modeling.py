@@ -14,9 +14,10 @@ import shutil
 import numpy as np
 
 sys.path.append("{}/../lib".format(os.path.dirname(os.path.abspath(__file__))))
-from utils import make_a_stamp, log, INFO, WARN
+from utils import make_a_stamp, log, INFO, WARN, create_folder
 from load import load_data, load_advanced_data, load_cache, save_cache, save_kaggle_submission, load_interaction_information, load_feature_importance
 from learning import LearningFactory
+from parameter_tuning import tuning
 from configuration import ModelConfParser
 from deep_learning import KaggleCheckpoint
 from ensemble_learning import layer_model
@@ -139,20 +140,42 @@ def learning(conf, thread, is_testing):
         shutil.rmtree(folder_model)
 
     folder_submission = "{}/submission".format(folder_model)
-    if not os.path.isdir(folder_submission):
-        os.makedirs(folder_submission)
+    create_folder(folder_submission + "/dummy.txt")
 
     filepath_training = "{}/training_proba_tracking.csv".format(folder_model)
     filepath_testing = "{}/testing_proba_tracking.csv".format(folder_model)
 
     previous_training_dataset, previous_testing_dataset = train_x, test_x
-    prediction_testing_history, prediction_training_history, learning_loss_history = {"ID": test_id}, {"Target": train_Y}, []
+    prediction_testing_history, prediction_training_history, learning_loss_history = {"ID": test_id}, {"target": train_Y}, []
 
     # Model Training
     m = [layer1_models, layer2_models, last_model]
     for idx, models in enumerate(m):
-        filepath_queue = "{}/layer{}_queue.pkl".format(idx+1, folder_model)
-        filepath_nfold = "{}/layer{}_nfold.pkl".format(idx+1, folder_model)
+        filepath_queue = "{}/layer{}_queue.pkl".format(folder_model, idx+1)
+        filepath_nfold = "{}/layer{}_nfold.pkl".format(folder_model, idx+1)
+
+        for idx_col, (method, setting) in enumerate(models):
+            if "auto_tuning" in setting and setting["auto_tuning"] == 1:
+                filepath_tuning = "{}/etc/parameter_tuning/layer{}/method={}_testing={}_nfold={}_top={}_binsize={}_feature={}.pkl".format(folder_model, idx+1, method, is_testing, nfold, top, binsize, len(previous_training_dataset[0]))
+                filepath_submission = "{}/etc/parameter_tuning/layer{}/method={}_binsize={}_top={}_feature={}.submission.csv".format(folder_model, idx+1, method, binsize, top, len(previous_training_dataset[0]))
+
+                create_folder(filepath_tuning)
+
+                log("Start the process of auto-tuning parameters for {}".format(method), INFO)
+                params = tuning(previous_training_dataset, train_Y, test_id, previous_testing_dataset, cost,
+                                None, filepath_tuning, filepath_submission, method, nfold, top_feature, binsize,
+                                thread=parser.get_n_jobs())
+
+                log("The final paramers of layer{}-{} are {}".format(idx+1, method, params), INFO)
+                for k, v in zip(["max_iter", "n_estimators", "learning_rate"], [parser.get_n_estimators(), parser.get_n_estimators(), parser.get_learning_rate()]):
+                    if k in params:
+                        params[k] = v
+
+                models[idx_col][1].update(params)
+
+            if "auto_tuning" in setting:
+                models[idx_col][1].pop("auto_tuning")
+
         layer_train_x, layer_test_x, learning_loss = layer_model(\
                                  objective, folder_model, folder_middle, predictors, previous_training_dataset, train_Y, previous_testing_dataset, models,
                                  filepath_queue, filepath_nfold,

@@ -15,7 +15,7 @@ import feature_engineering
 
 from utils import log, INFO, WARN, ERROR
 from load import load_data, data_transform_2, load_interaction_information, save_cache, load_cache
-from parameter_tuning import XGBoostingTuning, RandomForestTuning, ExtraTreeTuning
+from parameter_tuning import XGBoostingTuning, RandomForestTuning, ExtraTreeTuning, tuning
 from configuration import ModelConfParser
 
 @click.command()
@@ -25,7 +25,7 @@ from configuration import ModelConfParser
 @click.option("--is-feature-importance", is_flag=True, help="Turn on the feature importance")
 @click.option("--methodology", required=True, help="Tune parameters of which methodology")
 @click.option("--nfold", default=5, help="the number of nfold")
-def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
+def parameter_tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
     drop_fields = []
 
     parser = ModelConfParser(conf)
@@ -66,53 +66,18 @@ def tuning(methodology, nfold, is_testing, is_feature_importance, thread, conf):
                 log("Skip {}".format(layers), WARN)
                 break
 
-    train_x["Target"] = train_y.values
-
     if is_testing:
         train_x = train_x.head(1000)
+        train_y = train_y.head(1000)
 
     filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_nfold={}_top={}_binsize={}_feature={}.pkl".format(BASEPATH, methodology, is_testing, nfold, top_feature, binsize, len(train_x.columns))
     log("{} data records with {} features, and filepath is {}".format(len(train_x), len(train_x.columns), filepath_tuning), INFO)
 
-    algorithm, is_xgboosting, is_classifier = None, False, False
-    if methodology.find("xg") > -1:
-        if methodology[-1] == "c":
-            algorithm = XGBoostingTuning("Target", "ID", "classifier", cost=cost, n_jobs=thread, cv=nfold)
+    params = tuning(train_x, train_y, test_id, test_x, cost,
+                    filepath_feature_importance if is_feature_importance else None, filepath_tuning, filepath_submission, methodology, nfold, top_feature, binsize,
+                    thread=thread)
 
-            is_classifier = True
-        elif methodology[-1] == "r":
-            algorithm = XGBoostingTuning("Target", "ID", "regressor", cost=cost, n_jobs=thread, cv=nfold)
-
-        is_xgboosting = True
-    elif methodology.find("rf") > -1:
-        if methodology[-1] == "c":
-            algorithm = RandomForestTuning("Target", "ID", "classifier", cost=cost,n_jobs=thread, cv=nfold)
-
-            is_classifier = True
-        elif methodology[-1] == "r":
-            algorithm = RandomForestTuning("Target", "ID", "regressor", cost=cost,n_jobs=thread, cv=nfold)
-    elif methodology.find("et") > -1:
-        if methodology[-1] == "c":
-            algorithm = ExtraTreeTuning("Target", "ID", "classifier", cost=cost,n_jobs=thread, cv=nfold)
-
-            is_classifier = True
-        elif methodology[-1] == "r":
-            algorithm = ExtraTreeTuning("Target", "ID", "regressor", cost=cost,n_jobs=thread, cv=nfold)
-
-    if algorithm == None:
-        log("Not support this algorithm - {}".format(methodology), ERROR)
-        sys.exit(1)
-
-    algorithm.set_dataset(train_x, train_y, test_id, test_x)
-    if is_feature_importance:
-        algorithm.enable_feature_importance(filepath_feature_importance, top_feature)
-
-    algorithm.set_filepath(filepath_tuning, filepath_submission)
-
-    if os.path.exists(filepath_tuning):
-        algorithm.load()
-
-    algorithm.process()
+    log("The final parameters are {}".format(params))
 
 if __name__ == "__main__":
-    tuning()
+    parameter_tuning()

@@ -55,7 +55,10 @@ class ParameterTuning(object):
         self.test_id = test_id
         self.test_x = test_x
 
-        predictors = [x for x in self.train.columns if x not in [self.target, self.data_id]]
+        predictors = None
+        if isinstance(self.train, pd.DataFrame):
+            predictors = [x for x in self.train.columns if x not in [self.target, self.data_id]]
+
         self.predictors = predictors
 
     def save(self):
@@ -123,6 +126,14 @@ class ParameterTuning(object):
     def phase(self, phase, params, is_micro_tuning=False):
         gsearch1 = None
         best_cost, best_params, scores = -np.inf, -np.inf, None
+        training_x, training_y = None, self.train_y
+        if self.predictors:
+            training_x = self.train[self.predictors]
+        else:
+            training_x = self.train
+
+        n_features = len(training_x[0])
+
         if phase in self.done:
             log("The {} is done so we skip it".format(phase))
             for key in params.keys():
@@ -144,9 +155,9 @@ class ParameterTuning(object):
                                     cv=self.cv,
                                     verbose=1)
 
-            log("Training by {} features".format(len(self.predictors)), INFO)
+            log("Training by {} features".format(n_features), INFO)
 
-            best_cost, best_params, scores = self.get_best_params(gsearch1, self.train[self.predictors], self.train[self.target])
+            best_cost, best_params, scores = self.get_best_params(gsearch1, training_x, training_y)
             log("The {} of {}-model is {:.8f} based on {}".format(self.cost_function.__name__, phase, best_cost, best_params.keys()))
 
             self.done[phase] = best_cost, best_params, scores, gsearch1
@@ -185,7 +196,7 @@ class ParameterTuning(object):
                                             cv=self.cv,
                                             verbose=1)
 
-                    micro_cost, micro_params, micro_scores = self.get_best_params(gsearch2, self.train[self.predictors], self.train[self.target])
+                    micro_cost, micro_params, micro_scores = self.get_best_params(gsearch2, training_x, training_y)
 
                     self.done[key] = micro_cost, micro_params, micro_scores, gsearch2
                     self.improve(gsearch2, key, micro_cost, micro_params, True)
@@ -221,22 +232,28 @@ class ParameterTuning(object):
         raise NotImplementError
 
     def submit(self, model, filepath_testing, mode="training"):
-        results, predicted_proba = None, None
+        training_dataset, testing_data, results, predicted_proba = None, None, None, None
+        if self.predictors:
+            training_dataset = self.train[self.predictors]
+            testing_dataset = self.test_x[self.predictors]
+        else:
+            training_dataset = self.train
+            testing_dataset = self.test_x
 
         if mode == "training":
             if self.method == "classifier":
-                predicted_proba = model.predict_proba(self.train[self.predictors])[:,1]
+                predicted_proba = model.predict_proba(training_dataset)[:,1]
             elif self.method == "regressor":
-                predicted_proba = model.predict(self.train[self.predictors])
+                predicted_proba = model.predict(training_dataset)
             else:
                 raise NotImplementError
 
             results = {"Target": self.train_y, "Predicted_Proba": predicted_proba}
         else:
             if self.method == "classifier":
-                predicted_proba = model.predict_proba(self.test_x[self.predictors])[:,1]
+                predicted_proba = model.predict_proba(testing_dataset)[:,1]
             elif self.method == "regressor":
-                predicted_proba = model.predict(self.test_x[self.predictors])
+                predicted_proba = model.predict(testing_dataset)
             else:
                 raise NotImplementError
 
@@ -293,6 +310,7 @@ class RandomForestTuning(ParameterTuning):
                                           min_samples_split=min_samples_split,
                                           min_samples_leaf=min_samples_leaf,
                                           class_weight=class_weight,
+                                          random_state=self.random_state,
                                           n_jobs=-1)
         elif self.method == "regressor":
             return RandomForestRegressor(n_estimators=n_estimator,
@@ -300,6 +318,7 @@ class RandomForestTuning(ParameterTuning):
                                          max_depth=max_depth,
                                          min_samples_split=min_samples_split,
                                          min_samples_leaf=min_samples_leaf,
+                                         random_state=self.random_state,
                                          n_jobs=-1)
 
     def process(self):
@@ -307,8 +326,13 @@ class RandomForestTuning(ParameterTuning):
 
         _, _, _, model = self.phase("phase1", {})
 
-        size_feature = len(self.predictors)
-        param2 = {'max_depth': range(6, 11, 2), 'max_features': [ratio for ratio in [0.75, 0.1, 0.25, np.sqrt(size_feature)/size_feature]]}
+        n_features = -1
+        if self.predictors:
+            n_features = len(self.predictors)
+        else:
+            n_features = len(self.train[0])
+
+        param2 = {'max_depth': range(6, 11, 2), 'max_features': [ratio for ratio in [0.75, 0.1, 0.25, np.sqrt(n_features)/n_features]]}
         _, _, _, model = self.phase("phase2", param2, True)
 
         param3 = {"min_samples_leaf": range(2, 5, 2), "min_samples_split": range(4, 9, 2)}
@@ -342,6 +366,7 @@ class ExtraTreeTuning(RandomForestTuning):
                                         min_samples_split=min_samples_split,
                                         min_samples_leaf=min_samples_leaf,
                                         class_weight=class_weight,
+                                        random_state=self.random_state,
                                         n_jobs=-1)
         elif self.method == "regressor":
             return ExtraTreesRegressor(n_estimators=n_estimator,
@@ -349,6 +374,7 @@ class ExtraTreeTuning(RandomForestTuning):
                                        max_depth=max_depth,
                                        min_samples_split=min_samples_split,
                                        min_samples_leaf=min_samples_leaf,
+                                       random_state=self.random_state,
                                        n_jobs=-1)
 
 class XGBoostingTuning(ParameterTuning):
@@ -423,3 +449,47 @@ class XGBoostingTuning(ParameterTuning):
         self.calibrated_prediction()
 
         return self.get_model_instance().get_params()
+
+def tuning(train_x, train_y, test_id, test_x, cost,
+           filepath_feature_importance, filepath_tuning, filepath_submission, methodology, nfold, top_feature, binsize,
+           thread=-1):
+
+    algorithm, is_xgboosting, is_classifier = None, False, False
+    if methodology.find("xg") > -1 or methodology.find("xgboosting") > -1:
+        if methodology[-1] == "c" or methodology == "classifier":
+            algorithm = XGBoostingTuning("Target", "ID", "classifier", cost=cost, n_jobs=thread, cv=nfold)
+
+            is_classifier = True
+        elif methodology[-1] == "r" or methodology == "regressor":
+            algorithm = XGBoostingTuning("Target", "ID", "regressor", cost=cost, n_jobs=thread, cv=nfold)
+
+        is_xgboosting = True
+    elif methodology.find("rf") > -1 or methodology.find("randomforest") > -1:
+        if methodology[-1] == "c" or methodology == "classifier":
+            algorithm = RandomForestTuning("Target", "ID", "classifier", cost=cost, n_jobs=thread, cv=nfold)
+
+            is_classifier = True
+        elif methodology[-1] == "r" or methodology == "regressor":
+            algorithm = RandomForestTuning("Target", "ID", "regressor", cost=cost, n_jobs=thread, cv=nfold)
+    elif methodology.find("et") > -1 or methodology.find("extratree"):
+        if methodology[-1] == "c" or methodology == "classifier":
+            algorithm = ExtraTreeTuning("Target", "ID", "classifier", cost=cost, n_jobs=thread, cv=nfold)
+
+            is_classifier = True
+        elif methodology[-1] == "r" or methodology == "regressor":
+            algorithm = ExtraTreeTuning("Target", "ID", "regressor", cost=cost, n_jobs=thread, cv=nfold)
+
+    if algorithm == None:
+        log("Not support this algorithm - {}".format(methodology), ERROR)
+        sys.exit(1)
+
+    algorithm.set_dataset(train_x, train_y, test_id, test_x)
+    if filepath_feature_importance:
+        algorithm.enable_feature_importance(filepath_feature_importance, top_feature)
+
+    algorithm.set_filepath(filepath_tuning, filepath_submission)
+
+    if os.path.exists(filepath_tuning):
+        algorithm.load()
+
+    return algorithm.process()
