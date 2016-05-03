@@ -92,7 +92,7 @@ def learning(conf, thread, is_testing):
                                     verbose=0, save_best_only=True, save_training_dataset=False)
 
     # Init the parameters of cluster
-    for idx, layer_models in enumerate([layer1_models, layer2_models]):
+    for idx, layer_models in enumerate([layer1_models, layer2_models, last_model]):
         for model_section in parser.get_layer_models(idx+1):
             method, setting = parser.get_model_setting(model_section)
 
@@ -119,75 +119,56 @@ def learning(conf, thread, is_testing):
             log("Get the configuration of {} from {}".format(method, conf), INFO)
             log("The setting is {}".format(setting), INFO)
 
-    for model_section in parser.get_layer_models(3):
-        method, setting = parser.get_model_setting(model_section)
-
-        last_model.append((method, setting))
-
     folder_model = "{}/prediction_model/ensemble_learning/conf={}_is_testing={}_nfold={}_layer1={}_layer2={}_binsize={}_top={}".format(\
                         BASEPATH, os.path.basename(conf), is_testing, nfold, len(layer1_models), len(layer2_models), binsize, top_feature)
 
     folder_middle = "{}/etc/middle_layer/is_testing={}_nfold={}_binsize={}_top={}".format(\
                         BASEPATH, is_testing, nfold, binsize, top_feature)
 
-    folder_submission = "{}/submission".format(folder_model)
-    if not os.path.isdir(folder_submission):
-        os.makedirs(folder_submission)
-
     if is_testing:
         log("Due to the testing mode, remove the {} firstly".format(folder_model), INFO)
         shutil.rmtree(folder_model)
 
-    if not os.path.exists(folder_model):
-        os.makedirs(folder_model)
+    folder_submission = "{}/submission".format(folder_model)
+    if not os.path.isdir(folder_submission):
+        os.makedirs(folder_submission)
 
     filepath_training = "{}/training_proba_tracking.csv".format(folder_model)
     filepath_testing = "{}/testing_proba_tracking.csv".format(folder_model)
 
-    # Phase 1. --> Model Training
-    filepath_queue = "{}/layer1_queue.pkl".format(folder_model)
-    filepath_nfold = "{}/layer1_nfold.pkl".format(folder_model)
-    layer2_train_x, layer2_test_x, learning_loss = layer_model(\
-                             objective, folder_model, folder_middle, predictors, train_x, train_Y, test_x, layer1_models,
-                             filepath_queue, filepath_nfold,
-                             n_folds=nfold, cost_string=cost, number_of_thread=thread, saving_results=True)
-    log("Layer1 is done...", INFO)
+    previous_training_dataset = train_x
+    previous_testing_dataset = test_x
 
-    col = layer2_test_x.shape[1]
-    for idx in range(0, col):
-        submission = layer2_test_x[:,idx]
-        filepath_submission = "{}/layer=1_model={}_params={}.csv".format(folder_submission, layer1_models[idx][0], make_a_stamp(layer1_models[idx][1]))
+    prediction_history, learning_loss_history = {"Target": train_Y}, []
 
-        save_kaggle_submission({"ID": test_id, "Target": submission}, filepath_submission)
+    # Model Training
+    m = [layer1_models, layer2_models, last_model]
+    for idx, models in enumerate(m):
+        filepath_queue = "{}/layer{}_queue.pkl".format(idx+1, folder_model)
+        filepath_nfold = "{}/layer{}_nfold.pkl".format(idx+1, folder_model)
+        layer_train_x, layer_test_x, learning_loss = layer_model(\
+                                 objective, folder_model, folder_middle, predictors, previous_training_dataset, train_Y, previous_testing_dataset, models,
+                                 filepath_queue, filepath_nfold,
+                                 n_folds=(1 if idx==len(m)-1 else nfold), cost_string=cost, number_of_thread=thread, saving_results=(True if idx==0 else False))
 
-    # Phase 2. --> Model Training
-    filepath_queue = "{}/layer2_queue.pkl".format(folder_model)
-    filepath_nfold = "{}/layer2_nfold.pkl".format(folder_model)
-    layer3_train_x, layer3_test_x, learning_loss = layer_model(\
-                             objective, folder_model, folder_middle, None, layer2_train_x, train_Y, layer2_test_x, layer2_models,
-                             filepath_queue, filepath_nfold,
-                             n_folds=nfold, cost_string=cost, number_of_thread=thread, saving_results=False)
+        learning_loss_history.append(learning_loss)
 
-    training_dataset_proba = np.hstack((layer2_train_x, layer3_train_x))
-    training_targets = [{"Target": train_y}]
-    store_layer_output([m[0] for m in layer1_models+layer2_models], training_dataset_proba, filepath_training, optional=training_targets)
+        col = layer_test_x.shape[1]
+        for idx_col in range(0, col):
+            submission = layer_test_x[:,idx_col]
+            filepath_submission = "{}/layer={}_model={}_params={}.csv".format(folder_submission, idx+1, models[idx_col][0], make_a_stamp(models[idx_col][1]))
+            save_kaggle_submission({"ID": test_id, "Target": submission}, filepath_submission)
 
-    testing_dataset_proba = np.hstack((layer2_test_x, layer3_test_x))
-    testing_targets = [{"ID": test_id}]
-    store_layer_output([m[0] for m in layer1_models+layer2_models], testing_dataset_proba, filepath_testing, optional=testing_targets)
+            prediction_history["layer={}_method={}".format(idx+1, models[idx_col][0])] = layer_train_x[:, idx_col]
 
-    col = layer3_test_x.shape[1]
-    for idx in range(0, col):
-        submission = layer3_test_x[:, idx]
-        filepath_submission = "{}/layer=1_model={}_params={}.csv".format(folder_submission, layer2_models[idx][0], make_a_stamp(layer2_models[idx][1]))
+        previous_training_dataset = layer_train_x
+        previous_testing_dataset = layer_test_x
 
-        save_kaggle_submission({"ID": test_id, "Target": submission}, filepath_submission)
+        log("Layer{} is done...".format(idx+1), INFO)
 
-    # Phase 3. --> Model Training
-    submission_results = final_model(objective, last_model[0], layer3_train_x, train_Y, layer3_test_x, cost_string=cost)
-
-    filepath_final_submission = "{}/submission/final_submission_model={}.csv".format(folder_model, last_model[0][0])
-    save_kaggle_submission({"ID": test_id, "Target": submission_results}, filepath_final_submission)
+    filepath_history_prediction = "{}/history.csv".format(folder_model)
+    filepath_history_learning_loss = "{}/learning_loss.pkl".format(folder_model)
+    pd.DataFrame(prediction_history).to_csv(filepath, index=False)
 
 if __name__ == "__main__":
     learning()
