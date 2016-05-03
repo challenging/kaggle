@@ -2,6 +2,7 @@ import logging
 import os
 import copy
 import md5
+import collections
 
 CRITICAL = logging.CRITICAL
 ERROR = logging.ERROR
@@ -49,4 +50,7 @@ def log(msg, level=logging.INFO):
 def make_a_stamp(model_setting):
     m = md5.new()
     m.update(str(model_setting))
+
+    #m.update(str(collections.OrderedDict(sorted(model_setting.items()))))
+
     return m.hexdigest()

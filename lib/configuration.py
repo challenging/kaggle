@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import re
 import copy
 import ConfigParser
 
@@ -9,8 +10,6 @@ class ModelConfParser(object):
     def __init__(self, filepath):
         self.config = ConfigParser.RawConfigParser()
         self.config.read(filepath)
-
-        self.models = {}
 
     def get_workspace(self):
         return self.config.get("MAIN", "workspace")
@@ -84,17 +83,26 @@ class ModelConfParser(object):
         if "kernal" in d:
             d["method"] = d.pop("kernal")
 
-        if "model_id" in d:
-            self.models[d.pop("model_id")] = (method, copy.deepcopy(d))
+        if "calibration" in d:
+            calibration = d.pop("calibration")
 
-        if "dependency_model_id" in d:
-            d["dependency"] = self.models[d.pop("dependency_model_id")]
+            if calibration == 1:
+                calibration_method = re.sub("(randomforest|extratree|xgboosting)", "calibration", method)
+                calibration_setting = {}
+                calibration_setting["n_jobs"] = -1
+                calibration_setting["cv"] = self.get_nfold()
+                calibration_setting["dependency"] = (method, copy.deepcopy(d))
 
-            for key in ["data_dimension", "model_id"]:
-                if key in d["dependency"][1]:
-                    del d["dependency"][1][key]
+                for key in ["model_id"]:
+                    if key in calibration_setting["dependency"][1]:
+                        del calibration_setting["dependency"][1][key]
 
-        return method, d
+                calibration_setting["data_dimension"] = calibration_setting["dependency"][1].pop("data_dimension")
+                calibration_setting["method"] = "isotonic"
+
+                yield (calibration_method, calibration_setting)
+
+        yield (method, d)
 
     def get_layer_models(self, layer_number):
         for section in self.config.sections():

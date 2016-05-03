@@ -97,45 +97,41 @@ def learning(conf, thread, is_testing):
         data_dimension.append([])
 
         for model_section in parser.get_layer_models(idx+1):
-            method, setting = parser.get_model_setting(model_section)
+            for method, setting in parser.get_model_setting(model_section):
+                if method.find("deep") > -1:
+                    setting["folder"] = None
 
-            if method.find("deep") > -1:
-                setting["folder"] = None
+                    if "data_dimension" in setting:
+                        if setting["data_dimension"] == "basic":
+                            setting["input_dims"] = len(basic_columns)
+                        elif setting["data_dimension"] == "importance":
+                            setting["input_dims"] = len(importance_columns)
+                        elif setting["data_dimension"].find("interaction-information") != -1:
+                            setting["input_dims"] = top_feature
+                        else:
+                            log("Wrong Setting for input_dims because the data_dimension is {}".format(setting["data_dimension"]), ERRPR)
+                            sys.exit(100)
 
-                if "data_dimension" in setting:
-                    if setting["data_dimension"] == "basic":
-                        setting["input_dims"] = len(basic_columns)
-                    elif setting["data_dimension"] == "importance":
-                        setting["input_dims"] = len(importance_columns)
-                    elif setting["data_dimension"].find("interaction-information") != -1:
-                        setting["input_dims"] = top_feature
+                        data_dimension[idx].append(setting["data_dimension"])
                     else:
-                        log("Wrong Setting for input_dims because the data_dimension is {}".format(setting["data_dimension"]), ERRPR)
-                        sys.exit(100)
+                        log("Not found data_dimension in LAYER{}".format(idx+1), INFO)
 
-                    data_dimension[idx].append(setting["data_dimension"])
+                        data_dimension[idx].append("all")
+
+                    setting["callbacks"] = [checkpointer]
+                    setting["number_of_layer"] = setting.pop("layer_number")
                 else:
-                    log("Not found data_dimension in LAYER{}".format(idx+1), INFO)
+                    if "data_dimension" in setting:
+                        data_dimension[idx].append(setting["data_dimension"])
+                    else:
+                        data_dimension[idx].append("all")
 
-                    data_dimension[idx].append("all")
-
-                setting["callbacks"] = [checkpointer]
-                setting["number_of_layer"] = setting.pop("layer_number")
-            else:
-                if "data_dimension" in setting:
-                    data_dimension[idx].append(setting["data_dimension"])
-                else:
-                    data_dimension[idx].append("all")
-
-            layer_models.append((method, setting))
-            log("Get the configuration of {} from {}".format(method, conf), INFO)
-            log("The setting is {}".format(setting), INFO)
-
-    log(data_dimension)
+                layer_models.append((method, setting))
+                log("Get the configuration of {} from {}".format(method, conf), INFO)
+                log("The setting is {}".format(setting), INFO)
 
     folder_model = "{}/prediction_model/ensemble_learning/conf={}_is_testing={}_nfold={}_layer1={}_layer2={}_binsize={}_top={}".format(\
                         BASEPATH, os.path.basename(conf), is_testing, nfold, len(layer1_models), len(layer2_models), binsize, top_feature)
-
     folder_middle = "{}/etc/middle_layer/is_testing={}_nfold={}_binsize={}_top={}".format(\
                         BASEPATH, is_testing, nfold, binsize, top_feature)
 
@@ -150,10 +146,8 @@ def learning(conf, thread, is_testing):
     filepath_training = "{}/training_proba_tracking.csv".format(folder_model)
     filepath_testing = "{}/testing_proba_tracking.csv".format(folder_model)
 
-    previous_training_dataset = train_x
-    previous_testing_dataset = test_x
-
-    prediction_history, learning_loss_history = {"Target": train_Y}, []
+    previous_training_dataset, previous_testing_dataset = train_x, test_x
+    prediction_testing_history, prediction_training_history, learning_loss_history = {"ID": test_id}, {"Target": train_Y}, []
 
     # Model Training
     m = [layer1_models, layer2_models, last_model]
@@ -173,16 +167,21 @@ def learning(conf, thread, is_testing):
             filepath_submission = "{}/layer={}_dimension={}_model={}_params={}.csv".format(folder_submission, idx+1, data_dimension[idx][idx_col], models[idx_col][0], make_a_stamp(models[idx_col][1]))
             save_kaggle_submission({"ID": test_id, "Target": submission}, filepath_submission)
 
-            prediction_history["layer={}_method={}".format(idx+1, models[idx_col][0])] = layer_train_x[:, idx_col]
+            prediction_training_history["layer={}_method={}".format(idx+1, models[idx_col][0])] = layer_train_x[:, idx_col]
+            prediction_testing_history["layer={}_method={}".format(idx+1, models[idx_col][0])] = layer_test_x[:, idx_col]
 
         previous_training_dataset = layer_train_x
         previous_testing_dataset = layer_test_x
 
         log("Layer{} is done...".format(idx+1), INFO)
 
-    filepath_history_prediction = "{}/history.csv".format(folder_model)
+    filepath_history_training_prediction = "{}/history_training.csv".format(folder_model)
+    save_kaggle_submission(prediction_training_history, filepath_history_training_prediction)
+
+    filepath_history_testing_prediction = "{}/history_testing.csv".format(folder_model)
+    save_kaggle_submission(prediction_testing_history, filepath_history_testing_prediction)
+
     filepath_history_learning_loss = "{}/learning_loss.pkl".format(folder_model)
-    save_kaggle_submission(prediction_history, filepath_history_prediction)
 
 if __name__ == "__main__":
     learning()
