@@ -19,8 +19,7 @@ from load import load_data, load_advanced_data, load_cache, save_cache, save_kag
 from learning import LearningFactory
 from configuration import ModelConfParser
 from deep_learning import KaggleCheckpoint
-from keras.callbacks import EarlyStopping
-from ensemble_learning import layer_model, final_model, store_layer_output
+from ensemble_learning import layer_model
 
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
 

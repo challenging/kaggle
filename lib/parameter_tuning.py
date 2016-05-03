@@ -79,15 +79,19 @@ class ParameterTuning(object):
             return False
 
     def get_best_params(self, grid_model, x, y):
-        grid_model.fit(x, y)
+        try:
+            grid_model.fit(x, y)
 
-        return grid_model.best_score_, grid_model.best_params_, grid_model.grid_scores_
+            return grid_model.best_score_, grid_model.best_params_, grid_model.grid_scores_
+        except xgb.core.XGBoostError as e:
+            log(e, WARN)
+
+            return -np.inf, -np.inf, None
 
     def improve(self, model, phase, cost, params, micro_tuning=False):
         old_cost = self.best_cost
 
         if self.compare(cost):
-            log("Improve the {} from {} to {}".format(self.cost, old_cost, self.best_cost))
             for key, value in params.items():
                 setattr(self, key, value)
                 log("Set {} to be {}".format(key, getattr(self, key)))
@@ -97,14 +101,12 @@ class ParameterTuning(object):
 
             filepath_training = self.filepath_testing.replace("submission", "training_{}".format(phase))
             self.submit(model, filepath_training, "training")
+
+            log("Improve the {} from {} to {}".format(self.cost, old_cost, self.best_cost))
         else:
             if not micro_tuning:
-                log("Fail because of the {} of phase2-model is {}(< {}) so setting the params as default".format(self.cost, cost, old_cost), WARN)
-
                 for key, value in params.items():
                     setattr(self, key, getattr(self, "default_{}".format(key)))
-            else:
-                log("Fail in {}".format(phase), WARN)
 
         self.save()
 
@@ -184,7 +186,6 @@ class ParameterTuning(object):
                                             verbose=1)
 
                     micro_cost, micro_params, micro_scores = self.get_best_params(gsearch2, self.train[self.predictors], self.train[self.target])
-                    log("Finish the micro-tuning of {}, and then get best params is {}".format(phase, micro_params))
 
                     self.done[key] = micro_cost, micro_params, micro_scores, gsearch2
                     self.improve(gsearch2, key, micro_cost, micro_params, True)
@@ -199,6 +200,8 @@ class ParameterTuning(object):
         else:
             model = gsearch1
             a, b, c = best_cost, best_params, scores
+
+        log("Finish the tuning of {}({}), and then get best params is {}".format(phase, is_micro_tuning, b))
 
         return a, b, c, model
 
@@ -318,6 +321,8 @@ class RandomForestTuning(ParameterTuning):
         log("The best params are {}".format(model.get_params()), INFO)
         self.calibrated_prediction()
 
+        return self.get_model_instance().get_params()
+
 class ExtraTreeTuning(RandomForestTuning):
     def get_model_instance(self):
         n_estimator = self.get_value("n_estimator")
@@ -416,3 +421,5 @@ class XGBoostingTuning(ParameterTuning):
         self.phase("phase5", param5, True)
 
         self.calibrated_prediction()
+
+        return self.get_model_instance().get_params()

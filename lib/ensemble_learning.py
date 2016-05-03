@@ -16,26 +16,6 @@ from customized_estimators import FinalEnsembleModel
 from utils import log, INFO, ERROR
 from load import load_cache, save_cache
 
-def get_max_mean_min_probabilities(x):
-    min_probabilities, max_probabilities, mean_probabilities = [], [], []
-    for values in x:
-        min_probabilities.append(np.nanmin(values))
-        max_probabilities.append(np.nanmax(values))
-        mean_probabilities.append(np.nanmean(values))
-
-    return min_probabilities, max_probabilities, mean_probabilities
-
-def store_layer_output(models, dataset, filepath, optional=[]):
-    results_of_layer = {}
-    for model_idx, model_name in enumerate(models):
-        results_of_layer[model_name] = dataset[:, model_idx]
-
-    if optional:
-        for target in optional:
-            results_of_layer.update(target)
-
-    pd.DataFrame(results_of_layer).to_csv(filepath, index=False)
-
 def get_learning_queue(predictors, models, n_folds, train_x, train_y, test_x, filepath_queue):
     layer_two_training_dataset = np.zeros((train_x.shape[0], len(models)))
     layer_two_testing_dataset = np.zeros((test_x.shape[0], len(models), n_folds))
@@ -55,8 +35,8 @@ def get_learning_queue(predictors, models, n_folds, train_x, train_y, test_x, fi
     return learning_queue
 
 def start_learning(objective, folder_model, folder_middle,
-                    train_x, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, cost_func,
-                    number_of_thread=4, random_state=1201, saving_results=False):
+                   train_x, train_y, test_x, models, n_folds, learning_queue, filepath_nfold, cost_func,
+                   number_of_thread=4, random_state=1201, saving_results=False):
     skf = None
     if filepath_nfold and os.path.exists(filepath_nfold):
         skf = load_cache(filepath_nfold)
@@ -75,9 +55,6 @@ def start_learning(objective, folder_model, folder_middle,
     for model_idx, m in enumerate(models):
         model_name = m[0]
         for nfold, (train, test) in enumerate(skf):
-            #if learning_queue.is_done_layer_two_training_dataset(test, model_idx):
-            #    log("fold-{:02d} data to '{}' model is done".format(nfold, model_name))
-            #else:
             if model_name.find("deep") == -1:
                 learning_queue.put(nfold, model_idx, (train, test), m)
             else:
@@ -116,25 +93,3 @@ def layer_model(objective, folder_model, folder_middle, predictors, train_x, tra
                                                number_of_thread, random_state, saving_results)
 
     return learning_queue.layer_two_training_dataset, layer_two_testing_dataset, learning_queue.learning_cost
-
-def final_model(objective, pair, train_x, train_y, test_x, cost_string="log_loss"):
-    log("The phase 3 starts...", INFO)
-
-    cost_function = None
-    if cost_string == "log_loss":
-        cost_function = log_loss
-    elif cost_string == "auc":
-        cost_function = roc_auc_score
-    else:
-        log("Please set the cost function", ERROR)
-        sys.exit(1)
-
-    model = LearningFactory.get_model(objective, pair, cost_function)
-    model.train(train_x, train_y)
-
-    log("The weights of {} are {}".format(model.name, model.coef()), INFO)
-
-    prediction_results_training = model.predict(train_x)
-    log("The cost of layer-3 model is {}".format(cost_function(train_y, prediction_results_training)))
-
-    return model.predict(test_x)
