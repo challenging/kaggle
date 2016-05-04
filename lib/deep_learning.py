@@ -39,6 +39,7 @@ class KaggleCheckpoint(ModelCheckpoint):
         results = {"PredictedProb": probas}
         if is_testing:
             results["ID"] = self.testing_id
+            results["Target"] = results.pop("PredictedProb")
         else:
             results["Target"] = self.training_y
 
@@ -54,21 +55,16 @@ class KaggleCheckpoint(ModelCheckpoint):
                 warnings.warn('Can save best model only with %s available, skipping.' % (self.monitor), RuntimeWarning)
             else:
                 if self.monitor_op(current, self.best):
-                    log("Epoch %05d: %s improved from %0.8f to %0.8f" % (epoch+1, self.monitor, self.best, current), INFO)
-
                     self.best = current
                     self.model.save_weights(filepath, overwrite=True)
 
                     # Save the prediction results for testing set
                     if self.save_training_dataset and self.folder:
                         # Save the training results
-                        proba_training = self.model.predict_proba(self.training_x)
+                        proba_training = self.model.predict_proba(self.testing_x)
 
-                        filepath_training = "{}/training_{:05d}.csv".format(self.folder, epoch+1)
-                        self.save_results(filepath_training, proba_training)
-
-                        cost = self.cost_function(self.training_y, proba_training)
-                        log("Epoch {:05d}: current {} is {:.8f}".format(epoch+1, self.cost_function.__name__, cost), INFO)
+                        filepath_training = "{}/testing_{:05d}.csv".format(self.folder, epoch+1)
+                        self.save_results(filepath_training, proba_training, is_testing=True)
                 else:
                     if self.verbose > 0:
                         log('Epoch %05d: %s did not improve' %(epoch, self.monitor), DEBUG)
@@ -90,7 +86,7 @@ def get_newest_model(folder):
     return newest
 
 def logistic_regression(model_folder, layer, dimension, number_of_feature,
-       cost="binary_crossentropy", learning_rate=1e-6, dropout_rate=0.5, nepoch=10, activation="tanh"):
+       cost="binary_crossentropy", learning_rate=1e-6, dropout_rate=0.5, nepoch=10, activation="relu"):
 
     model = Sequential()
     model.add(Dense(dimension, input_dim=number_of_feature, init="uniform", activation=activation))
