@@ -189,8 +189,8 @@ def learning(conf, thread, is_testing):
             filepath_submission = "{}/layer={}_dimension={}_model={}_params={}.csv".format(folder_submission, idx+1, data_dimension[idx][idx_col], models[idx_col][0], make_a_stamp(models[idx_col][1]))
             save_kaggle_submission({"ID": test_id, "Target": submission}, filepath_submission)
 
-            prediction_training_history["layer={}_method={}_feature={}_params={}".format(idx+1, models[idx_col][0], data_dimension[idx_col][idx], make_a_stamp(models[idx_col][1]))] = layer_train_x[:, idx_col]
-            prediction_testing_history["layer={}_method={}_feature={}_params={}".format(idx+1, models[idx_col][0], data_dimension[idx_col][idx], make_a_stamp(models[idx_col][1]))] = layer_test_x[:, idx_col]
+            prediction_training_history["layer={}_method={}_feature={}_params={}".format(idx+1, models[idx_col][0], data_dimension[idx][idx_col], make_a_stamp(models[idx_col][1]))] = layer_train_x[:, idx_col]
+            prediction_testing_history["layer={}_method={}_feature={}_params={}".format(idx+1, models[idx_col][0], data_dimension[idx][idx_col], make_a_stamp(models[idx_col][1]))] = layer_test_x[:, idx_col]
 
         previous_training_dataset = layer_train_x
         previous_testing_dataset = layer_test_x
