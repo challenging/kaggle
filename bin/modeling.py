@@ -178,8 +178,7 @@ def learning(conf, thread, is_testing):
 
         layer_train_x, layer_test_x, learning_loss = layer_model(\
                                  objective, folder_model, folder_middle, predictors, previous_training_dataset, train_Y, previous_testing_dataset, models,
-                                 filepath_queue, filepath_nfold,
-                                 n_folds=(1 if idx==len(m)-1 else nfold), cost_string=cost, number_of_thread=thread, saving_results=(True if idx==0 else False))
+                                 filepath_queue, filepath_nfold, n_folds=nfold, cost_string=cost, number_of_thread=thread, saving_results=(True if idx==0 else False))
 
         learning_loss_history.append(learning_loss)
 

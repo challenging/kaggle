@@ -126,7 +126,7 @@ class ModelConfParser(object):
                 yield section
 
 if __name__ == "__main__":
-    parser = ModelConfParser("../etc/conf/Santander_testing.cfg")
-    for model_section in parser.get_layer_models(1):
-        cfg = parser.get_model_setting(model_section)
-        print cfg
+    parser = ModelConfParser("../etc/conf/Santander.cfg")
+    for model_section in parser.get_layer_models(2):
+        for method, setting in parser.get_model_setting(model_section):
+            print method, setting
