@@ -155,6 +155,11 @@ def learning(conf, thread, is_testing):
         filepath_nfold = "{}/layer{}_nfold.pkl".format(folder_model, idx+1)
 
         for idx_col, (method, setting) in enumerate(models):
+            if method.find("deep") > -1:
+                input_dims = -1
+
+                models[idx_col][1]["input_dims"] = len(previous_training_dataset[0])
+
             if "auto_tuning" in setting and setting["auto_tuning"] == 1:
                 filepath_tuning = "{}/etc/parameter_tuning/layer{}/method={}_testing={}_nfold={}_top={}_binsize={}_feature={}.pkl".format(folder_model, idx+1, method, is_testing, nfold, top, binsize, len(previous_training_dataset[0]))
                 filepath_submission = "{}/etc/parameter_tuning/layer{}/method={}_binsize={}_top={}_feature={}.submission.csv".format(folder_model, idx+1, method, binsize, top, len(previous_training_dataset[0]))
@@ -178,7 +183,8 @@ def learning(conf, thread, is_testing):
 
         layer_train_x, layer_test_x, learning_loss = layer_model(\
                                  objective, folder_model, folder_middle, predictors, previous_training_dataset, train_Y, previous_testing_dataset, models,
-                                 filepath_queue, filepath_nfold, n_folds=nfold, cost_string=cost, number_of_thread=thread, saving_results=(True if idx==0 else False))
+                                 filepath_queue, filepath_nfold, n_folds=nfold, cost_string=cost, number_of_thread=thread,
+                                 saving_results=(True if (idx == 0 or method.find("deep") == -1 )else False))
 
         learning_loss_history.append(learning_loss)
 

@@ -293,6 +293,19 @@ class Learning(object):
             log("Not implement the training method of {}".format(self.name), ERROR)
             raise NotImplementError
 
+    def get_params(self):
+        params = {}
+        if self.is_deep_learning():
+            params.update({"batch_size": self.batch_size,
+                           "callbacks": self.callbacks,
+                           "nepoch": self.nepoch,
+                           "class_weight": self.class_weight,
+                           "validation_split": self.validation_split})
+        else:
+            params.update(self.model.get_params())
+
+        return params
+
     def grid_scores(self):
         if self.is_grid_search():
             return self.model.grid_scores_
@@ -509,10 +522,10 @@ class LearningThread(threading.Thread):
                         model.train(train_x, train_y)
 
                         results = model.predict(validate_x)
-                        self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, results, model.model.get_params(), filepath_training, is_saving=self.saving_results)
+                        self.obj.insert_layer_two_training_dataset(test_x_idx, model_idx, results, model.get_params(), filepath_training, is_saving=self.saving_results)
 
                         layer_two_testing_dataset = model.predict(test_x)
-                        self.obj.insert_layer_two_testing_dataset(model_idx, nfold, layer_two_testing_dataset, model.model.get_params(), filepath_testing, is_saving=self.saving_results)
+                        self.obj.insert_layer_two_testing_dataset(model_idx, nfold, layer_two_testing_dataset, model.get_params(), filepath_testing, is_saving=self.saving_results)
 
                         cost = model.cost_function(validate_y, results)
                         if np.isnan(cost):
