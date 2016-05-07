@@ -4,7 +4,6 @@ contextlib2==0.5.1
 cv2==1.0
 cycler==0.10.0
 decorator==4.0.9
-dit==1.0.0.dev0
 gnureadline==6.3.3
 h5py==2.6.0
 ipython==4.1.2
@@ -12,7 +11,6 @@ ipython-genutils==0.1.0
 iterutils==0.1.6
 Keras==1.0.1
 matplotlib==1.5.1
-minepy==1.0.0
 networkx==1.11
 numpy==1.11.0
 pandas==0.18.0
