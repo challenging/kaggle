@@ -1,6 +1,8 @@
 import os
 import sys
 
+import datetime
+
 import md5
 import copy
 import logging
@@ -85,8 +87,27 @@ def split_file_by_size(filepath, n_size=32*1024*1024):
 
     log("write sub-file in {}".format(filepath_part), INFO)
 
-def split_file_by_column(filepath, idx, split_char=","):
-    column_name = None
+def simple_split(arr, idx):
+    return arr[idx]
+
+def weekday_split(arr, idx):
+    weekday = -1
+    parsered_date = arr[idx]
+
+    try:
+        if parsered_date.find(":") == -1:
+            weekday = datetime.datetime.strptime(parsered_date, "%Y-%m-%d").weekday()
+        else:
+            weekday = datetime.datetime.strptime(parsered_date, "%Y-%m-%d %H:%M:%S").weekday()
+    except ValueError as e:
+        pass
+
+    return str(weekday)
+
+def split_file_by_column(filepath, idxs):
+    combine = lambda x: "|".join(x)
+
+    headers, column_name = None, []
     folder = os.path.dirname(filepath)
     filename = os.path.basename(filepath)
 
@@ -94,18 +115,37 @@ def split_file_by_column(filepath, idx, split_char=","):
 
     with open(filepath, "rb") as INPUT:
         for line in INPUT:
-            arrs = line.split(split_char)
-            if column_name == None:
-                column_name = arrs[idx]
+            arr = line.strip().split(",")
+
+            if not column_name:
+                for idx, method in idxs:
+                    column_name.append(arr[idx])
+
+                folder += "/{}".format(combine(column_name))
+                if not os.path.isdir(folder):
+                    os.makedirs(folder)
+
+                log("Save files in {}".format(folder))
+
+                headers = line
             else:
-                value = arrs[idx]
+                value = []
+                for idx, method in idxs:
+                    value.append(method(arr, idx))
 
-                outputs.setdefault(value, open("{}/{}_site_name={}.csv".format(folder, filename, value), "wb"))
-                outputs[value].write(line)
+                key = combine(value)
+                outputs.setdefault(key, [])
+                outputs[key].append(line)
 
-    for output in outputs.values():
-        output.close()
+    for value, lines in outputs.items():
+        with open("{}/{}_{}={}.csv".format(folder, filename.replace(".csv", ""), combine(column_name), value), "wb") as OUTPUT:
+            lines.insert(0, headers)
+            OUTPUT.writelines(lines)
+
+        log("There are {} records in {}".format(len(lines), value))
 
 if __name__ == "__main__":
-    #split_file("/Users/rongqichen/Documents/programs/kaggle/cases/Expedia Hotel Recommendations/input/train/train.csv")
-    split_file_by_column("/Users/rongqichen/Documents/programs/kaggle/cases/Expedia Hotel Recommendations/input/train/train.csv", 1)
+    #split_file_by_column("/Users/RungChiChen/Documents/programs/kaggle/cases/Expedia Hotel Recommendations/input/train/train.csv", [(0, weekday_split)])#[(3, simple_split), (11, weekday_split)])
+    #split_file_by_column("/Users/RungChiChen/Documents/programs/kaggle/cases/Expedia Hotel Recommendations/input/test/test.csv", [(1, weekday_split)])#[(4, simple_split), (12, weekday_split)])
+
+    pass
