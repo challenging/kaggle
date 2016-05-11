@@ -20,9 +20,9 @@ def worker(working_queue, folder_submission):
         filename = os.path.basename(filepath_testing)
         filepath_training, filepath_submission = filepath_testing.replace("test", "train"), os.path.join(folder_submission, filename.replace("test", "submission"))
 
-        best_hotels_search_dest, best_hotels_search_dest1, best_hotels_od_ulc, best_hotels_country, popular_hotel_cluster = prepare_arrays_match(filepath_training)
+        best_hotels_search_dest, best_hotels_user_location, best_hotels_search_dest1, best_hotels_od_ulc, best_hotels_country, popular_hotel_cluster = prepare_arrays_match(filepath_training)
         with open(filepath_submission, "wb") as OUTPUT:
-            for user_id, filled in gen_submission(filepath_testing, best_hotels_search_dest, best_hotels_search_dest1, best_hotels_od_ulc, best_hotels_country, popular_hotel_cluster):
+            for user_id, filled in gen_submission(filepath_testing, best_hotels_search_dest, best_hotels_user_location, best_hotels_search_dest1, best_hotels_od_ulc, best_hotels_country, popular_hotel_cluster):
                 OUTPUT.write("{},{}\n".format(user_id, " ".join(filled)))
 
             log("Create the sub-submission file in {}".format(filepath_submission), INFO)
@@ -48,7 +48,7 @@ def main(f_pattern, n_threads=4):
         method = "all"
 
     # Create submission folder
-    folder_submission = folder.replace("test", "submission_method={}_plus=hotelcountry|weekday|book_year_{}".format(method, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M")))
+    folder_submission = folder.replace("test", "submission_method={}_plus=hotelcountry|userlocation|weekday|book_year_{}".format(method, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M")))
     if not os.path.isdir(folder_submission):
         os.makedirs(folder_submission)
 
