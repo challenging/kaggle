@@ -10,12 +10,28 @@ import re
 import numpy as np
 import pandas as pd
 
+from sklearn.pipeline import FeatureUnion
+from sklearn.decomposition import PCA
+from sklearn.feature_selection import SelectKBest
+
 from itertools import combinations
 from collections import Counter
 
 from load import save_cache, load_cache, load_interaction_information
 from interaction_information import InteractionInformation, InteractionInformationThread
 from utils import log, DEBUG, INFO, WARN
+
+def pca(x, y, test_x, n_features=-1):
+    if n_features == -1:
+        n_features = int(np.ceil(np.sqrt(x.shape[1])))
+
+    pca = PCA(n_components=number_of_feature)
+    selection = SelectKBest(k=n_features/2)
+
+    combined_features = FeatureUnion([("pca", pca), ("univ_select", selection)])
+    combined_features.fit(x, y)
+
+    return combined_features.transform(x), combined_features.transform(test_x)
 
 def load_dataset(filepath_cache, dataset, binsize=2, threshold=0.1):
     LABELS = "abcdefghijklmnopqrstuvwxABCDEFGHIJKLMNOPQRSTUVWX0123456789!@#$%^&*()_+~"

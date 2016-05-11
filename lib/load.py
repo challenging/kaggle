@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 
 from utils import log, DEBUG, INFO, WARN
-from sklearn import decomposition
 from sklearn.preprocessing import PolynomialFeatures
 
 def data_load(filepath_train="../input/train.csv", filepath_test="../input/test.csv", drop_fields=[], filepath_cache=None):
@@ -41,12 +40,6 @@ def data_load(filepath_train="../input/train.csv", filepath_test="../input/test.
                 pickle.dump((train_x, train_y, test_x, test_id), OUTPUT)
 
     return train_x, train_y, test_x, test_id
-
-def pca(x, number_of_feature=None):
-    pca = decomposition.PCA(n_components=number_of_feature)
-    pca.fit(x)
-
-    return pca
 
 def data_transform_1(train, test):
     for (train_name, train_series), (test_name, test_series) in zip(train.iteritems(),test.iteritems()):
