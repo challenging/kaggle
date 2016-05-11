@@ -86,7 +86,7 @@ def get_newest_model(folder):
     return newest
 
 def logistic_regression(model_folder, layer, dimension, number_of_feature,
-       cost="binary_crossentropy", learning_rate=1e-6, dropout_rate=0.5, nepoch=10, activation="relu"):
+                        cost="binary_crossentropy", learning_rate=1e-6, dropout_rate=0.5, nepoch=10, activation="relu"):
 
     model = Sequential()
     model.add(Dense(dimension, input_dim=number_of_feature, init="uniform", activation=activation))
@@ -112,7 +112,7 @@ def logistic_regression(model_folder, layer, dimension, number_of_feature,
     return model
 
 def logistic_regression_2(model_folder, layer, dimension, input_dims,
-       cost="binary_crossentropy", learning_rate=1e-6, dropout_rate=0.5, nepoch=10, init="uniform", activation="tanh"):
+                          cost="binary_crossentropy", learning_rate=1e-6, dropout_rate=0.5, nepoch=10, init="uniform", activation="tanh"):
 
     sources = []
     for input_dim in input_dims:
