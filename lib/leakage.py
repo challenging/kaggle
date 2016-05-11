@@ -22,10 +22,9 @@ UNKNOWN_HOTEL_CLUSTER = "X"
 
 def prepare_arrays_match(filepath):
     best_hotels_od_ulc = {}
-    best_hotels_search_dest, best_hotels_search_dest_formula = {}, lambda x: 7 + 17*x
-    best_hotels_search_dest1, best_hotels_search_dest1_formula = {}, lambda x: 7 + 17*x
-    best_hotels_country, best_hotels_country_formula = {}, lambda x: 5 + 5*x
-    best_hotels_weekday, best_hotels_weekday_formula = {}, lambda x: 3 + 3*x
+    best_hotels_search_dest, best_hotels_search_dest_formula = {}, lambda x: 3 + 17*x
+    best_hotels_search_dest1, best_hotels_search_dest1_formula = {}, lambda x: 3 + 17*x
+    best_hotels_country, best_hotels_country_formula = {}, lambda x: 1 + 5*x
     popular_hotel_cluster = {}
 
     count_empty = 0
@@ -74,25 +73,21 @@ def prepare_arrays_match(filepath):
                     best_hotels_search_dest1[key][hotel_cluster] += best_hotels_search_dest1_formula(is_booking)
 
                 if hotel_country != "":
-                    key = (hotel_country)
+                    key = (weekday, hotel_country)
 
                     best_hotels_country.setdefault(key, {})
                     best_hotels_country[key].setdefault(hotel_cluster, 0)
                     best_hotels_country[key][hotel_cluster] += best_hotels_country_formula(is_booking)
 
                 key = (weekday)
-                best_hotels_weekday.setdefault(key, {})
-                best_hotels_weekday[key].setdefault(hotel_cluster, 0)
-                best_hotels_weekday[key][hotel_cluster] += best_hotels_weekday_formula(is_booking)
-
                 popular_hotel_cluster.setdefault(hotel_cluster, 0)
                 popular_hotel_cluster[hotel_cluster] += 1
     else:
         log("Not found {}".format(filepath), WARN)
 
-    return best_hotels_search_dest, best_hotels_search_dest1, best_hotels_od_ulc, best_hotels_country, best_hotels_weekday, popular_hotel_cluster
+    return best_hotels_search_dest, best_hotels_search_dest1, best_hotels_od_ulc, best_hotels_country, popular_hotel_cluster
 
-def gen_submission(filepath_testing, best_hotels_search_dest, best_hotels_search_dest1, best_hotels_od_ulc, best_hotels_country, best_hotels_weekday, popular_hotel_cluster):
+def gen_submission(filepath_testing, best_hotels_search_dest, best_hotels_search_dest1, best_hotels_od_ulc, best_hotels_country, popular_hotel_cluster):
     topclasters = nlargest(5, sorted(popular_hotel_cluster.items()), key=itemgetter(1))
 
     def fill(filled, d):
@@ -137,14 +132,9 @@ def gen_submission(filepath_testing, best_hotels_search_dest, best_hotels_search
                 d = best_hotels_search_dest1[(srch_destination_id)]
                 fill(filled, d)
 
-            s3 = (hotel_country)
+            s3 = (weekday, hotel_country)
             if s3 in best_hotels_country:
                 d = best_hotels_country[s3]
-                fill(filled, d)
-
-            s4 = (weekday)
-            if s4 in best_hotels_weekday:
-                d = best_hotels_weekday
                 fill(filled, d)
 
             for i in range(len(topclasters)):
