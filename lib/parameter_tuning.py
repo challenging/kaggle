@@ -123,14 +123,22 @@ class ParameterTuning(object):
         self.predictors = load_feature_importance(filepath_pkl, top_feature)
         self.predictors = list(set(self.predictors))
 
+    def get_dataset(self):
+        training_x, testing_x = None, None
+
+        if self.predictors:
+            training_x = self.train[self.predictors]
+            testing_x = self.test_x[self.predictors]
+        else:
+            training_x = self.train
+            testing_x = self.test_x
+
+        return training_x, testing_x
+
     def phase(self, phase, params, is_micro_tuning=False):
         gsearch1 = None
         best_cost, best_params, scores = -np.inf, -np.inf, None
-        training_x, training_y = None, self.train_y
-        if self.predictors:
-            training_x = self.train[self.predictors]
-        else:
-            training_x = self.train
+        (training_x, _), training_y = self.get_dataset(), self.train_y
 
         n_features = len(training_x[0])
 
@@ -216,29 +224,11 @@ class ParameterTuning(object):
 
         return a, b, c, model
 
-    def get_training_score(self, model):
-        if self.method == "classifier":
-            predicted_proba = model.predict_proba(self.train[self.predictors])[:,1]
-            cost = self.cost_function(self.train[self.target], predicted_proba)
-            log("The {} of training dataset is {:.8f}".format(self.cost, cost))
-        elif self.method == "regressor":
-            predicted_proba = model.predict(self.train[self.predictors])
-            cost = self.cost_function(self.train[self.target], predicted_proba)
-            log("The {} of training dataset is {:.8f}".format(self.cost, cost))
-        else:
-            log("???? {}".format(self.method))
-
     def process(self):
         raise NotImplementError
 
     def submit(self, model, filepath_testing, mode="training"):
-        training_dataset, testing_data, results, predicted_proba = None, None, None, None
-        if self.predictors:
-            training_dataset = self.train[self.predictors]
-            testing_dataset = self.test_x[self.predictors]
-        else:
-            training_dataset = self.train
-            testing_dataset = self.test_x
+        (training_dataset, testing_dataset), results, predicted_proba = self.get_dataset(), None, None
 
         if mode == "training":
             if self.method == "classifier":
@@ -265,6 +255,8 @@ class ParameterTuning(object):
 
     def calibrated_prediction(self):
         if self.method == "classifier":
+            training_dataset, testing_dataset = self.get_dataset()
+
             for method_calibration in ["sigmoid", "isotonic"]:
                 filepath_testing = self.filepath_testing.replace("submission", "calibrated={}".format(method_calibration))
                 filepath_calibration = filepath_testing.replace("csv", "pkl")
@@ -273,8 +265,8 @@ class ParameterTuning(object):
                     if os.path.exists(filepath_calibration):
                         clf = load_cache(filepath_calibration)
                     else:
-                        clf.fit(self.train[self.predictors], self.train_y)
-                        save_cache(filepath_calibration)
+                        clf.fit(training_dataset, self.train_y)
+                        save_cache(clf, filepath_calibration)
 
                     log("Save calibrated results in {}".format(filepath_testing), INFO)
                     self.submit(clf, filepath_testing, "testing")

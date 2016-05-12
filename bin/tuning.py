@@ -16,6 +16,7 @@ import feature_engineering
 from utils import log, INFO, WARN, ERROR
 from load import load_data, data_transform_2, load_interaction_information, save_cache, load_cache
 from parameter_tuning import XGBoostingTuning, RandomForestTuning, ExtraTreeTuning, tuning
+from feature_engineering import pca
 from configuration import ModelConfParser
 
 @click.command()
@@ -70,8 +71,10 @@ def parameter_tuning(methodology, nfold, is_testing, is_feature_importance, thre
         train_x = train_x.head(1000)
         train_y = train_y.head(1000)
 
-    filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_nfold={}_top={}_binsize={}_feature={}.pkl".format(BASEPATH, methodology, is_testing, nfold, top_feature, binsize, len(train_x.columns))
-    log("{} data records with {} features, and filepath is {}".format(len(train_x), len(train_x.columns), filepath_tuning), INFO)
+    train_x, test_x = pca(train_x, train_y.values, test_x)
+
+    filepath_tuning = "{}/etc/parameter_tuning/{}_testing={}_nfold={}_top={}_binsize={}_feature={}.pkl".format(BASEPATH, methodology, is_testing, nfold, top_feature, binsize, train_x.shape[1])
+    log("{} data records with {} features, and filepath is {}".format(len(train_x), train_x.shape[1], filepath_tuning), INFO)
 
     params = tuning(train_x, train_y, test_id, test_x, cost,
                     filepath_feature_importance if is_feature_importance else None, filepath_tuning, filepath_submission, methodology, nfold, top_feature, binsize,

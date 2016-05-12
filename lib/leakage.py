@@ -23,7 +23,7 @@ UNKNOWN_HOTEL_CLUSTER = "X"
 def prepare_arrays_match(filepath):
     best_hotels_od_ulc = {}
     best_hotels_search_dest, best_hotels_search_dest_formula = {}, lambda x: 3 + 17*x
-    best_hotels_location, best_hotels_location_formula = {}, lambda x: 3 + 17*x
+    best_hotels_user_location, best_hotels_user_location_formula = {}, lambda x: 3 + 17*x
     best_hotels_search_dest1, best_hotels_search_dest1_formula = {}, lambda x: 3 + 17*x
     best_hotels_country, best_hotels_country_formula = {}, lambda x: 1 + 5*x
     popular_hotel_cluster = {}
@@ -66,11 +66,13 @@ def prepare_arrays_match(filepath):
 
                 if srch_destination_id != "":
                     key = (srch_destination_id)
-                    cluster_calculation(key, hotel_cluster, best_hotels_location, best_hotels_location_formula(is_booking))
+                    #cluster_calculation(key, hotel_cluster, best_hotels_user_location, best_hotels_user_location_formula(is_booking))
+                    cluster_calculation(key, hotel_cluster, best_hotels_search_dest1, best_hotels_search_dest1_formula(is_booking))
 
                 if user_city != "" and srch_destination_id != "":
                     key = (user_city, srch_destination_id)
-                    cluster_calculation(key, hotel_cluster, best_hotels_search_dest1, best_hotels_search_dest1_formula(is_booking))
+                    #cluster_calculation(key, hotel_cluster, best_hotels_search_dest1, best_hotels_search_dest1_formula(is_booking))
+                    cluster_calculation(key, hotel_cluster, best_hotels_user_location, best_hotels_user_location_formula(is_booking))
 
                 if hotel_country != "":
                     key = (weekday, hotel_country)
@@ -81,9 +83,9 @@ def prepare_arrays_match(filepath):
     else:
         log("Not found {}".format(filepath), WARN)
 
-    return best_hotels_search_dest, best_hotels_location, best_hotels_search_dest1, best_hotels_od_ulc, best_hotels_country, popular_hotel_cluster
+    return best_hotels_search_dest, best_hotels_search_dest1, best_hotels_user_location, best_hotels_od_ulc, best_hotels_country, popular_hotel_cluster
 
-def gen_submission(filepath_testing, best_hotels_search_dest, best_hotels_user_location, best_hotels_search_dest1, best_hotels_od_ulc, best_hotels_country, popular_hotel_cluster):
+def gen_submission(filepath_testing, best_hotels_search_dest, best_hotels_search_dest1, best_hotels_user_location, best_hotels_od_ulc, best_hotels_country, popular_hotel_cluster):
     topclasters = nlargest(5, sorted(popular_hotel_cluster.items()), key=itemgetter(1))
 
     def fill(filled, d):
@@ -100,75 +102,70 @@ def gen_submission(filepath_testing, best_hotels_search_dest, best_hotels_user_l
 
     count_s1, count_s2, count_s3, count_s4, count_s5, count_popular = 0, 0, 0, 0, 0, 0
     with open(filepath_testing, "rb") as INPUT:
-        with open(filepath_testing_profile, "wb") as OUTPUT:
-            for line in INPUT:
-                line = line.strip()
+        for line in INPUT:
+            line = line.strip()
 
-                arr = line.split(",")
-                user_id = arr[0]
-                if not user_id.isdigit():
-                    OUTPUT.write("{},hotel_cluster\n".format(line.strip()))
+            arr = line.split(",")
+            user_id = arr[0]
+            if not user_id.isdigit():
+                continue
 
+            weekday = str(datetime.datetime.strptime(arr[1], "%Y-%m-%d %H:%M:%S").weekday())
+            user_location_country = arr[4]
+            user_location_region = arr[5]
+            user_location_city = arr[6]
+            orig_destination_distance = arr[7]
+            srch_destination_id = arr[17]
+            hotel_country = arr[20]
+            hotel_market = arr[21]
+
+            filled = []
+
+            s1 = (user_location_city, orig_destination_distance)
+            if s1 in best_hotels_od_ulc:
+                d = best_hotels_od_ulc[s1]
+                fill(filled, d)
+
+                count_s1 += 1
+
+            s2 = (srch_destination_id, hotel_country, hotel_market)
+            if s2 in best_hotels_search_dest:
+                d = best_hotels_search_dest[s2]
+                fill(filled, d)
+
+                count_s2 += 1
+
+            s3 = (srch_destination_id)
+            if s3 in best_hotels_user_location:
+                d = best_hotels_user_location[s3]
+                fill(filled, d)
+
+                count_s3 += 1
+
+            s4 = (user_location_city, srch_destination_id)
+            if s4 in best_hotels_search_dest1:
+                d = best_hotels_search_dest1[s4]
+                fill(filled, d)
+
+                count_s4 += 1
+
+            s5 = (weekday, hotel_country)
+            if s5 in best_hotels_country:
+                d = best_hotels_country[s5]
+                fill(filled, d)
+
+                count_s5 += 1
+
+            if len(filled) < 5:
+                count_popular += 1
+
+            for i in range(len(topclasters)):
+                if topclasters[i][0] in filled:
                     continue
+                if len(filled) == 5:
+                    break
 
-                weekday = str(datetime.datetime.strptime(arr[1], "%Y-%m-%d %H:%M:%S").weekday())
-                user_location_country = arr[4]
-                user_location_region = arr[5]
-                user_location_city = arr[6]
-                orig_destination_distance = arr[7]
-                srch_destination_id = arr[17]
-                hotel_country = arr[20]
-                hotel_market = arr[21]
-
-                filled = []
-
-                s1 = (user_location_city, orig_destination_distance)
-                if s1 in best_hotels_od_ulc:
-                    d = best_hotels_od_ulc[s1]
-                    fill(filled, d)
-
-                    count_s1 += 1
-
-                s2 = (srch_destination_id, hotel_country, hotel_market)
-                if s2 in best_hotels_search_dest:
-                    d = best_hotels_search_dest[s2]
-                    fill(filled, d)
-
-                    count_s2 += 1
-
-                s3 = (srch_destination_id)
-                if s3 in best_hotels_user_location:
-                    d = best_hotels_user_location[s3]
-                    fill(filled, d)
-
-                    count_s3 += 1
-
-                s4 = (user_location_city, srch_destination_id)
-                if s4 in best_hotels_search_dest1:
-                    d = best_hotels_search_dest1[s4]
-                    fill(filled, d)
-
-                    count_s4 += 1
-
-                s5 = (weekday, hotel_country)
-                if s5 in best_hotels_country:
-                    d = best_hotels_country[s5]
-                    fill(filled, d)
-
-                    count_s5 += 1
-
-                if len(filled) < 5:
-                    count_popular += 1
-
-                for i in range(len(topclasters)):
-                    if topclasters[i][0] in filled:
-                        continue
-                    if len(filled) == 5:
-                        break
-
-                    filled.append(topclasters[i][0])
-
-                OUTPUT.write("{},{}\n".format(line.strip(), filled[0]))
+                filled.append(topclasters[i][0])
 
             yield (user_id, filled)
 

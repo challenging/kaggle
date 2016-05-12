@@ -25,7 +25,7 @@ def pca(x, y, test_x, n_features=-1):
     if n_features == -1:
         n_features = int(np.ceil(np.sqrt(x.shape[1])))
 
-    pca = PCA(n_components=number_of_feature)
+    pca = PCA(n_components=n_features)
     selection = SelectKBest(k=n_features/2)
 
     combined_features = FeatureUnion([("pca", pca), ("univ_select", selection)])
