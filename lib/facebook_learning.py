@@ -49,7 +49,6 @@ class MostPopularThread(BaseCalculatorThread):
             test_ids, test_xs = self.queue.get()
 
             top = {}
-            count_hit, count_miss = 0, 0
             for test_id, test_x in zip(test_ids, test_xs):
                 top.setdefault(test_id, [])
 
@@ -57,13 +56,9 @@ class MostPopularThread(BaseCalculatorThread):
                 if key in self.metrics:
                     for place_id, most_popular in nlargest(self.n_top, sorted(self.metrics[key].items()), key=lambda (k, v): v):
                         top[test_id].append(place_id)
-
-                    count_hit += 1
                 else:
                     log("The ({} ----> {}) of {} is not in metrics".format(test_x, key, test_id), WARN)
-                    count_miss += 1
 
-            log("Hit count: {}, Miss count: {}".format(count_hit, count_miss), INFO)
             self.update_results(top)
 
             self.queue.task_done()
@@ -177,7 +172,7 @@ class StrategyEngine(object):
 
         with open(filepath, "rb") as INPUT:
             for line in INPUT:
-                arr = line.split(",")
+                arr = line.strip().split(",")
 
                 row_id = arr[0]
                 if not row_id.isdigit():
@@ -211,7 +206,7 @@ class ProcessThread(BaseCalculatorThread):
 
         self.strategy_engine = StrategyEngine(self.is_accuracy, self.is_exclude_outlier, self.is_testing)
         self.results = {}
-        self.batch_size = 1000
+        self.batch_size = 50000
 
     def run(self):
         while True:
@@ -293,7 +288,7 @@ def process(workspace, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_j
     results = {}
 
     queue = Queue.Queue()
-    for filepath_train in glob.iglob(os.path.join(workspace, "train.csv")):
+    for filepath_train in glob.iglob(os.path.join(workspace, "*.csv")):
         queue.put(filepath_train)
         log("Push {} in queue".format(filepath_train), INFO)
 
@@ -327,7 +322,7 @@ def process(workspace, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_j
         csv_format.setdefault(test_id, [])
 
         for place_id, most_popular in nlargest(3, sorted(rankings.items()), key=lambda (k, v): v):
-            csv_format[test_id].append(place_id)
+            csv_format[test_id].append(place_id.strip())
 
         csv_format[test_id] = " ".join(csv_format[test_id])
 
