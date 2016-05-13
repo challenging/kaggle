@@ -85,7 +85,7 @@ class ProcessThread(threading.Thread):
             metrics = load_cache(filepath_pkl)
         else:
             for place_id, m in self.get_nearest_centroid(filepath):
-                metrics[m if is_accuracy else m[:2]] = place_id
+                metrics[m if self.is_accuracy else m[:2]] = place_id
         timestamp_end = time.time()
         log("Cost {:4} seconds to build up the centroid metrics".format(timestamp_end-timestamp_start), INFO)
 
@@ -100,7 +100,9 @@ class ProcessThread(threading.Thread):
             filepath_train = self.queue.get()
             filepath_test = filepath_train.replace("train", "test")
             filepath_pkl = filepath_train.replace("train", "prediction_tmp") + "isaccuracy={}_excludeoutlier={}.pkl".format(self.is_accuracy, self.is_exclude_outlier)
-            create_folder(filepath_pkl)
+            filepath_submission = filepath_train.replace("train", "submission_tmp") + "isaccuracy={}_excludeoutlier={}.pkl".format(self.is_accuracy, self.is_exclude_outlier)
+            for folder in [filepath_pkl, filepath_submission]:
+                create_folder(folder)
 
             results = {}
             if not self.is_testing and os.path.exists(filepath_pkl):
@@ -141,6 +143,7 @@ class ProcessThread(threading.Thread):
                 queue.join()
 
             if not self.is_testing:
+                save_submission(filepath_submission, results)
                 save_cache(results, filepath_pkl)
 
             self.results.update(results)
@@ -157,7 +160,6 @@ def process(workspace, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_j
 
     for filepath_train in glob.iglob(os.path.join(workspace, "*.csv")):
         queue.put(filepath_train)
-        #results.update(prediction(filepath_train, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_jobs=16))
 
     threads = []
     for idx in range(0, n_jobs):
@@ -184,7 +186,7 @@ def save_submission(filepath, results):
     pd.DataFrame(results.items(), columns=["row_id", "place_id"]).to_csv(filepath, index=False, compression="gzip")
 
 if __name__ == "__main__":
-    workspace = "/Users/RungChiChen/Documents/programs/kaggle/cases/Facebook V - Predicting Check Ins/input/1_way/train/pos/windown_size=1"
+    workspace = "/Users/RungChiChen/Documents/programs/kaggle/cases/Facebook V - Predicting Check Ins/input/1_way/train/pos/windown_size=2"
 
     is_accuracy, is_exclude_outlier, is_testing = False, False, True
 

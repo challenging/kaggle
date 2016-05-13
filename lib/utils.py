@@ -61,8 +61,12 @@ def create_folder(filepath):
     folder = os.path.dirname(filepath)
 
     if not os.path.isdir(folder):
-        os.makedirs(folder)
-        log("Create folder in {}".format(folder), INFO)
+        try:
+            os.makedirs(folder)
+            log("Create folder in {}".format(folder), INFO)
+        except OSError as e:
+            if str(e).find("File Exists") == -1:
+                log(e)
 
 def split_file_by_size(filepath, n_size=32*1024*1024):
     part_no = 1
