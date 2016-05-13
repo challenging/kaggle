@@ -27,7 +27,7 @@ def facebook(conf, thread, is_testing, top):
 
     filepath_train = os.path.join(workspace, "train.csv")
     filepath_test = os.path.join(workspace, "test.csv")
-    filepath_output = "{}.{}_isaccuracy={}_excludeoutlier={}.submission.csv".format(workspace, datetime.datetime.now().strftime("%Y%m%d%H"), is_accuracy, is_exclude_outlier)
+    filepath_output = "{}.{}_isaccuracy={}_excludeoutlier={}.submission.csv".format(workspace, datetime.datetime.now().strftime("%Y%m%d%H"), is_accuracy, is_exclude_outlier, n_top=top, n_jobs=thread)
 
     results = process(workspace, is_accuracy, is_exclude_outlier, is_testing)
 
