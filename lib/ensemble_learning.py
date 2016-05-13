@@ -55,14 +55,14 @@ def start_learning(objective, folder_model, folder_middle,
     for model_idx, m in enumerate(models):
         model_name = m[0]
         for nfold, (train, test) in enumerate(skf):
-            if model_name.find("deep") == -1:
-                learning_queue.put(nfold, model_idx, (train, test), m)
-            else:
-                if nfold == 0:
-                    idxs = [idx for idx in range(0, len(train_x))]
-                    learning_queue.put(nfold, model_idx, (idxs, idxs), m)
-                else:
-                    continue
+            #if model_name.find("deep") == -1:
+            learning_queue.put(nfold, model_idx, (train, test), m)
+            #else:
+            #    if nfold == 0:
+            #        idxs = [idx for idx in range(0, len(train_x))]
+            #        learning_queue.put(nfold, model_idx, (idxs, idxs), m)
+            #    else:
+            #        continue
 
             log("Put fold-{:02d} data into this '{}' model".format(nfold, model_name))
 
