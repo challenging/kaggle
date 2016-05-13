@@ -16,10 +16,10 @@ from configuration import FacebookConfiguration
 
 @click.command()
 @click.option("--conf", required=True, help="Filepath of Configuration")
-@click.option("--thread", default=4, help="Number of thread")
+@click.option("--n-jobs", default=4, help="Number of thread")
 @click.option("--is-testing", is_flag=True, help="Testing Mode")
-@click.option("--top", default=10, help="Top X cluster")
-def facebook(conf, thread, is_testing, top):
+@click.option("--n-top", default=10, help="Top X cluster")
+def facebook(conf, n_jobs, is_testing, n_top):
     configuration = FacebookConfiguration(conf)
 
     workspace = configuration.get_workspace()
@@ -27,9 +27,9 @@ def facebook(conf, thread, is_testing, top):
 
     filepath_train = os.path.join(workspace, "train.csv")
     filepath_test = os.path.join(workspace, "test.csv")
-    filepath_output = "{}.{}_isaccuracy={}_excludeoutlier={}.submission.csv".format(workspace, datetime.datetime.now().strftime("%Y%m%d%H"), is_accuracy, is_exclude_outlier, n_top=top, n_jobs=thread)
+    filepath_output = "{}.{}_isaccuracy={}_excludeoutlier={}.submission.csv".format(workspace, datetime.datetime.now().strftime("%Y%m%d%H"), is_accuracy, is_exclude_outlier)
 
-    results = process(workspace, is_accuracy, is_exclude_outlier, is_testing)
+    results = process(workspace, is_accuracy, is_exclude_outlier, is_testing, n_top=n_top, n_jobs=n_jobs)
 
     save_submission(filepath_output, results)
 
