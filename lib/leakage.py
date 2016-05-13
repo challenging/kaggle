@@ -11,6 +11,8 @@ import collections
 import threading
 import Queue
 
+import numpy as np
+
 from heapq import nlargest
 from operator import itemgetter
 
@@ -28,10 +30,10 @@ def prepare_arrays_match(filepath):
     best_hotels_country, best_hotels_country_formula = {}, lambda x: 1 + 5*x
     popular_hotel_cluster = {}
 
-    def cluster_calculation(key, hotel, d, v):
+    def cluster_calculation(key, hotel, d, v, decay):
         d.setdefault(key, {})
         d[key].setdefault(hotel_cluster, 0)
-        d[key][hotel_cluster] += v
+        d[key][hotel_cluster] += v*decay
 
     # Calc counts
     if os.path.exists(filepath):
@@ -47,6 +49,7 @@ def prepare_arrays_match(filepath):
 
                 weekday = str(datetime.datetime.strptime(arr[0], "%Y-%m-%d %H:%M:%S").weekday())
                 book_year = int(arr[0][:4])
+                book_month = int(arr[0][5:7])
                 user_country = arr[3]
                 user_region = arr[4]
                 orig_destination_distance = arr[6]
@@ -56,30 +59,32 @@ def prepare_arrays_match(filepath):
                 hotel_market = arr[22]
                 hotel_cluster = arr[23]
 
+                decay = np.exp((book_year - 2012) + (book_month - 12)/12)
+
                 if user_city != '' and orig_destination_distance != '':
                     key = (user_city, orig_destination_distance)
-                    cluster_calculation(key, hotel_cluster, best_hotels_od_ulc, 1)
+                    cluster_calculation(key, hotel_cluster, best_hotels_od_ulc, 1, decay)
 
-                if srch_destination_id != '' and hotel_country != '' and hotel_market != '' and book_year == 2014:
+                if srch_destination_id != '' and hotel_country != '' and hotel_market != '':
                     key = (srch_destination_id, hotel_country, hotel_market)
-                    cluster_calculation(key, hotel_cluster, best_hotels_search_dest, best_hotels_search_dest_formula(is_booking))
+                    cluster_calculation(key, hotel_cluster, best_hotels_search_dest, best_hotels_search_dest_formula(is_booking), decay)
 
                 if srch_destination_id != "":
                     key = (srch_destination_id)
                     #cluster_calculation(key, hotel_cluster, best_hotels_user_location, best_hotels_user_location_formula(is_booking))
-                    cluster_calculation(key, hotel_cluster, best_hotels_search_dest1, best_hotels_search_dest1_formula(is_booking))
+                    cluster_calculation(key, hotel_cluster, best_hotels_search_dest1, best_hotels_search_dest1_formula(is_booking), decay)
 
                 if user_city != "" and srch_destination_id != "":
                     key = (user_city, srch_destination_id)
                     #cluster_calculation(key, hotel_cluster, best_hotels_search_dest1, best_hotels_search_dest1_formula(is_booking))
-                    cluster_calculation(key, hotel_cluster, best_hotels_user_location, best_hotels_user_location_formula(is_booking))
+                    cluster_calculation(key, hotel_cluster, best_hotels_user_location, best_hotels_user_location_formula(is_booking), decay)
 
                 if hotel_country != "":
                     key = (weekday, hotel_country)
-                    cluster_calculation(key, hotel_cluster, best_hotels_country, best_hotels_country_formula(is_booking))
+                    cluster_calculation(key, hotel_cluster, best_hotels_country, best_hotels_country_formula(is_booking), decay)
 
                 key = (weekday)
-                cluster_calculation(key, hotel_cluster, popular_hotel_cluster, 1)
+                cluster_calculation(key, hotel_cluster, popular_hotel_cluster, 1, decay)
     else:
         log("Not found {}".format(filepath), WARN)
 
