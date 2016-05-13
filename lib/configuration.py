@@ -6,6 +6,22 @@ import ConfigParser
 
 import numpy as np
 
+class FacebookConfiguration(object):
+    def __init__(self, filepath):
+        self.config = ConfigParser.RawConfigParser()
+        self.config.read(filepath)
+
+    def get_workspace(self):
+        return self.config.get("MAIN", "workspace")
+
+    def is_accuracy(self):
+        is_accuracy = self.config.getint("FEATURE", "is_accuracy")
+
+        return True if is_accuracy == 1 else False
+
+    def is_exclude_outlier(self):
+        return True if self.config.getint("FEATURE", "is_exclude_outlier") == 1 else False
+
 class ModelConfParser(object):
     def __init__(self, filepath):
         self.config = ConfigParser.RawConfigParser()
