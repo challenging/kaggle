@@ -49,7 +49,7 @@ class CalculateDistanceThread(threading.Thread):
             self.queue.task_done()
 
             timestamp_end = time.time()
-            log("Cost {:4f} secends to get the TOP{} cluster of {} is {}".format(timestamp_end-timestamp_start, self.n_top, test_id, top[test_id]), INFO)
+            log("Cost {:4f} secends to get the TOP{} cluster of {} is {}".format(timestamp_end-timestamp_start, self.n_top, test_id, top[test_id]), DEBUG)
 
 class ProcessThread(threading.Thread):
     def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
