@@ -41,7 +41,10 @@ def facebook(conf, n_jobs, is_testing):
     results = process(method, (workspace, cache_workspace, submission_workspace), batch_size, is_accuracy, is_exclude_outlier, is_testing, n_top=n_top, n_jobs=n_jobs)
 
     filepath_output = submission_workspace + ".csv.gz"
-    save_submission(filepath_output, results)
+
+    for size in [3, n_top]:
+        filepath_output = submission_workspace + ".{}.csv.gz".format(size)
+        save_submission(filepath_output, results, size)
 
 if __name__ == "__main__":
     facebook()

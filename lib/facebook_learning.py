@@ -350,14 +350,17 @@ def process(method, workspaces, batch_size, is_accuracy, is_exclude_outlier, is_
     for test_id, rankings in results.items():
         csv_format.setdefault(test_id, [])
 
-        for place_id, most_popular in nlargest(3, sorted(rankings.items()), key=lambda (k, v): v):
+        for place_id, most_popular in nlargest(n_top, sorted(rankings.items()), key=lambda (k, v): v):
             csv_format[test_id].append(str(place_id))
 
         csv_format[test_id] = " ".join(csv_format[test_id])
 
     return csv_format
 
-def save_submission(filepath, results):
+def save_submission(filepath, results, n_top=3):
+    for test_id, info in results.items():
+        results[test_id] = " ".join(info.split(" ")[:n_top])
+
     pd.DataFrame(results.items(), columns=["row_id", "place_id"]).to_csv(filepath, index=False, compression="gzip")
 
     log("The submission file is stored in {}".format(filepath), INFO)
