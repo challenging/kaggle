@@ -6,13 +6,52 @@ import ConfigParser
 
 import numpy as np
 
+from utils import make_a_stamp
+
 class FacebookConfiguration(object):
     def __init__(self, filepath):
         self.config = ConfigParser.RawConfigParser()
         self.config.read(filepath)
 
     def get_workspace(self):
-        return self.config.get("MAIN", "workspace")
+        return self.config.get("MAIN", "workspace"), self.config.get("MAIN", "cache_workspace"), self.config.get("MAIN", "output_workspace")
+
+    def get_method(self):
+        method = "most_popular"
+
+        if self.config.has_option("MAIN", "method"):
+            method = self.config.get("MAIN", "method")
+
+        return method
+
+    def get_stamp(self):
+        names = self.get_workspace()[0].split("/")
+
+        turn_on, pool = 0, []
+        for name in names:
+            if name == "input":
+                turn_on = 1
+
+            if turn_on == 1:
+                pool.append(name)
+
+        return make_a_stamp(pool)
+
+    def get_size(self):
+        window_size = "all"
+        t = re.match("windown_size=(\d)+", self.get_workspace()[0])
+        if t:
+            window_size = t.group(0)
+
+        batch_size = 10000
+        if self.config.has_option("MAIN", "batch_size"):
+            batch_size = self.config.getint("MAIN", "batch_size")
+
+        n_top = 3
+        if self.config.has_option("MAIN", "n_top"):
+            n_top = self.config.getint("MAIN", "n_top")
+
+        return window_size, batch_size, n_top
 
     def is_accuracy(self):
         is_accuracy = self.config.getint("FEATURE", "is_accuracy")

@@ -19,7 +19,8 @@ from scipy.spatial.distance import euclidean
 
 from sklearn.neighbors import NearestCentroid, DistanceMetric
 
-from utils import log, INFO, WARN, create_folder
+from utils import log, DEBUG, INFO, WARN
+from utils import create_folder
 from load import save_cache, load_cache
 
 class BaseCalculatorThread(threading.Thread):
@@ -45,7 +46,6 @@ class MostPopularThread(BaseCalculatorThread):
     def run(self):
         while True:
             timestamp_start = time.time()
-
             test_ids, test_xs = self.queue.get()
 
             top = {}
@@ -77,9 +77,9 @@ class CalculateDistanceThread(BaseCalculatorThread):
             test_ids, test_xs = self.queue.get()
 
             rankings = {}
-            for metrics, place_id in self.metrics.items():
-                for test_id, test_x in zip(test_ids, test_xs):
-                    rankings.setdefault(test_id, {})
+            for test_id, test_x in zip(test_ids, test_xs):
+                rankings.setdefault(test_id, {})
+                for metrics, place_id in self.metrics.items():
                     rankings[test_id].setdefault(place_id, self.distance(test_x, list(metrics)))
 
             top = {}
@@ -121,9 +121,7 @@ class StrategyEngine(object):
 
             yield place_id, (x, y, accuracy)
 
-    def get_centroid_distance_metrics(self, filepath):
-        filepath_pkl = "{}.centroid.metrics.isaccuracy={}_excludeoutiler={}.pkl".format(filepath, self.is_accuracy, self.is_exclude_outlier)
-
+    def get_centroid_distance_metrics(self, filepath, filepath_pkl):
         metrics = {}
 
         timestamp_start = time.time()
@@ -140,7 +138,7 @@ class StrategyEngine(object):
         return metrics
 
     def most_popular_transformer(self, x, y):
-        range = 500
+        range = 800
         ix = math.floor(range*x/10)
         if ix < 0:
             ix = 0
@@ -155,40 +153,32 @@ class StrategyEngine(object):
 
         return int(ix), int(iy)
 
-    def get_most_popular_metrics(self, filepath):
+    def get_most_popular_metrics(self, filepath, filepath_pkl):
         metrics = {}
 
         timestamp_start = time.time()
-        '''
-        df = pd.read_csv(filepath)
-        for idx in range(0, df.shape[0]):
-            [x, y, place_id] = df[["x", "y", "place_id"]].values[idx]
+        if os.path.exists(filepath_pkl):
+            metrics = load_cache(filepath_pkl)
+        else:
+            with open(filepath, "rb") as INPUT:
+                for line in INPUT:
+                    arr = line.strip().split(",")
 
-            key = self.most_popular_transformer(x, y)
-            metrics.setdefault(key, {})
-            metrics[key].setdefault(place_id, 0)
-            metrics[key][place_id] += 1
-        '''
+                    row_id = arr[0]
+                    if not row_id.isdigit():
+                        continue
 
-        with open(filepath, "rb") as INPUT:
-            for line in INPUT:
-                arr = line.strip().split(",")
+                    x = float(arr[1])
+                    y = float(arr[2])
+                    accuracy = arr[3]
+                    place_id = arr[5]
 
-                row_id = arr[0]
-                if not row_id.isdigit():
-                    continue
+                    key = self.most_popular_transformer(x, y)
+                    metrics.setdefault(key, {})
+                    metrics[key].setdefault(place_id, 0)
+                    metrics[key][place_id] += 1
 
-                x = float(arr[1])
-                y = float(arr[2])
-                accuracy = arr[3]
-                #time = arr[4]
-                place_id = arr[5]
-
-                key = self.most_popular_transformer(x, y)
-                metrics.setdefault(key, {})
-                metrics[key].setdefault(place_id, 0)
-                metrics[key][place_id] += 1
-
+            save_cache(metrics, filepath_pkl)
         timestamp_end = time.time()
 
         log("Cost {:8f} secends to build up the most popular solution".format(timestamp_end-timestamp_start), INFO)
@@ -206,7 +196,6 @@ class ProcessThread(BaseCalculatorThread):
 
         self.strategy_engine = StrategyEngine(self.is_accuracy, self.is_exclude_outlier, self.is_testing)
         self.results = {}
-        self.batch_size = 50000
 
     def run(self):
         while True:
@@ -217,10 +206,13 @@ class ProcessThread(BaseCalculatorThread):
             folder = os.path.dirname(filepath_train)
 
             filepath_test = filepath_train.replace("train", "test")
-            filepath_pkl = os.path.join(folder, "prediction_tmp", filename, "_method={}_isaccuracy={}_excludeoutlier={}.pkl".format(self.method, self.is_accuracy, self.is_exclude_outlier))
-            filepath_submission = os.path.join(folder, "submission_tmp", filename, "_method={}_isaccuracy={}_excludeoutlier={}.pkl".format(self.method, self.is_accuracy, self.is_exclude_outlier))
-            for folder in [filepath_pkl, filepath_submission]:
-                create_folder(folder)
+            filepath_pkl = os.path.join(self.cache_workspace, "{}.{}.pkl".format(type(self).__name__.lower(), filename))
+            filepath_submission = os.path.join(self.submission_workspace, "{}.{}.pkl".format(type(self).__name__.lower(), filename))
+
+            log(filepath_pkl)
+
+            for f in [filepath_pkl, filepath_submission]:
+                create_folder(f)
 
             results = {}
             if not self.is_testing and os.path.exists(filepath_pkl):
@@ -228,9 +220,11 @@ class ProcessThread(BaseCalculatorThread):
             else:
                 metrics = None
                 if self.method == self.strategy_engine.STRATEGY_DISTANCE:
-                    metrics = self.strategy_engine.get_centroid_distance_metrics(filepath_train)
+                    f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_centroid_distance_metrics.__name__.lower(), filename))
+                    metrics = self.strategy_engine.get_centroid_distance_metrics(filepath_train, f)
                 elif self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
-                    metrics = self.strategy_engine.get_most_popular_metrics(filepath_train)
+                    f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_most_popular_metrics.__name__.lower(), filename))
+                    metrics = self.strategy_engine.get_most_popular_metrics(filepath_train, f)
 
                 df = pd.read_csv(filepath_test)
                 if self.is_testing:
@@ -254,11 +248,13 @@ class ProcessThread(BaseCalculatorThread):
                     thread = None
                     if self.method == self.strategy_engine.STRATEGY_DISTANCE:
                         thread = CalculateDistanceThread(kwargs={"queue": queue,
+                                                                 "cache_workspace": self.cache_workspace,
                                                                  "metrics": metrics,
                                                                  "distance": euclidean,
                                                                  "n_top": self.n_top})
                     elif self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
                         thread = MostPopularThread(kwargs={"queue": queue,
+                                                           "cache_workspace": self.cache_workspace,
                                                            "metrics": metrics,
                                                            "transformer": self.strategy_engine.most_popular_transformer,
                                                            "n_top": self.n_top})
@@ -284,20 +280,28 @@ class ProcessThread(BaseCalculatorThread):
             timestamp_end = time.time()
             log("Cost {:8f} to finish the prediction of {}".format(timestamp_end-timestamp_start, filepath_train), INFO)
 
-def process(workspace, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_jobs=8):
+def process(method, workspaces, batch_size, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_jobs=8):
     results = {}
+
+    workspace, cache_workspace, output_workspace = workspaces
+    for folder in [os.path.join(cache_workspace, "1.txt"), os.path.join(output_workspace, "1.txt")]:
+        create_folder(folder)
 
     queue = Queue.Queue()
     for filepath_train in glob.iglob(os.path.join(workspace, "*.csv")):
-        queue.put(filepath_train)
-        log("Push {} in queue".format(filepath_train), INFO)
+        if filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:
+            queue.put(filepath_train)
+            log("Push {} in queue".format(filepath_train), INFO)
 
     log("There are {} files in queue".format(queue.qsize()), INFO)
 
     threads = []
     for idx in range(0, n_jobs):
         thread = ProcessThread(kwargs={"queue": queue,
-                                       "method": StrategyEngine.STRATEGY_MOST_POPULAR,
+                                       "method": method,
+                                       "batch_size": batch_size,
+                                       "cache_workspace": cache_workspace,
+                                       "submission_workspace": output_workspace,
                                        "is_accuracy": is_accuracy,
                                        "is_exclude_outlier": is_exclude_outlier,
                                        "is_testing": is_testing,
