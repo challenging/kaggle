@@ -293,7 +293,6 @@ class ProcessThread(BaseCalculatorThread):
                     results.update(thread.results)
 
             if not self.is_testing:
-                save_submission(filepath_submission, results)
                 save_cache(results, filepath_pkl)
 
             self.update_results(results, False)
@@ -304,8 +303,6 @@ class ProcessThread(BaseCalculatorThread):
             log("Cost {:8f} to finish the prediction of {}".format(timestamp_end-timestamp_start, filepath_train), INFO)
 
 def process(method, workspaces, batch_size, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_jobs=8):
-    results = {}
-
     workspace, cache_workspace, output_workspace = workspaces
     for folder in [os.path.join(cache_workspace, "1.txt"), os.path.join(output_workspace, "1.txt")]:
         create_folder(folder)
@@ -338,6 +335,7 @@ def process(method, workspaces, batch_size, is_accuracy, is_exclude_outlier, is_
         threads.append(thread)
     queue.join()
 
+    results = {}
     for thread in threads:
         for test_id, clusters in thread.results.items():
             results.setdefault(test_id, {})
