@@ -13,6 +13,7 @@ import Queue
 import pandas as pd
 import numpy as np
 
+from scandir import scandir
 from heapq import nlargest
 from scipy import stats
 from scipy.spatial.distance import euclidean
@@ -288,8 +289,10 @@ def process(method, workspaces, batch_size, is_accuracy, is_exclude_outlier, is_
         create_folder(folder)
 
     queue = Queue.Queue()
-    for filepath_train in glob.iglob(os.path.join(workspace, "*.csv")):
-        if filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:
+    for filename in scandir(os.path.join(workspace)):
+        filepath_train = filename.path
+
+        if filepath_train.find(".csv") != -1 and filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:
             queue.put(filepath_train)
             log("Push {} in queue".format(filepath_train), INFO)
 
