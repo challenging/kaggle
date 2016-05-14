@@ -14,6 +14,8 @@ import pandas as pd
 import numpy as np
 
 from scandir import scandir
+from collections import OrderedDict
+from operator import itemgetter
 from heapq import nlargest
 from scipy import stats
 from scipy.spatial.distance import euclidean
@@ -33,15 +35,15 @@ class BaseCalculatorThread(threading.Thread):
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        self.results = {}
+        self.results = OrderedDict()
 
-    def update_results(self, results):
+    def update_results(self, results, is_adjust=False):
         for test_id, clusters in results.items():
-            self.results.setdefault(test_id, {})
+            self.results.setdefault(test_id, OrderedDict())
 
             for adjust, place_id in enumerate(clusters):
                 self.results[test_id].setdefault(place_id, 0)
-                self.results[test_id][place_id] += (len(clusters) - adjust)*1.0
+                self.results[test_id][place_id] += ((len(clusters) - adjust)*1.0 if is_adjust else 0)
 
 class MostPopularThread(BaseCalculatorThread):
     def run(self):
@@ -55,12 +57,12 @@ class MostPopularThread(BaseCalculatorThread):
 
                 key = self.transformer(test_x[0], test_x[1])
                 if key in self.metrics:
-                    for place_id, most_popular in nlargest(self.n_top, sorted(self.metrics[key].items()), key=lambda (k, v): v):
+                    for place_id, most_popular in self.metrics[key]:
                         top[test_id].append(place_id)
                 else:
                     log("The ({} ----> {}) of {} is not in metrics".format(test_x, key, test_id), WARN)
 
-            self.update_results(top)
+            self.update_results(top, False)
 
             self.queue.task_done()
 
@@ -69,7 +71,19 @@ class MostPopularThread(BaseCalculatorThread):
 
 class KDTreeThread(threading.Thread):
     def run(self):
-        pass
+        while True:
+            timestamp_start = time.time()
+            test_ids, test_xs = self.queue.get()
+
+            top = {}
+            _, ind = tree.query(test_xs, k=self.n_top)
+
+            self.update_results(top)
+
+            self.queue.task_done()
+
+            timestamp_end = time.time()
+            log("Cost {:4f} secends to finish this batch job({} - {}, {}) getting TOP-{} clusters".format(timestamp_end-timestamp_start, test_ids[0], test_ids[-1], len(self.results), self.n_top), INFO)
 
 class CalculateDistanceThread(BaseCalculatorThread):
     def run(self):
@@ -88,7 +102,7 @@ class CalculateDistanceThread(BaseCalculatorThread):
                 for place_id, distance in sorted(ranking.items(), key=lambda (k, v): v)[:self.n_top]:
                     top[test_id].append(str(place_id))
 
-            self.update_results(top)
+            self.update_results(top, True)
 
             self.queue.task_done()
 
@@ -154,7 +168,7 @@ class StrategyEngine(object):
 
         return int(ix), int(iy)
 
-    def get_most_popular_metrics(self, filepath, filepath_pkl):
+    def get_most_popular_metrics(self, filepath, filepath_pkl, is_accuracy=False, n_top=3):
         metrics = {}
 
         timestamp_start = time.time()
@@ -171,13 +185,16 @@ class StrategyEngine(object):
 
                     x = float(arr[1])
                     y = float(arr[2])
-                    accuracy = arr[3]
+                    accuracy = int(arr[3])
                     place_id = arr[5]
 
                     key = self.most_popular_transformer(x, y)
                     metrics.setdefault(key, {})
                     metrics[key].setdefault(place_id, 0)
-                    metrics[key][place_id] += 1
+                    metrics[key][place_id] += np.log2(accuracy) if is_accuracy else 1
+
+            for key in metrics.keys():
+                metrics[key] = nlargest(n_top, sorted(metrics[key].items()), key=itemgetter(1))
 
             save_cache(metrics, filepath_pkl)
         timestamp_end = time.time()
@@ -210,8 +227,6 @@ class ProcessThread(BaseCalculatorThread):
             filepath_pkl = os.path.join(self.cache_workspace, "{}.{}.pkl".format(type(self).__name__.lower(), filename))
             filepath_submission = os.path.join(self.submission_workspace, "{}.{}.pkl".format(type(self).__name__.lower(), filename))
 
-            log(filepath_pkl)
-
             for f in [filepath_pkl, filepath_submission]:
                 create_folder(f)
 
@@ -225,7 +240,7 @@ class ProcessThread(BaseCalculatorThread):
                     metrics = self.strategy_engine.get_centroid_distance_metrics(filepath_train, f)
                 elif self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
                     f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_most_popular_metrics.__name__.lower(), filename))
-                    metrics = self.strategy_engine.get_most_popular_metrics(filepath_train, f)
+                    metrics = self.strategy_engine.get_most_popular_metrics(filepath_train, f, self.is_accuracy, self.n_top)
 
                 df = pd.read_csv(filepath_test)
                 if self.is_testing:
@@ -318,7 +333,7 @@ def process(method, workspaces, batch_size, is_accuracy, is_exclude_outlier, is_
 
     for thread in threads:
         for test_id, clusters in thread.results.items():
-            results.setdefault(test_id, {})
+            results.setdefault(test_id, OrderedDict())
 
             for adjust, place_id in enumerate(clusters):
                 results[test_id].setdefault(place_id, 0)
@@ -329,7 +344,7 @@ def process(method, workspaces, batch_size, is_accuracy, is_exclude_outlier, is_
         csv_format.setdefault(test_id, [])
 
         for place_id, most_popular in nlargest(3, sorted(rankings.items()), key=lambda (k, v): v):
-            csv_format[test_id].append(place_id.strip())
+            csv_format[test_id].append(str(place_id))
 
         csv_format[test_id] = " ".join(csv_format[test_id])
 
