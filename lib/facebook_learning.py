@@ -14,7 +14,6 @@ import pandas as pd
 import numpy as np
 
 from scandir import scandir
-from collections import OrderedDict
 from operator import itemgetter
 from heapq import nlargest
 from scipy import stats
@@ -35,15 +34,23 @@ class BaseCalculatorThread(threading.Thread):
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        self.results = OrderedDict()
+        self.results = {}
 
     def update_results(self, results, is_adjust=False):
         for test_id, clusters in results.items():
-            self.results.setdefault(test_id, OrderedDict())
+            self.results.setdefault(test_id, {})
 
             for adjust, place_id in enumerate(clusters):
                 self.results[test_id].setdefault(place_id, 0)
-                self.results[test_id][place_id] += ((len(clusters) - adjust)*1.0 if is_adjust else 0)
+
+                score = 1
+                if is_adjust:
+                    score = (len(clusters) - adjust)*1.0
+                else:
+                    if isinstance(clusters, dict):
+                        score = clusters[place_id]
+
+                self.results[test_id][place_id] += score
 
 class MostPopularThread(BaseCalculatorThread):
     def run(self):
@@ -60,9 +67,9 @@ class MostPopularThread(BaseCalculatorThread):
                     for place_id, most_popular in self.metrics[key]:
                         top[test_id].append(place_id)
                 else:
-                    log("The ({} ----> {}) of {} is not in metrics".format(test_x, key, test_id), WARN)
+                    log("The ({} ----> {}) of {} is not in metrics".format(test_x, key, test_id), DEBUG)
 
-            self.update_results(top, False)
+            self.update_results(top, True)
 
             self.queue.task_done()
 
@@ -78,7 +85,7 @@ class KDTreeThread(threading.Thread):
             top = {}
             _, ind = tree.query(test_xs, k=self.n_top)
 
-            self.update_results(top)
+            self.update_results(top, True)
 
             self.queue.task_done()
 
@@ -289,7 +296,7 @@ class ProcessThread(BaseCalculatorThread):
                 save_submission(filepath_submission, results)
                 save_cache(results, filepath_pkl)
 
-            self.update_results(results)
+            self.update_results(results, False)
 
             self.queue.task_done()
 
@@ -333,11 +340,11 @@ def process(method, workspaces, batch_size, is_accuracy, is_exclude_outlier, is_
 
     for thread in threads:
         for test_id, clusters in thread.results.items():
-            results.setdefault(test_id, OrderedDict())
+            results.setdefault(test_id, {})
 
             for adjust, place_id in enumerate(clusters):
                 results[test_id].setdefault(place_id, 0)
-                results[test_id][place_id] += (len(clusters) - adjust)*1.0
+                results[test_id][place_id] += clusters[place_id]
 
     csv_format = {}
     for test_id, rankings in results.items():
