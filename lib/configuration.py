@@ -17,12 +17,12 @@ class FacebookConfiguration(object):
         return self.config.get("MAIN", "workspace"), self.config.get("MAIN", "cache_workspace"), self.config.get("MAIN", "output_workspace")
 
     def get_method(self):
-        method = "most_popular"
+        method, criteria = "most_popular", (800, 800)
 
         if self.config.has_option("MAIN", "method"):
             method = self.config.get("MAIN", "method")
 
-        return method
+        return method, criteria
 
     def get_stamp(self):
         names = self.get_workspace()[0].split("/")
