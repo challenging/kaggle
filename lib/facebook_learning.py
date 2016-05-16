@@ -4,6 +4,7 @@ import os
 import sys
 import math
 import glob
+import copy
 import time
 import datetime
 
@@ -16,14 +17,14 @@ import pandas as pd
 import numpy as np
 
 from scandir import scandir
+from joblib import Parallel, delayed
 from operator import itemgetter
 from heapq import nlargest
 from scipy import stats
 from scipy.spatial.distance import euclidean
+from sklearn.neighbors import NearestCentroid, DistanceMetric, KDTree
 
-from sklearn.neighbors import NearestCentroid, DistanceMetric
-
-from utils import log, DEBUG, INFO, WARN
+from utils import log, DEBUG, INFO, WARN, ERROR
 from utils import create_folder, make_a_stamp
 from load import save_cache, load_cache
 
@@ -55,174 +56,242 @@ class BaseCalculatorThread(threading.Thread):
 
                 self.results[test_id][place_id] += score*self.weights
 
-class MostPopularThread(BaseCalculatorThread):
+                #if test_id == 0:
+                #    log("{} {}".format(place_id, self.results[test_id][place_id]))
+
     def run(self):
         while True:
             timestamp_start = time.time()
+
             test_ids, test_xs = self.queue.get()
 
-            stamp = make_a_stamp(str(test_ids) + str(test_xs))
-            filepath = os.path.join(self.cache_workspace, "{}.pkl".format(stamp))
+            top = self.process(test_ids, test_xs)
+            self.update_results(top, True)
 
+            self.queue.task_done()
+
+            timestamp_end = time.time()
+            log("Cost {:4f} secends to finish this batch job({} - {}, {}) getting TOP-{} clusters. The remaining size of queue is {}".format(timestamp_end-timestamp_start, test_ids[0], test_ids[-1], len(top), self.n_top, self.queue.qsize()), DEBUG)
+
+    def process(self, test_ids, test_xs):
+        raise NotImplementError
+
+class MostPopularThread(BaseCalculatorThread):
+    def process(self, test_ids, test_xs):
+        stamp = make_a_stamp(str(test_ids) + str(test_xs))
+        filepath = os.path.join(self.cache_workspace, "{}.pkl".format(stamp))
+
+        top = load_cache(filepath)
+        if not top or self.is_testing:
             top = {}
-            if os.path.exists(filepath):
-                try:
-                    top = load_cache(filepath)
-                except Exception as e:
-                    log("Fail in loading cache file from {} so we re-build it".format(e, filepath), WARN)
 
-            if not top:
-                for test_id, test_x in zip(test_ids, test_xs):
-                    top.setdefault(test_id, [])
+            for test_id, test_x in zip(test_ids, test_xs):
+                top.setdefault(test_id, [])
 
-                    key = self.transformer(test_x[0], test_x[1])
-                    if key in self.metrics:
-                        for place_id, most_popular in self.metrics[key]:
-                            top[test_id].append(place_id)
-                    else:
-                        log("The ({} ----> {}) of {} is not in metrics".format(test_x, key, test_id), WARN)
+                key = (self.transformer(test_x[0], self.range_x[0], self.range_x[1], self.range_x[2]), self.transformer(test_x[1], self.range_y[0], self.range_y[1], self.range_y[2]))
+                if key in self.metrics:
+                    for place_id, most_popular in self.metrics[key]:
+                        top[test_id].append(place_id)
+                else:
+                    log("The ({} ----> {}) of {} is not in metrics".format(test_x, key, test_id), WARN)
 
+            if not self.is_testing:
                 save_cache(top, filepath)
 
-            self.update_results(top, True)
+        return top
 
-            self.queue.task_done()
+class KDTreeThread(BaseCalculatorThread):
+    def process(self, test_ids, test_xs):
+        stamp = make_a_stamp(str(test_ids) + str(test_xs))
+        filepath = os.path.join(self.cache_workspace, "{}.pkl".format(stamp))
 
-            timestamp_end = time.time()
-            log("Cost {:4f} secends to finish this batch job({} - {}, {}) getting TOP-{} clusters".format(timestamp_end-timestamp_start, test_ids[0], test_ids[-1], len(self.results), self.n_top), INFO)
-
-class KDTreeThread(threading.Thread):
-    def run(self):
-        while True:
-            timestamp_start = time.time()
-            test_ids, test_xs = self.queue.get()
-
+        top = load_cache(filepath)
+        if not top or self.is_testing:
             top = {}
-            _, ind = tree.query(test_xs, k=self.n_top)
 
-            self.update_results(top, True)
+            distance, ind = self.metrics.query(test_xs, k=self.n_top)
+            for idx, loc in enumerate(ind):
+                test_id = test_ids[idx]
 
-            self.queue.task_done()
+                top.setdefault(test_id, {})
+                for loc_idx, locc in enumerate(loc):
+                    place_id = self.mapping[locc]
 
-            timestamp_end = time.time()
-            log("Cost {:4f} secends to finish this batch job({} - {}, {}) getting TOP-{} clusters".format(timestamp_end-timestamp_start, test_ids[0], test_ids[-1], len(self.results), self.n_top), INFO)
+                    top[test_id].setdefault(place_id, 0)
+                    top[test_id][place_id] += 1.0*distance[idx][loc_idx]
+
+            if not self.is_testing:
+                save_cache(top, filepath)
+
+        return top
 
 class CalculateDistanceThread(BaseCalculatorThread):
-    def run(self):
-        while True:
-            timestamp_start = time.time()
-            test_ids, test_xs = self.queue.get()
+    def process(self):
+        rankings = {}
+        for test_id, test_x in zip(test_ids, test_xs):
+            rankings.setdefault(test_id, {})
+            for metrics, place_id in self.metrics.items():
+                rankings[test_id].setdefault(place_id, self.distance(test_x, list(metrics)))
 
-            rankings = {}
-            for test_id, test_x in zip(test_ids, test_xs):
-                rankings.setdefault(test_id, {})
-                for metrics, place_id in self.metrics.items():
-                    rankings[test_id].setdefault(place_id, self.distance(test_x, list(metrics)))
+        top = {}
+        for test_id, ranking in rankings.items():
+            for place_id, distance in sorted(ranking.items(), key=lambda (k, v): v)[:self.n_top]:
+                top[test_id].append(str(place_id))
 
-            top = {}
-            for test_id, ranking in rankings.items():
-                for place_id, distance in sorted(ranking.items(), key=lambda (k, v): v)[:self.n_top]:
-                    top[test_id].append(str(place_id))
-
-            self.update_results(top, True)
-
-            self.queue.task_done()
-
-            timestamp_end = time.time()
-            log("Cost {:4f} secends to finish this batch job({} - {}) getting TOP-{} clusters".format(timestamp_end-timestamp_start, test_ids[0], test_ids[-1], self.n_top), DEBUG)
+        return top
 
 class StrategyEngine(object):
     STRATEGY_DISTANCE = "distance"
     STRATEGY_MOST_POPULAR = "most_popular"
+    STRATEGY_KDTREE = "kdtree"
+
+    STRATEGY_QUEUE = Queue.Queue()
 
     def __init__(self, is_accuracy, is_exclude_outlier, is_testing):
         self.is_accuracy = is_accuracy
         self.is_exclude_outlier = is_exclude_outlier
         self.is_testing = is_testing
 
-    def data_preprocess(self, df):
-        df_target = df
-        if self.is_exclude_outlier:
-              df_target = df_target[(stats.zscore(df_target["x"]) < 3) & (stats.zscore(df_target["y"]) < 3) & (stats.zscore(df_target["accuracy"]) < 3)]
+    @staticmethod
+    def data_preprocess(df, results, is_accuracy, is_exclude_outlier, threshold=3):
+        while True:
+            timestamp_start = time.time()
+            place_id = StrategyEngine.STRATEGY_QUEUE.get()
 
-        return df_target
+            df_target = df[df["place_id"] == place_id]
+            ori_shape = df_target.shape
 
-    def get_nearest_centroid(self, filepath):
+            df_target = df_target[(stats.zscore(df_target["x"]) < threshold) & (stats.zscore(df_target["y"]) < threshold)] if is_exclude_outlier else df_target
+            new_shape = df_target.shape
+
+            if ori_shape != new_shape:
+                log("Cut off outlier to make shape from {} to {} for {}".format(ori_shape, new_shape, place_id), INFO)
+
+            x, y = df_target["x"].mean(), df_target["y"].mean()
+            accuracy = df_target["accuracy"].mean() if is_accuracy else -1
+
+            results.append((place_id, (x, y, accuracy)))
+
+            StrategyEngine.STRATEGY_QUEUE.task_done()
+
+            timestamp_end = time.time()
+            log("Cost {:8f} seconds to get the centroid({}, {}, {}) from {}({}). Then, the remaining size of queue is {}".format(timestamp_end-timestamp_start, x, y, accuracy, df_target.shape, ori_shape, StrategyEngine.STRATEGY_QUEUE.qsize()), INFO)
+
+    @staticmethod
+    def position_transformer(x, min_x, len_x, range_x="800"):
+        return int(math.floor((x-min_x)/len_x*int(range_x)/10))
+
+    def get_centroid(self, filepath, n_jobs=8):
         df = pd.read_csv(filepath)
 
-        for place_id in df["place_id"].unique():
-            df_target = df[df["place_id"] == place_id]
-            df_target = self.data_preprocess(df_target[(stats.zscore(df_target["x"]) < 3) & (stats.zscore(df_target["y"]) < 3) & (stats.zscore(df_target["accuracy"]) < 3)])
+        results = []
 
-            x, y, accuracy = df_target["x"].mean(), df_target["y"].mean(), df_target["accuracy"].mean()
+        if self.is_exclude_outlier:
+            timestamp_start = time.time()
 
-            yield place_id, (x, y, accuracy)
+            for place_id in df["place_id"].unique():
+                StrategyEngine.STRATEGY_QUEUE.put(place_id)
+
+            for idx in range(0, 4):
+                thread = threading.Thread(target=StrategyEngine.data_preprocess, kwargs={"df": df, "results": results, "is_accuracy": self.is_accuracy, "is_exclude_outlier": self.is_exclude_outlier})
+                thread.setDaemon(thread)
+                thread.start()
+
+            StrategyEngine.STRATEGY_QUEUE.join()
+
+            timestamp_end = time.time()
+            log("Cost {:8f} secends to filter out the outliner".format(timestamp_end-timestamp_start), INFO)
+        else:
+            for idx in range(0, df.shape[0]):
+                results.append((df["place_id"].values[idx], (df["x"].values[idx], df["y"].values[idx], df["accuracy"].values[idx])))
+
+        return results
+
+    def get_training_dataset(self, filepath, filepath_pkl, n_top):
+        info = load_cache(filepath_pkl)
+        if not info or self.is_testing:
+            training_dataset, mapping = [], []
+
+            for idx, (place_id, (x, y, accuracy)) in enumerate(self.get_centroid(filepath)):
+                training_dataset.append([x, y])
+                mapping.append(str(place_id))
+
+            if not self.is_testing:
+                save_cache((training_dataset, mapping), filepath_pkl)
+        else:
+            training_dataset, mapping = info
+
+        return np.array(training_dataset), mapping
 
     def get_centroid_distance_metrics(self, filepath, filepath_pkl):
-        metrics = {}
-
         timestamp_start = time.time()
-        if os.path.exists(filepath_pkl):
-            metrics = load_cache(filepath_pkl)
-        else:
-            for place_id, m in self.get_nearest_centroid(filepath):
+        metrics = load_cache(filepath_pkl)
+        if not metrics or self.is_testing:
+            for place_id, m in self.get_centroid(filepath):
                 metrics[m if self.is_accuracy else m[:2]] = place_id
+
+            if not self.is_testing:
+                save_cache(metrics, filepath_pkl)
+
         timestamp_end = time.time()
         log("Cost {:4} seconds to build up the centroid metrics".format(timestamp_end-timestamp_start), INFO)
 
-        save_cache(metrics, filepath_pkl)
-
         return metrics
 
-    def most_popular_transformer(self, x, y, range_x=800, range_y=800):
-        ix = math.floor(range_x*x/10)
-        if ix < 0:
-            ix = 0
-        if ix >= range_x:
-            ix = range_x-1
-
-        iy = math.floor(range_y*y/10)
-        if iy < 0:
-            iy = 0
-        if iy >= range_y:
-            iy = range_y-1
-
-        return int(ix), int(iy)
-
-    def get_most_popular_metrics(self, filepath, filepath_pkl, is_accuracy=False, n_top=3, range_x=800, range_y=800):
-        metrics = {}
-
+    def get_kdtree(self, filepath, filepath_train_pkl, filepath_pkl, n_top):
         timestamp_start = time.time()
-        if os.path.exists(filepath_pkl):
-            metrics = load_cache(filepath_pkl)
+
+        info = load_cache(filepath_pkl)
+        if not info or self.is_testing:
+            training_dataset, mapping = self.get_training_dataset(filepath, filepath_train_pkl, n_top)
+            tree = KDTree(training_dataset, n_top)
+
+            if not self.is_testing:
+                save_cache((tree, mapping), filepath_pkl)
         else:
-            with open(filepath, "rb") as INPUT:
-                for line in INPUT:
-                    arr = line.strip().split(",")
+            tree, mapping = info
 
-                    row_id = arr[0]
-                    if not row_id.isdigit():
-                        continue
+        timestamp_end = time.time()
+        log("Cost {:8f} secends to build up the KDTree solution".format(timestamp_end-timestamp_start), INFO)
 
-                    x = float(arr[1])
-                    y = float(arr[2])
-                    accuracy = int(arr[3])
-                    place_id = arr[5]
+        return tree, mapping
 
-                    key = self.most_popular_transformer(x, y, range_x, range_y)
-                    metrics.setdefault(key, {})
-                    metrics[key].setdefault(place_id, 0)
-                    metrics[key][place_id] += np.log2(accuracy) if is_accuracy else 1
+    def get_most_popular_metrics(self, filepath, filepath_train_pkl, filepath_pkl, n_top=3, range_x=800, range_y=800):
+        timestamp_start = time.time()
+
+        info = load_cache(filepath_pkl)
+        if not info or self.is_testing:
+            training_dataset, mapping = self.get_training_dataset(filepath, filepath_train_pkl, n_top)
+
+            metrics = {}
+
+            min_x, max_x = training_dataset[:,0].min(), training_dataset[:,0].max()
+            len_x = max_x - min_x
+
+            min_y, max_y = training_dataset[:,1].min(), training_dataset[:,1].max()
+            len_y = max_y - min_y
+
+            for idx in range(0, training_dataset.shape[0]):
+                x = StrategyEngine.position_transformer(training_dataset[idx,0], min_x, len_x, range_x)
+                y = StrategyEngine.position_transformer(training_dataset[idx,1], min_y, len_y, range_y)
+                place_id = str(mapping[idx])
+
+                key = (x, y)
+                metrics.setdefault(key, {})
+                metrics[key].setdefault(place_id, 0)
 
             for key in metrics.keys():
                 metrics[key] = nlargest(n_top, sorted(metrics[key].items()), key=itemgetter(1))
 
-            save_cache(metrics, filepath_pkl)
+            if not self.is_testing:
+                save_cache((metrics, (min_x, len_x), (min_y, len_y)), filepath_pkl)
+        else:
+            metrics, (min_x, len_x), (min_y, len_y) = info
 
         timestamp_end = time.time()
         log("Cost {:8f} secends to build up the most popular solution".format(timestamp_end-timestamp_start), INFO)
 
-        return metrics
+        return metrics, (min_x, len_x), (min_y, len_y)
 
 class ProcessThread(BaseCalculatorThread):
     def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
@@ -243,16 +312,25 @@ class ProcessThread(BaseCalculatorThread):
             filename = os.path.basename(filepath_train)
             folder = os.path.dirname(filepath_train)
 
+            filepath_train_pkl = os.path.join(self.cache_workspace, "train", "{}.pkl".format(make_a_stamp(filepath_train)))
+            create_folder(filepath_train_pkl)
+
             filepath_test = filepath_train.replace("train", "test")
             filepath_submission = os.path.join(self.submission_workspace, "{}.{}.pkl".format(type(self).__name__.lower(), filename))
 
-            metrics = None
+            metrics, mapping = None, None
             if self.method == self.strategy_engine.STRATEGY_DISTANCE:
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_centroid_distance_metrics.__name__.lower(), filename))
-                metrics = self.strategy_engine.get_centroid_distance_metrics(filepath_train, f)
+                metrics = self.strategy_engine.get_centroid_distance_metrics(filepath_train, filepath_train_pkl, f)
             elif self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_most_popular_metrics.__name__.lower(), filename))
-                metrics = self.strategy_engine.get_most_popular_metrics(filepath_train, f, self.is_accuracy, self.n_top, self.criteria[0], self.criteria[1])
+                metrics, (min_x, len_x), (min_y, len_y) = self.strategy_engine.get_most_popular_metrics(filepath_train, filepath_train_pkl, f, self.n_top, self.criteria[0], self.criteria[1])
+            elif self.method == self.strategy_engine.STRATEGY_KDTREE:
+                f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_kdtree.__name__.lower(), filename))
+                metrics, mapping = self.strategy_engine.get_kdtree(filepath_train, filepath_train_pkl, f, self.n_top)
+            else:
+                log("Not implement this method, {}".format(self.method), ERROR)
+                raise NotImplementError
 
             df = pd.read_csv(filepath_test)
             if self.is_testing:
@@ -280,14 +358,29 @@ class ProcessThread(BaseCalculatorThread):
                                                              "cache_workspace": self.cache_workspace,
                                                              "metrics": metrics,
                                                              "distance": euclidean,
+                                                             "is_testing": self.is_testing,
                                                              "n_top": self.n_top})
                 elif self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
                     thread = MostPopularThread(kwargs={"queue": queue,
                                                        "results": self.results,
                                                        "cache_workspace": self.cache_workspace,
                                                        "metrics": metrics,
-                                                       "transformer": self.strategy_engine.most_popular_transformer,
+                                                       "transformer": self.strategy_engine.position_transformer,
+                                                       "range_x": (min_x, len_x, self.criteria[0]),
+                                                       "range_y": (min_y, len_y, self.criteria[1]),
+                                                       "is_testing": self.is_testing,
                                                        "n_top": self.n_top})
+                elif self.method == self.strategy_engine.STRATEGY_KDTREE:
+                    thread = KDTreeThread(kwargs={"queue": queue,
+                                                  "results": self.results,
+                                                  "cache_workspace": self.cache_workspace,
+                                                  "metrics": metrics,
+                                                  "mapping": mapping,
+                                                  "is_testing": self.is_testing,
+                                                  "n_top": self.n_top})
+                else:
+                    log("Not implement this method, {}".format(self.method), ERROR)
+                    raise NotImplementError
 
                 thread.setDaemon(True)
                 thread.start()
@@ -297,7 +390,7 @@ class ProcessThread(BaseCalculatorThread):
             self.queue.task_done()
 
             timestamp_end = time.time()
-            log("Cost {:8f} to finish the prediction of {}".format(timestamp_end-timestamp_start, filepath_train), INFO)
+            log("Cost {:8f} seconds to finish the prediction of {} by {}".format(timestamp_end-timestamp_start, filepath_train, self.method), INFO)
 
 def process(method, workspaces, batch_size, criteria, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_jobs=8):
     workspace, cache_workspace, output_workspace = workspaces
@@ -326,14 +419,13 @@ def process(method, workspaces, batch_size, criteria, is_accuracy, is_exclude_ou
                                        "is_accuracy": is_accuracy,
                                        "is_exclude_outlier": is_exclude_outlier,
                                        "is_testing": is_testing,
-                                        "n_top": n_top,
+                                       "n_top": n_top,
                                        "n_jobs": n_jobs})
         thread.setDaemon(True)
         thread.start()
 
         threads.append(thread)
     queue.join()
-    log("All of ProcessThreads finish their jobs", INFO)
 
     timestamp_start = time.time()
     csv_format = {}

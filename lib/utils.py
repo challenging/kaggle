@@ -68,6 +68,10 @@ def create_folder(filepath):
             if str(e).find("File Exists") == -1:
                 log(e)
 
+def remove_cache_file(filepath):
+    if os.path.exists(filepath):
+        os.remove(filepath)
+
 def split_file_by_size(filepath, n_size=32*1024*1024):
     part_no = 1
     chunk = []

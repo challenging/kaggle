@@ -5,10 +5,13 @@ import sys
 import datetime
 
 import click
+import threading
+import Queue
 
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
-
 sys.path.append("{}/../lib".format(BASEPATH))
+
+working_queue = Queue.Queue()
 
 from utils import log, INFO
 from facebook_learning import process, save_submission
@@ -19,34 +22,48 @@ from configuration import FacebookConfiguration
 @click.option("--n-jobs", default=4, help="Number of thread")
 @click.option("--is-testing", is_flag=True, help="Testing Mode")
 def facebook(conf, n_jobs, is_testing):
+    global working_queue
+
     configuration = FacebookConfiguration(conf)
 
-    workspace, cache_workspace, output_workspace = configuration.get_workspace()
-    is_accuracy, is_exclude_outlier = configuration.is_accuracy(), configuration.is_exclude_outlier()
-    window_size, batch_size, n_top = configuration.get_size()
-    method, criteria = configuration.get_method()
-    stamp = configuration.get_stamp()
+    for section in configuration.get_methods():
+        working_queue.put(section)
 
-    log("The method is {}, window_size is {}, batch_size is {}. n_top is {}".format(method, window_size, batch_size, n_top))
+    for idx in range(0, 4):
+        thread = threading.Thread(target=run, kwargs={"n_jobs": n_jobs, "is_testing": is_testing, "configuration": configuration})
+        thread.setDaemon(True)
+        thread.start()
 
-    filepath_train = os.path.join(workspace, "train.csv")
-    filepath_test = os.path.join(workspace, "test.csv")
-    cache_workspace = "{}/method={},{}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/{}.{}".format(\
-                        cache_workspace, method, "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, stamp, n_top)
-    submission_workspace = "{}/method={},{}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/{}.{}".format(\
-                        output_workspace, method, "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, stamp, n_top)
+    working_queue.join()
 
-    log("The workspace is {}".format(workspace))
-    log("The cache workspace is {}".format(cache_workspace), INFO)
-    log("The submission workspace is {}".format(submission_workspace), INFO)
+def run(n_jobs, is_testing, configuration):
+    global working_queue
 
-    results = process(method, (workspace, cache_workspace, submission_workspace), batch_size, criteria, is_accuracy, is_exclude_outlier, is_testing, n_top=n_top, n_jobs=n_jobs)
+    while True:
+        m = working_queue.get()
 
-    filepath_output = submission_workspace + ".csv.gz"
+        workspace, cache_workspace, output_workspace = configuration.get_workspace(m)
+        method, criteria, stamp, (window_size, batch_size, n_top), is_accuracy, is_exclude_outlier = configuration.get_method_detail(m)
+        log("The method is {}, window_size is {}, batch_size is {}. n_top is {}".format(method, window_size, batch_size, n_top))
 
-    for size in [n_top, 3]:
-        filepath_output = submission_workspace + ".{}.csv.gz".format(size)
-        save_submission(filepath_output, results, size)
+        filepath_train = os.path.join(workspace, "train.csv")
+        filepath_test = os.path.join(workspace, "test.csv")
+        cache_workspace = "{}/method={},{}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/{}.{}".format(\
+                            cache_workspace, method, "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, stamp, n_top)
+        submission_workspace = "{}/method={},{}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/{}.{}".format(\
+                            output_workspace, method, "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, stamp, n_top)
+
+        log("The workspace is {}".format(workspace))
+        log("The cache workspace is {}".format(cache_workspace), INFO)
+        log("The submission workspace is {}".format(submission_workspace), INFO)
+        results = process(method, (workspace, cache_workspace, submission_workspace), batch_size, criteria, is_accuracy, is_exclude_outlier, is_testing, n_top=n_top, n_jobs=max(1, n_jobs/2))
+
+        filepath_output = submission_workspace + ".csv.gz"
+        for size in [n_top, 3]:
+            filepath_output = submission_workspace + ".{}.csv.gz".format(size)
+            save_submission(filepath_output, results, size)
+
+        working_queue.task_done()
 
 if __name__ == "__main__":
     facebook()

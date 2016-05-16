@@ -13,19 +13,28 @@ class FacebookConfiguration(object):
         self.config = ConfigParser.RawConfigParser()
         self.config.read(filepath)
 
-    def get_workspace(self):
-        return self.config.get("MAIN", "workspace"), self.config.get("MAIN", "cache_workspace"), self.config.get("MAIN", "output_workspace")
+    def get_workspace(self, section):
+        return self.config.get(section, "workspace"), self.config.get("MAIN", "cache_workspace"), self.config.get("MAIN", "output_workspace")
 
-    def get_method(self):
-        method, criteria = "most_popular", (800, 800)
+    def get_methods(self):
+        for section in self.config.sections():
+            if section.find("METHOD") > -1:
+                yield section
 
-        if self.config.has_option("MAIN", "method"):
-            method = self.config.get("MAIN", "method")
+    def get_method_detail(self, section):
+        method, criteria = "most_popular", ("800", "800")
 
-        return method, criteria
+        if self.config.has_option(section, "name"):
+            method = self.config.get(section, "name")
 
-    def get_stamp(self):
-        names = self.get_workspace()[0].split("/")
+        if self.config.has_option(section, "criteria"):
+            if method == "most_popular":
+                criteria = self.config.get(section, "criteria").split(",")
+
+        return method, criteria, self.get_stamp(section), self.get_size(section), self.is_accuracy(section), self.is_exclude_outlier(section)
+
+    def get_stamp(self, section):
+        names = self.get_workspace(section)[0].split("/")
 
         turn_on, pool = 0, []
         for name in names:
@@ -37,29 +46,29 @@ class FacebookConfiguration(object):
 
         return make_a_stamp(pool)
 
-    def get_size(self):
+    def get_size(self, section):
         window_size = "all"
-        t = re.match("windown_size=(\d)+", self.get_workspace()[0])
+        t = re.search("windown_size=(\d+)", self.get_workspace(section)[0])
         if t:
-            window_size = t.group(0)
+            window_size = t.groups(0)[0]
 
         batch_size = 10000
-        if self.config.has_option("MAIN", "batch_size"):
-            batch_size = self.config.getint("MAIN", "batch_size")
+        if self.config.has_option(section, "batch_size"):
+            batch_size = self.config.getint(section, "batch_size")
 
         n_top = 3
-        if self.config.has_option("MAIN", "n_top"):
-            n_top = self.config.getint("MAIN", "n_top")
+        if self.config.has_option(section, "n_top"):
+            n_top = self.config.getint(section, "n_top")
 
         return window_size, batch_size, n_top
 
-    def is_accuracy(self):
-        is_accuracy = self.config.getint("FEATURE", "is_accuracy")
+    def is_accuracy(self, section):
+        is_accuracy = self.config.getint(section, "is_accuracy")
 
         return True if is_accuracy == 1 else False
 
-    def is_exclude_outlier(self):
-        return True if self.config.getint("FEATURE", "is_exclude_outlier") == 1 else False
+    def is_exclude_outlier(self, section):
+        return True if self.config.getint(section, "is_exclude_outlier") == 1 else False
 
 class ModelConfParser(object):
     def __init__(self, filepath):

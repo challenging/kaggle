@@ -258,19 +258,21 @@ def save_cache(obj, filepath):
     log("Save {}'s cache in {}".format(obj.__class__, filepath), DEBUG)
 
 def load_cache(filepath):
-    log("Try to load {}".format(filepath))
-
     obj = None
     try:
-        with open(filepath, "rb") as INPUT:
-            obj = pickle.load(INPUT)
+        if os.path.exists(filepath):
+            timestamp_start = time.time()
+            with open(filepath, "rb") as INPUT:
+                obj = pickle.load(INPUT)
+            timestamp_end = time.time()
 
-        log("Load {} from cache, {}".format(obj.__class__, filepath), DEBUG)
+            log("Spend {:8f} seconds to load cache from {}".format(timestamp_end-timestamp_start, filepath), INFO)
+        else:
+            pass
     except ValueError as e:
         log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
 
         os.remove(filepath)
-        raise
 
     return obj
 
