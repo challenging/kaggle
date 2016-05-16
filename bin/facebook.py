@@ -56,7 +56,9 @@ def run(n_jobs, is_testing, configuration):
         log("The workspace is {}".format(workspace))
         log("The cache workspace is {}".format(cache_workspace), INFO)
         log("The submission workspace is {}".format(submission_workspace), INFO)
-        results = process(method, (workspace, cache_workspace, submission_workspace), batch_size, criteria, is_accuracy, is_exclude_outlier, is_testing, n_top=n_top, n_jobs=max(1, n_jobs/2))
+
+        filepath_pkl = os.path.join(cache_workspace, "final_results.pkl")
+        results = process(method, (workspace, cache_workspace, submission_workspace), filepath_pkl, batch_size, criteria, is_accuracy, is_exclude_outlier, is_testing, n_top=n_top, n_jobs=max(1, n_jobs/2))
 
         filepath_output = submission_workspace + ".csv.gz"
         for size in [n_top, 3]:
