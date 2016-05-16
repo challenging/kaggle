@@ -392,7 +392,9 @@ class ProcessThread(BaseCalculatorThread):
             timestamp_end = time.time()
             log("Cost {:8f} seconds to finish the prediction of {} by {}".format(timestamp_end-timestamp_start, filepath_train, self.method), INFO)
 
-def process(method, workspaces, batch_size, criteria, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_jobs=8):
+def process(method, workspaces, filepath_pkl, batch_size, criteria, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_jobs=8):
+    timestamp_start = time.time()
+
     workspace, cache_workspace, output_workspace = workspaces
     for folder in [os.path.join(cache_workspace, "1.txt"), os.path.join(output_workspace, "1.txt")]:
         create_folder(folder)
@@ -407,27 +409,29 @@ def process(method, workspaces, batch_size, criteria, is_accuracy, is_exclude_ou
 
     log("There are {} files in queue".format(queue.qsize()), INFO)
 
-    threads, results = [], {}
-    for idx in range(0, n_jobs):
-        thread = ProcessThread(kwargs={"queue": queue,
-                                       "results": results,
-                                       "method": method,
-                                       "criteria": criteria,
-                                       "batch_size": batch_size,
-                                       "cache_workspace": cache_workspace,
-                                       "submission_workspace": output_workspace,
-                                       "is_accuracy": is_accuracy,
-                                       "is_exclude_outlier": is_exclude_outlier,
-                                       "is_testing": is_testing,
-                                       "n_top": n_top,
-                                       "n_jobs": n_jobs})
-        thread.setDaemon(True)
-        thread.start()
+    threads, results = [], load_cache(filepath_pkl)
+    if not results:
+        for idx in range(0, n_jobs):
+            thread = ProcessThread(kwargs={"queue": queue,
+                                           "results": results,
+                                           "method": method,
+                                           "criteria": criteria,
+                                           "batch_size": batch_size,
+                                           "cache_workspace": cache_workspace,
+                                           "submission_workspace": output_workspace,
+                                           "is_accuracy": is_accuracy,
+                                           "is_exclude_outlier": is_exclude_outlier,
+                                           "is_testing": is_testing,
+                                           "n_top": n_top,
+                                           "n_jobs": n_jobs})
+            thread.setDaemon(True)
+            thread.start()
 
-        threads.append(thread)
-    queue.join()
+            threads.append(thread)
+        queue.join()
 
-    timestamp_start = time.time()
+        save_cache(results, filepath_pkl)
+
     csv_format = {}
     for test_id, rankings in results.items():
         csv_format.setdefault(test_id, [])
@@ -436,8 +440,8 @@ def process(method, workspaces, batch_size, criteria, is_accuracy, is_exclude_ou
             csv_format[test_id].append(str(place_id))
 
         csv_format[test_id] = " ".join(csv_format[test_id])
-    timestamp_end = time.time()
 
+    timestamp_end = time.time()
     log("Cost {:8f} secends to transform the results to submission".format(timestamp_end-timestamp_start), INFO)
 
     return csv_format
