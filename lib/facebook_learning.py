@@ -118,7 +118,7 @@ class KDTreeThread(BaseCalculatorThread):
                     place_id = self.mapping[locc]
 
                     top[test_id].setdefault(place_id, 0)
-                    top[test_id][place_id] += 1.0*distance[idx][loc_idx]
+                    top[test_id][place_id] += -1.0*np.log(distance[idx][loc_idx])
 
             if not self.is_testing:
                 save_cache(top, filepath)
