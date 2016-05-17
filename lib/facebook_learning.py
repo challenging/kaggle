@@ -55,9 +55,8 @@ class BaseCalculatorThread(threading.Thread):
                         score = clusters[place_id]
 
                 self.results[test_id][place_id] += score*self.weights
-
-                #if test_id == 0:
-                #    log("{} {}".format(place_id, self.results[test_id][place_id]))
+                if test_id == 0:
+                    log("{} >>>> {}".format(place_id, self.results[test_id][place_id]))
 
     def run(self):
         while True:
@@ -92,6 +91,9 @@ class MostPopularThread(BaseCalculatorThread):
                 if key in self.metrics:
                     for place_id, most_popular in self.metrics[key]:
                         top[test_id].append(place_id)
+
+                    if test_id == 0:
+                        log("{} !!!! {}".format(place_id, top[test_id][-1]))
                 else:
                     log("The ({} ----> {}) of {} is not in metrics".format(test_x, key, test_id), WARN)
 
@@ -122,21 +124,6 @@ class KDTreeThread(BaseCalculatorThread):
 
             if not self.is_testing:
                 save_cache(top, filepath)
-
-        return top
-
-class CalculateDistanceThread(BaseCalculatorThread):
-    def process(self):
-        rankings = {}
-        for test_id, test_x in zip(test_ids, test_xs):
-            rankings.setdefault(test_id, {})
-            for metrics, place_id in self.metrics.items():
-                rankings[test_id].setdefault(place_id, self.distance(test_x, list(metrics)))
-
-        top = {}
-        for test_id, ranking in rankings.items():
-            for place_id, distance in sorted(ranking.items(), key=lambda (k, v): v)[:self.n_top]:
-                top[test_id].append(str(place_id))
 
         return top
 
@@ -175,13 +162,13 @@ class StrategyEngine(object):
             StrategyEngine.STRATEGY_QUEUE.task_done()
 
             timestamp_end = time.time()
-            log("Cost {:8f} seconds to get the centroid({}, {}, {}) from {}({}). Then, the remaining size of queue is {}".format(timestamp_end-timestamp_start, x, y, accuracy, df_target.shape, ori_shape, StrategyEngine.STRATEGY_QUEUE.qsize()), INFO)
+            log("Cost {:8f} seconds to get the centroid({}, {}, {}) from {}({}). Then, the remaining size of queue is {}".format(timestamp_end-timestamp_start, x, y, accuracy, df_target.shape, ori_shape, StrategyEngine.STRATEGY_QUEUE.qsize()), DEBUG)
 
     @staticmethod
     def position_transformer(x, min_x, len_x, range_x="800"):
         return int(math.floor((x-min_x)/len_x*int(range_x)/10))
 
-    def get_centroid(self, filepath, n_jobs=8):
+    def get_centroid(self, filepaath, n_jobs=6):
         df = pd.read_csv(filepath)
 
         results = []
@@ -192,29 +179,28 @@ class StrategyEngine(object):
             for place_id in df["place_id"].unique():
                 StrategyEngine.STRATEGY_QUEUE.put(place_id)
 
-            for idx in range(0, 4):
+            for idx in range(0, n_jobs):
                 thread = threading.Thread(target=StrategyEngine.data_preprocess, kwargs={"df": df, "results": results, "is_accuracy": self.is_accuracy, "is_exclude_outlier": self.is_exclude_outlier})
                 thread.setDaemon(thread)
                 thread.start()
 
             StrategyEngine.STRATEGY_QUEUE.join()
 
+            results = np.array(results)
+
             timestamp_end = time.time()
             log("Cost {:8f} secends to filter out the outliner".format(timestamp_end-timestamp_start), INFO)
         else:
-            for idx in range(0, df.shape[0]):
-                results.append((df["place_id"].values[idx], (df["x"].values[idx], df["y"].values[idx], df["accuracy"].values[idx])))
+            df["place_id"] = df["place_id"].astype(str)
+            results = df[["place_id", "x", "y", "accuracy"]].values
 
         return results
 
     def get_training_dataset(self, filepath, filepath_pkl, n_top):
         info = load_cache(filepath_pkl)
         if not info or self.is_testing:
-            training_dataset, mapping = [], []
-
-            for idx, (place_id, (x, y, accuracy)) in enumerate(self.get_centroid(filepath)):
-                training_dataset.append([x, y])
-                mapping.append(str(place_id))
+            results = self.get_centroid(filepath)
+            training_dataset, mapping = results[:,1:], results[:,0]
 
             if not self.is_testing:
                 save_cache((training_dataset, mapping), filepath_pkl)
@@ -222,21 +208,6 @@ class StrategyEngine(object):
             training_dataset, mapping = info
 
         return np.array(training_dataset), mapping
-
-    def get_centroid_distance_metrics(self, filepath, filepath_pkl):
-        timestamp_start = time.time()
-        metrics = load_cache(filepath_pkl)
-        if not metrics or self.is_testing:
-            for place_id, m in self.get_centroid(filepath):
-                metrics[m if self.is_accuracy else m[:2]] = place_id
-
-            if not self.is_testing:
-                save_cache(metrics, filepath_pkl)
-
-        timestamp_end = time.time()
-        log("Cost {:4} seconds to build up the centroid metrics".format(timestamp_end-timestamp_start), INFO)
-
-        return metrics
 
     def get_kdtree(self, filepath, filepath_train_pkl, filepath_pkl, n_top):
         timestamp_start = time.time()
@@ -274,7 +245,7 @@ class StrategyEngine(object):
             for idx in range(0, training_dataset.shape[0]):
                 x = StrategyEngine.position_transformer(training_dataset[idx,0], min_x, len_x, range_x)
                 y = StrategyEngine.position_transformer(training_dataset[idx,1], min_y, len_y, range_y)
-                place_id = str(mapping[idx])
+                place_id = mapping[idx]
 
                 key = (x, y)
                 metrics.setdefault(key, {})
@@ -282,6 +253,8 @@ class StrategyEngine(object):
 
             for key in metrics.keys():
                 metrics[key] = nlargest(n_top, sorted(metrics[key].items()), key=itemgetter(1))
+
+            log("The compression rate is {}/{}={:4f}".format(len(metrics), training_dataset.shape[0], float(len(metrics))/training_dataset.shape[0]), INFO)
 
             if not self.is_testing:
                 save_cache((metrics, (min_x, len_x), (min_y, len_y)), filepath_pkl)
@@ -319,10 +292,7 @@ class ProcessThread(BaseCalculatorThread):
             filepath_submission = os.path.join(self.submission_workspace, "{}.{}.pkl".format(type(self).__name__.lower(), filename))
 
             metrics, mapping = None, None
-            if self.method == self.strategy_engine.STRATEGY_DISTANCE:
-                f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_centroid_distance_metrics.__name__.lower(), filename))
-                metrics = self.strategy_engine.get_centroid_distance_metrics(filepath_train, filepath_train_pkl, f)
-            elif self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
+            if self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_most_popular_metrics.__name__.lower(), filename))
                 metrics, (min_x, len_x), (min_y, len_y) = self.strategy_engine.get_most_popular_metrics(filepath_train, filepath_train_pkl, f, self.n_top, self.criteria[0], self.criteria[1])
             elif self.method == self.strategy_engine.STRATEGY_KDTREE:
@@ -352,15 +322,7 @@ class ProcessThread(BaseCalculatorThread):
             n_threads = max(1, self.n_jobs/2)
             for idx in range(0, n_threads):
                 thread = None
-                if self.method == self.strategy_engine.STRATEGY_DISTANCE:
-                    thread = CalculateDistanceThread(kwargs={"queue": queue,
-                                                             "results": self.results,
-                                                             "cache_workspace": self.cache_workspace,
-                                                             "metrics": metrics,
-                                                             "distance": euclidean,
-                                                             "is_testing": self.is_testing,
-                                                             "n_top": self.n_top})
-                elif self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
+                if self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
                     thread = MostPopularThread(kwargs={"queue": queue,
                                                        "results": self.results,
                                                        "cache_workspace": self.cache_workspace,
@@ -393,8 +355,6 @@ class ProcessThread(BaseCalculatorThread):
             log("Cost {:8f} seconds to finish the prediction of {} by {}".format(timestamp_end-timestamp_start, filepath_train, self.method), INFO)
 
 def process(method, workspaces, filepath_pkl, batch_size, criteria, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_jobs=8):
-    timestamp_start = time.time()
-
     workspace, cache_workspace, output_workspace = workspaces
     for folder in [os.path.join(cache_workspace, "1.txt"), os.path.join(output_workspace, "1.txt")]:
         create_folder(folder)
@@ -411,6 +371,8 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, is_accuracy,
 
     threads, results = [], load_cache(filepath_pkl)
     if not results:
+        results = {}
+
         for idx in range(0, n_jobs):
             thread = ProcessThread(kwargs={"queue": queue,
                                            "results": results,
@@ -432,12 +394,16 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, is_accuracy,
 
         save_cache(results, filepath_pkl)
 
+    timestamp_start = time.time()
     csv_format = {}
     for test_id, rankings in results.items():
         csv_format.setdefault(test_id, [])
 
         for place_id, most_popular in nlargest(n_top, sorted(rankings.items()), key=lambda (k, v): v):
-            csv_format[test_id].append(str(place_id))
+            csv_format[test_id].append(place_id)
+
+            if test_id == 0:
+                log(csv_format[test_id][-1])
 
         csv_format[test_id] = " ".join(csv_format[test_id])
 
