@@ -56,7 +56,14 @@ class StrategyEngine(object):
 
     @staticmethod
     def position_transformer(x, min_x, len_x, range_x="800"):
-        return int(float(x-min_x)/len_x*int(range_x))
+        new_x = int(float(x)*int(range_x))
+
+        try:
+            new_x = int(float(x-min_x)/len_x*int(range_x))
+        except ValueError as e:
+            pass
+
+        return new_x
 
     def get_centroid(self, filepath, n_jobs=6):
         df = pd.read_csv(filepath, dtype={"row_id": str, "place_id": str, "x":np.float32, "y":np.float32, "accuracy": np.int32, "time": np.int32})
@@ -134,19 +141,14 @@ class StrategyEngine(object):
             len_y = max_y - min_y
 
             for idx in range(0, training_dataset.shape[0]):
-                try:
-                    x = StrategyEngine.position_transformer(training_dataset[idx,0], min_x, len_x, range_x)
-                    y = StrategyEngine.position_transformer(training_dataset[idx,1], min_y, len_y, range_y)
-                    place_id = mapping[idx]
+                x = StrategyEngine.position_transformer(training_dataset[idx,0], min_x, len_x, range_x)
+                y = StrategyEngine.position_transformer(training_dataset[idx,1], min_y, len_y, range_y)
+                place_id = mapping[idx]
 
-                    key = (x, y)
-                    metrics.setdefault(key, {})
-                    metrics[key].setdefault(place_id, 0)
-                    metrics[key][place_id] += 1
-                except ValueError as e:
-                    log(e)
-                    log("The inforamtion of x are {},{},{}".format(training_dataset[idx,0], min_x, len_x), WARN)
-                    log("The inforamtion of y are {},{},{}".format(training_dataset[idx,1], min_y, len_y), WARN)
+                key = (x, y)
+                metrics.setdefault(key, {})
+                metrics[key].setdefault(place_id, 0)
+                metrics[key][place_id] += 1
 
             for key in metrics.keys():
                 metrics[key] = nlargest(n_top, sorted(metrics[key].items()), key=lambda (k, v): v)
