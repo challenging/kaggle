@@ -29,7 +29,7 @@ def facebook(conf, n_jobs, is_testing):
     for section in configuration.get_methods():
         working_queue.put(section)
 
-    for idx in range(0, 4):
+    for idx in range(0, 1):
         thread = threading.Thread(target=run, kwargs={"n_jobs": n_jobs, "is_testing": is_testing, "configuration": configuration})
         thread.setDaemon(True)
         thread.start()

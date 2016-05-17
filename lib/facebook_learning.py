@@ -48,8 +48,6 @@ class BaseCalculatorThread(threading.Thread):
                         score = clusters[place_id]
 
                 self.results[test_id][place_id] += score*self.weights
-                if test_id == 0:
-                    log("{} >>>> {}".format(place_id, self.results[test_id][place_id]))
 
     def run(self):
         while True:
@@ -84,9 +82,6 @@ class MostPopularThread(BaseCalculatorThread):
                 if key in self.metrics:
                     for place_id, most_popular in self.metrics[key]:
                         top[test_id].append(place_id)
-
-                    if test_id == 0:
-                        log("{} !!!! {}".format(place_id, top[test_id][-1]))
                 else:
                     log("The ({} ----> {}) of {} is not in metrics".format(test_x, key, test_id), WARN)
 
@@ -255,9 +250,6 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, is_accuracy,
 
         for place_id, most_popular in nlargest(n_top, sorted(rankings.items()), key=lambda (k, v): v):
             csv_format[test_id].append(place_id)
-
-            if test_id == 0:
-                log(csv_format[test_id][-1])
 
         csv_format[test_id] = " ".join(csv_format[test_id])
 
