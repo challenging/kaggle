@@ -10,7 +10,8 @@ import operator
 import numpy as np
 import pandas as pd
 
-from utils import log, DEBUG, INFO, WARN
+from memory_profiler import profile
+from utils import log, DEBUG, INFO, WARN, create_folder
 from sklearn.preprocessing import PolynomialFeatures
 
 def data_load(filepath_train="../input/train.csv", filepath_test="../input/test.csv", drop_fields=[], filepath_cache=None):
@@ -248,10 +249,7 @@ def save_kaggle_submission(results, filepath):
     pd.DataFrame(results).to_csv(filepath, index=False)
 
 def save_cache(obj, filepath):
-    parent_folder = os.path.dirname(filepath)
-    if not os.path.isdir(parent_folder):
-        os.makedirs(parent_folder)
-
+    create_folder(filepath)
     with open(filepath, "wb") as OUTPUT:
         pickle.dump(obj, OUTPUT)
 
@@ -282,4 +280,7 @@ def load_cache(filepath):
     return obj
 
 if __name__ == "__main__":
-    load_feature_importance("/Users/RungChiChen/Documents/kaggle/Santander Customer Satisfaction/etc/feature_profile/transform2=True_binsize=4_top=500.pkl", 1024)
+    for test_id, info in load_cache("/Users/rongqichen/Documents/programs/kaggle/cases/Facebook V - Predicting Check Ins/input/cache/64x64_windowsize=1_batchsize=500000_isaccuracy=False_excludeoutlier=False_istesting=False/method=most_popular_54cc3480ffb5b30f7744eba8dd2f663c.6/a32d479f49d2a30e4e3b57bb494dcac6.pkl").items():
+        print test_id, info
+        print type(test_id).__name__
+        break

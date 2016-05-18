@@ -22,7 +22,7 @@ class FacebookConfiguration(object):
                 yield section
 
     def get_method_detail(self, section):
-        method, criteria = "most_popular", ("800", "800")
+        method, criteria = "most_popular", ("1024", "1024")
 
         if self.config.has_option(section, "name"):
             method = self.config.get(section, "name")

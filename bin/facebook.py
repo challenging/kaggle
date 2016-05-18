@@ -48,10 +48,10 @@ def run(n_jobs, is_testing, configuration):
 
         filepath_train = os.path.join(workspace, "train.csv")
         filepath_test = os.path.join(workspace, "test.csv")
-        cache_workspace = "{}/method={},{}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/{}.{}".format(\
-                            cache_workspace, method, "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, stamp, n_top)
-        submission_workspace = "{}/method={},{}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/{}.{}".format(\
-                            output_workspace, method, "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, stamp, n_top)
+        cache_workspace = "{}/{}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}_{}.{}".format(\
+                            cache_workspace, "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, stamp, n_top)
+        submission_workspace = "{}/{}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}_{}.{}".format(\
+                            output_workspace, "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, stamp, n_top)
 
         log("The workspace is {}".format(workspace))
         log("The cache workspace is {}".format(cache_workspace), INFO)

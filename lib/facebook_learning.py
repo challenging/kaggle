@@ -15,6 +15,7 @@ from scandir import scandir
 from operator import itemgetter
 from heapq import nlargest
 from scipy import stats
+from memory_profiler import profile
 
 from facebook_strategy import StrategyEngine
 from utils import log, DEBUG, INFO, WARN, ERROR
@@ -83,7 +84,7 @@ class MostPopularThread(BaseCalculatorThread):
                 key = (self.transformer(test_x[0], self.range_x[0], self.range_x[1], self.range_x[2]), self.transformer(test_x[1], self.range_y[0], self.range_y[1], self.range_y[2]))
                 if key in self.metrics:
                     for place_id, most_popular in self.metrics[key]:
-                        top[test_id].append(place_id)
+                        top[test_id].append(int(place_id))
                 else:
                     log("The ({} ----> {}) of {} is not in metrics".format(test_x, key, test_id), WARN)
 
@@ -140,7 +141,7 @@ class ProcessThread(BaseCalculatorThread):
             filename = os.path.basename(filepath_train)
             folder = os.path.dirname(filepath_train)
 
-            filepath_train_pkl = os.path.join(self.cache_workspace, "train", "{}.pkl".format(make_a_stamp(filepath_train)))
+            filepath_train_pkl = os.path.join(os.path.dirname(self.cache_workspace), "train", "{}.pkl".format(make_a_stamp(filepath_train)))
             create_folder(filepath_train_pkl)
 
             filepath_test = filepath_train.replace("train", "test")
@@ -157,7 +158,7 @@ class ProcessThread(BaseCalculatorThread):
                 log("Not implement this method, {}".format(self.method), ERROR)
                 raise NotImplementError
 
-            df = pd.read_csv(filepath_test)
+            df = pd.read_csv(filepath_test, dtype={"row_id": np.int32, "x":np.float32, "y":np.float32, "accuracy": np.int32, "time": np.int32})
             if self.is_testing:
                 df = df.head(100)
             log("There are {} reocrds in {}".format(df.values.shape, filepath_test), INFO)
@@ -260,7 +261,7 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, is_accuracy,
         csv_format.setdefault(test_id, [])
 
         for place_id, most_popular in nlargest(n_top, sorted(rankings.items()), key=lambda (k, v): v):
-            csv_format[test_id].append(place_id)
+            csv_format[test_id].append(str(place_id))
 
         csv_format[test_id] = " ".join(csv_format[test_id])
 
