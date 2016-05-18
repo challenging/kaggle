@@ -61,7 +61,8 @@ class BaseCalculatorThread(threading.Thread):
             self.queue.task_done()
 
             timestamp_end = time.time()
-            log("Cost {:4f} secends to finish this batch job({} - {}, {}) getting TOP-{} clusters. The remaining size of queue is {}".format(timestamp_end-timestamp_start, test_ids[0], test_ids[-1], len(top), self.n_top, self.queue.qsize()), DEBUG)
+            log("Cost {:4f} secends to finish this batch job({} - {}, {}) getting TOP-{} clusters. The remaining size of queue is {}".format(\
+                timestamp_end-timestamp_start, test_ids[0], test_ids[-1], len(top), self.n_top, self.queue.qsize()), DEBUG)
 
     def process(self, test_ids, test_xs):
         raise NotImplementError
@@ -75,6 +76,7 @@ class MostPopularThread(BaseCalculatorThread):
         if not top or self.is_testing:
             top = {}
 
+            count_missing = 0
             for test_id, test_x in zip(test_ids, test_xs):
                 top.setdefault(test_id, [])
 
@@ -84,6 +86,10 @@ class MostPopularThread(BaseCalculatorThread):
                         top[test_id].append(place_id)
                 else:
                     log("The ({} ----> {}) of {} is not in metrics".format(test_x, key, test_id), WARN)
+
+                    count_missing += 1
+
+            log("The missing ratio is {}/{}={:4f}".format(count_missing, len(top), float(count_missing)/len(top)), INFO)
 
             if not self.is_testing:
                 save_cache(top, filepath)
@@ -166,7 +172,12 @@ class ProcessThread(BaseCalculatorThread):
             queue = Queue.Queue()
             for idx in range(0, test_id.shape[0]/self.batch_size+1):
                 idx_start, idx_end = idx*self.batch_size, min(test_id.shape[0], (idx+1)*self.batch_size)
-                queue.put((test_id[idx_start:idx_end], test_x[idx_start:idx_end]))
+                size = test_id[idx_start:idx_end].shape[0]
+
+                if size > 0:
+                    queue.put((test_id[idx_start:idx_end], test_x[idx_start:idx_end]))
+                else:
+                    log("The batch size is {}({} - {})".format(size, idx_start, idx_end), ERROR)
 
             n_threads = max(1, self.n_jobs/2)
             for idx in range(0, n_threads):

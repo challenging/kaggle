@@ -275,6 +275,9 @@ def load_cache(filepath):
     except EOFError as e:
         log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
         os.remove(filepath)
+    except KeyError as e:
+        log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
+        os.remove(filepath)
 
     return obj
 

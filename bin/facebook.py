@@ -44,7 +44,7 @@ def run(n_jobs, is_testing, configuration):
 
         workspace, cache_workspace, output_workspace = configuration.get_workspace(m)
         method, criteria, stamp, (window_size, batch_size, n_top), is_accuracy, is_exclude_outlier = configuration.get_method_detail(m)
-        log("The method is {}, window_size is {}, batch_size is {}. n_top is {}".format(method, window_size, batch_size, n_top))
+        log("The method is {}, window_size is {}, batch_size is {}. n_top is {}. is_exclude_outlier is {}. is_accuracy is {}".format(method, window_size, batch_size, n_top, is_exclude_outlier, is_accuracy))
 
         filepath_train = os.path.join(workspace, "train.csv")
         filepath_test = os.path.join(workspace, "test.csv")
