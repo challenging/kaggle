@@ -106,7 +106,7 @@ class KDTreeThread(BaseCalculatorThread):
         if not top or self.is_testing:
             top = {}
 
-            distance, ind = self.metrics.query(test_xs, k=self.n_top)
+            distance, ind = self.metrics.query(test_xs, k=min(self.n_top, len(self.mapping)))
             for idx, loc in enumerate(ind):
                 test_id = test_ids[idx]
 
@@ -115,7 +115,10 @@ class KDTreeThread(BaseCalculatorThread):
                     place_id = self.mapping[locc]
 
                     top[test_id].setdefault(place_id, 0)
-                    top[test_id][place_id] += -1.0*np.log(distance[idx][loc_idx])
+
+                    d = distance[idx][loc_idx]
+                    if d != 0:
+                        top[test_id][place_id] += -1.0*np.log(distance[idx][loc_idx])
 
             if not self.is_testing:
                 save_cache(top, filepath)
@@ -224,9 +227,11 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, is_accuracy,
     for filename in scandir(os.path.join(workspace)):
         filepath_train = filename.path
 
-        if filepath_train.find(".csv") != -1 and filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:
-            queue.put(filepath_train)
-            log("Push {} in queue".format(filepath_train), INFO)
+        if filepath_train.find(".csv") != -1 and filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:# and filepath_train.find("10_1.csv") != -1:
+            # Avoid the empty file
+            if os.stat(filepath_train).st_size > 238:
+                queue.put(filepath_train)
+                log("Push {} in queue".format(filepath_train), INFO)
 
     log("There are {} files in queue".format(queue.qsize()), INFO)
 
