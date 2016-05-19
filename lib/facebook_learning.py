@@ -263,7 +263,7 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
 
     timestamp_start = time.time()
     csv_format = {}
-    for test_id, rankings in enumerate(resutls):
+    for test_id, rankings in enumerate(results):
         csv_format.setdefault(test_id, [])
 
         for place_id, most_popular in nlargest(n_top, sorted(rankings.items()), key=lambda (k, v): v):
