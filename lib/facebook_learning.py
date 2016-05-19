@@ -259,7 +259,7 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
             threads.append(thread)
         queue.join()
 
-        save_cache(results, filepath_pkl)
+        #save_cache(results, filepath_pkl)
 
     timestamp_start = time.time()
     csv_format = {}
