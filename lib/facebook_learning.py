@@ -63,7 +63,7 @@ class BaseCalculatorThread(threading.Thread):
 
             timestamp_end = time.time()
             log("Cost {:4f} secends to finish this batch job({} - {}, {}) getting TOP-{} clusters. The remaining size of queue is {}".format(\
-                timestamp_end-timestamp_start, test_ids[0], test_ids[-1], len(top), self.n_top, self.queue.qsize()), DEBUG)
+                timestamp_end-timestamp_start, test_ids[0], test_ids[-1], len(top), self.n_top, self.queue.qsize()), INFO)
 
     def process(self, test_ids, test_xs):
         raise NotImplementError

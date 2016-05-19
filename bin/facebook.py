@@ -48,17 +48,17 @@ def run(n_jobs, is_testing, configuration):
 
         filepath_train = os.path.join(workspace, "train.csv")
         filepath_test = os.path.join(workspace, "test.csv")
-        cache_workspace = "{}/criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}_{}.{}".format(\
-                            cache_workspace, criteria if isinstance(criteria, str) else "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, stamp, n_top)
-        submission_workspace = "{}/criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}_{}.{}".format(\
-                            output_workspace, criteria if isinstance(criteria, str) else "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, stamp, n_top)
+        cache_workspace = "{}/criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}_strategy={}.{}.{}".format(\
+                            cache_workspace, criteria if isinstance(criteria, str) else "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, strategy, stamp, n_top)
+        submission_workspace = "{}/criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}_strategy={}.{}.{}".format(\
+                            output_workspace, criteria if isinstance(criteria, str) else "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, strategy, stamp, n_top)
 
         log("The workspace is {}".format(workspace))
         log("The cache workspace is {}".format(cache_workspace), INFO)
         log("The submission workspace is {}".format(submission_workspace), INFO)
 
         filepath_pkl = os.path.join(cache_workspace, "final_results.pkl")
-        results = process(method, (workspace, cache_workspace, submission_workspace), filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_testing, n_top=n_top, n_jobs=max(1, n_jobs/2))
+        results = process(method, (workspace, cache_workspace, submission_workspace), filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_testing, n_top=n_top, n_jobs=max(1, n_jobs))
 
         filepath_output = submission_workspace + ".csv.gz"
         for size in [n_top, 3]:
