@@ -62,6 +62,7 @@ class StrategyEngine(object):
                     x, y = df_target["x"].mean(), df_target["y"].mean()
                 elif self.strategy == "median":
                     x, y = df_target["x"].median(), df_target["y"].median()
+                    new_shape = ori_shape
 
                 accuracy = df_target["accuracy"].mean() if self.is_accuracy else -1
 

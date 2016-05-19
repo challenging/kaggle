@@ -36,7 +36,7 @@ class BaseCalculatorThread(threading.Thread):
 
     def update_results(self, results, is_adjust=False):
         for test_id, clusters in results.items():
-            self.results.setdefault(test_id, {})
+            #self.results.setdefault(test_id, {})
 
             for adjust, place_id in enumerate(clusters):
                 self.results[test_id].setdefault(place_id, 0)
@@ -218,7 +218,7 @@ class ProcessThread(BaseCalculatorThread):
             timestamp_end = time.time()
             log("Cost {:8f} seconds to finish the prediction of {} by {}".format(timestamp_end-timestamp_start, filepath_train, self.method), INFO)
 
-def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_jobs=8):
+def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_jobs=8, count_testing_dataset=8607230):
     workspace, cache_workspace, output_workspace = workspaces
     for folder in [os.path.join(cache_workspace, "1.txt"), os.path.join(output_workspace, "1.txt")]:
         create_folder(folder)
@@ -227,7 +227,7 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
     for filename in scandir(os.path.join(workspace)):
         filepath_train = filename.path
 
-        if filepath_train.find(".csv") != -1 and filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:# and filepath_train.find("10_1.csv") != -1:
+        if filepath_train.find(".csv") != -1 and filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:
             # Avoid the empty file
             if os.stat(filepath_train).st_size > 238:
                 queue.put(filepath_train)
@@ -237,7 +237,7 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
 
     threads, results = [], load_cache(filepath_pkl)
     if not results:
-        results = {}
+        results = [{} for count in xrange(0, count_testing_dataset)]
 
         for idx in range(0, n_jobs):
             thread = ProcessThread(kwargs={"queue": queue,
@@ -263,7 +263,7 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
 
     timestamp_start = time.time()
     csv_format = {}
-    for test_id, rankings in results.items():
+    for test_id, rankings in enumerate(resutls):
         csv_format.setdefault(test_id, [])
 
         for place_id, most_popular in nlargest(n_top, sorted(rankings.items()), key=lambda (k, v): v):
