@@ -134,7 +134,7 @@ class ProcessThread(BaseCalculatorThread):
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-        self.strategy_engine = StrategyEngine(self.is_accuracy, self.is_exclude_outlier, self.is_testing)
+        self.strategy_engine = StrategyEngine(self.is_accuracy, self.is_exclude_outlier, self.is_testing, self.strategy)
 
     def run(self):
         while True:
@@ -144,7 +144,7 @@ class ProcessThread(BaseCalculatorThread):
             filename = os.path.basename(filepath_train)
             folder = os.path.dirname(filepath_train)
 
-            filepath_train_pkl = os.path.join(os.path.dirname(self.cache_workspace), "train", "{}.pkl".format(make_a_stamp(filepath_train)))
+            filepath_train_pkl = os.path.join(os.path.dirname(self.cache_workspace), "train", "{}.{}.pkl".format(self.strategy, make_a_stamp(filepath_train)))
             create_folder(filepath_train_pkl)
 
             filepath_test = filepath_train.replace("train", "test")
@@ -218,7 +218,7 @@ class ProcessThread(BaseCalculatorThread):
             timestamp_end = time.time()
             log("Cost {:8f} seconds to finish the prediction of {} by {}".format(timestamp_end-timestamp_start, filepath_train, self.method), INFO)
 
-def process(method, workspaces, filepath_pkl, batch_size, criteria, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_jobs=8):
+def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_jobs=8):
     workspace, cache_workspace, output_workspace = workspaces
     for folder in [os.path.join(cache_workspace, "1.txt"), os.path.join(output_workspace, "1.txt")]:
         create_folder(folder)
@@ -244,6 +244,7 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, is_accuracy,
                                            "results": results,
                                            "method": method,
                                            "criteria": criteria,
+                                           "strategy": strategy,
                                            "batch_size": batch_size,
                                            "cache_workspace": cache_workspace,
                                            "submission_workspace": output_workspace,

@@ -24,10 +24,11 @@ class StrategyEngine(object):
     STRATEGY_MOST_POPULAR = "most_popular"
     STRATEGY_KDTREE = "kdtree"
 
-    def __init__(self, is_accuracy, is_exclude_outlier, is_testing):
+    def __init__(self, is_accuracy, is_exclude_outlier, is_testing, strategy="mean"):
         self.is_accuracy = is_accuracy
         self.is_exclude_outlier = is_exclude_outlier
         self.is_testing = is_testing
+        self.strategy = strategy
 
     @staticmethod
     def position_transformer(x, min_x, len_x, range_x="800"):
@@ -44,7 +45,7 @@ class StrategyEngine(object):
     def get_centroid(self, filepath, n_jobs=6):
         queue = Queue.Queue()
 
-        def data_preprocess(df, results, is_accuracy, is_exclude_outlier, threshold=3):
+        def data_preprocess(df, results, threshold=3):
             while True:
                 timestamp_start = time.time()
                 place_id, filepath = queue.get()
@@ -52,12 +53,17 @@ class StrategyEngine(object):
                 df_target = df[df.index == place_id]
                 ori_shape = df_target.shape
 
-                if is_exclude_outlier and df_target.shape[0] > 10:
-                    df_target = df_target[(stats.zscore(df_target["x"]) < threshold) & (stats.zscore(df_target["y"]) < threshold)]
-                new_shape = df_target.shape
+                x, y = -1, -1
+                if self.strategy == "mean":
+                    if self.is_exclude_outlier and df_target.shape[0] > 10:
+                        df_target = df_target[(stats.zscore(df_target["x"]) < threshold) & (stats.zscore(df_target["y"]) < threshold)]
+                    new_shape = df_target.shape
 
-                x, y = df_target["x"].mean(), df_target["y"].mean()
-                accuracy = df_target["accuracy"].mean() if is_accuracy else -1
+                    x, y = df_target["x"].mean(), df_target["y"].mean()
+                elif self.strategy == "median":
+                    x, y = df_target["x"].median(), df_target["y"].median()
+
+                accuracy = df_target["accuracy"].mean() if self.is_accuracy else -1
 
                 results.append([place_id, x, y, accuracy])
                 timestamp_end = time.time()
@@ -75,7 +81,7 @@ class StrategyEngine(object):
                 queue.put((place_id, filepath))
 
             for idx in range(0, n_jobs):
-                thread = threading.Thread(target=data_preprocess, kwargs={"df": df, "results": results, "is_accuracy": self.is_accuracy, "is_exclude_outlier": self.is_exclude_outlier})
+                thread = threading.Thread(target=data_preprocess, kwargs={"df": df, "results": results})
                 thread.setDaemon(True)
                 thread.start()
 

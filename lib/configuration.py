@@ -22,7 +22,7 @@ class FacebookConfiguration(object):
                 yield section
 
     def get_method_detail(self, section):
-        method, criteria = "most_popular", ("1024", "1024")
+        method, criteria, strategy = "most_popular", ("1024", "1024"), "mean"
 
         if self.config.has_option(section, "name"):
             method = self.config.get(section, "name")
@@ -31,7 +31,10 @@ class FacebookConfiguration(object):
             if method == "most_popular":
                 criteria = self.config.get(section, "criteria").split(",")
 
-        return method, criteria, self.get_stamp(section), self.get_size(section), self.is_accuracy(section), self.is_exclude_outlier(section)
+        if method == "kdtree":
+            strategy = self.config.get(section, "strategy")
+
+        return method, criteria, strategy, self.get_stamp(section), self.get_size(section), self.is_accuracy(section), self.is_exclude_outlier(section)
 
     def get_stamp(self, section):
         names = self.get_workspace(section)[0].split("/")
