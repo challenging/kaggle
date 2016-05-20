@@ -63,25 +63,29 @@ def complex_split_data(filepath, binsize=256, output_folder="."):
                     df[c1 & c2 & c3].to_csv(filepath_output, index=False)
                     log("Save file in {}".format(filepath_output), INFO)
 
-def pos_split_data(filepath, output_folder="."):
+def pos_split_data(filepath, range_x=[x for x in range(0, 11, 1)], range_y=[y for y in range(0, 11, 1)], 
+                             size_x=[s for s in range(1, 6)], size_y=[y for y in range(1, 6)],
+                             output_folder="."):
     df = pd.read_csv(filepath)
 
-    for window_size in range(1, 6):
-        for x in range(0, 11, 1):
-            start_x, end_x = x, min(x+window_size, 11)
+    for window_size_x, window_size_y in zip(size_x, size_y):
+        for x in range_x:
+            start_x, end_x = x, min(x+window_size_x, 11)
             c2 = (df["x"].values >= start_x) & (df["x"].values < end_x)
 
-            for y in range(0, 11, 1):
-                start_y, end_y = y, min(y+window_size, 11)
+            for y in range_y:
+                start_y, end_y = y, min(y+window_size_y, 11)
                 c3 = (df["y"].values >= start_y) & (df["y"].values < end_y)
 
-                filepath_output = os.path.join(output_folder, "windown_size={}".format(window_size), "{}_{}.csv".format(start_x, start_y))
+                filepath_output = os.path.join(output_folder, "windown_size={},{}".format(window_size_x, window_size_y), "{}_{}.csv".format(start_x, start_y))
                 folder_output = os.path.dirname(filepath_output)
                 if not os.path.isdir(folder_output):
                     os.makedirs(folder_output)
 
-                df[c2 & c3].to_csv(filepath_output, index=False)
-                log("Save file in {}".format(filepath_output), INFO)
+                final_df = df[c2 & c3]
+                if final_df.shape[0] > 0:
+                    final_df.to_csv(filepath_output, index=False)
+                    log("Save file in {}".format(filepath_output), INFO)
 
 def plot_place_history(filepath):
     history = {}
@@ -104,7 +108,7 @@ def plot_place_history(filepath):
 if __name__ == "__main__":
     binsize_time = 128
 
-    folder = "/Users/RungChiChen/Documents/programs/kaggle/cases/Facebook V - Predicting Check Ins/input"
+    folder = "/Users/RungChiChen/Documents/programs/kaggle/cases/Facebook V - Predicting Check Ins/input/original"
     filepath_train = "{}/train.csv".format(folder)
     filepath_test = "{}/test.csv".format(folder)
     rules = [("time", binsize_time)]
@@ -115,8 +119,10 @@ if __name__ == "__main__":
     #complex_split_data(filepath_train, binsize_time, output_folder=os.path.join(folder, "2_way", "train"))
     #complex_split_data(filepath_test, binsize_time, output_folder=os.path.join(folder, "2_way", "test"))
 
-    #pos_split_data(filepath_train, output_folder=os.path.join(folder, "1_way", "train", "pos"))
-    #pos_split_data(filepath_test, output_folder=os.path.join(folder, "1_way", "test", "pos"))
+    range_x, size_x = [float(x)/10 for x in range(0, 110, 1)], [0.5]
+    range_y, size_y = [float(x)/10 for x in range(0, 110, 5)], [1]
+    pos_split_data(filepath_train, range_x, range_y, size_x, size_y, output_folder=os.path.join(folder.replace("original", ""), "1_way", "train", "pos"))
+    pos_split_data(filepath_test, range_x, range_y, size_x, size_y, output_folder=os.path.join(folder.replace("original", ""), "1_way", "test", "pos"))
 
-    filepath_time_sort_train = os.path.join(folder, "train_sort=time.csv")
-    plot_place_history(filepath_time_sort_train)
+    #filepath_time_sort_train = os.path.join(folder, "train_sort=time.csv")
+    #plot_place_history(filepath_time_sort_train)/
