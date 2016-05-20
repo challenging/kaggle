@@ -119,8 +119,8 @@ if __name__ == "__main__":
     #complex_split_data(filepath_train, binsize_time, output_folder=os.path.join(folder, "2_way", "train"))
     #complex_split_data(filepath_test, binsize_time, output_folder=os.path.join(folder, "2_way", "test"))
 
-    range_x, size_x = [float(x)/10 for x in range(0, 110, 1)], [0.5]
-    range_y, size_y = [float(x)/10 for x in range(0, 110, 5)], [1]
+    range_x, size_x = [float(x)/10 for x in range(0, 110, 1)], [0.2]
+    range_y, size_y = [float(x)/20 for x in range(0, 220, 1)], [0.1]
     pos_split_data(filepath_train, range_x, range_y, size_x, size_y, output_folder=os.path.join(folder.replace("original", ""), "1_way", "train", "pos"))
     pos_split_data(filepath_test, range_x, range_y, size_x, size_y, output_folder=os.path.join(folder.replace("original", ""), "1_way", "test", "pos"))
 
