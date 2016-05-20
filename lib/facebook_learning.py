@@ -267,7 +267,7 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
         csv_format.setdefault(test_id, [])
 
         for place_id, most_popular in nlargest(n_top, sorted(rankings.items()), key=lambda (k, v): v):
-            csv_format[test_id].append(str(place_id))
+            csv_format[test_id].append(str(int(place_id)))
 
         csv_format[test_id] = " ".join(csv_format[test_id])
 
