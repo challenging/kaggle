@@ -78,6 +78,19 @@ class ModelConfParser(object):
         self.config = ConfigParser.RawConfigParser()
         self.config.read(filepath)
 
+    def get_value(self, section, option):
+        value = None
+        if self.config.has_option(section, option):
+            value = self.config.get(section, option)
+
+        return value
+
+    def get_filepaths(self):
+        return self.get_value("MAIN", "filepath_training"), self.get_value("MAIN", "filepath_testing"), self.get_value("MAIN", "filepath_submission")
+
+    def get_additional_filepaths(self):
+        return self.get_value("MAIN", "filepath_feature_importance"), self.get_value("MAIN", "filepath_tuning")
+
     def get_workspace(self):
         return self.config.get("MAIN", "workspace")
 
@@ -102,7 +115,7 @@ class ModelConfParser(object):
             return -1
 
     def get_top_feature(self):
-        top_feature = 512
+        top_feature = None
 
         if self.config.has_option("MAIN", "top_feature"):
             top_feature = self.config.getint("MAIN", "top_feature")
@@ -126,7 +139,7 @@ class ModelConfParser(object):
         return value
 
     def get_interaction_information(self):
-        return self.config.getint("INTERACTION_INFORMATION", "binsize"), self.config.get("INTERACTION_INFORMATION", "top")
+        return self.get_value("INTERACTION_INFORMATION", "binsize"), self.get_value("INTERACTION_INFORMATION", "top")
 
     def get_global_setting(self):
         workspace, nfold, cost_string = self.config.get("MAIN", "workspace"), self.config.get("MAIN", "nfold"), self.config.get("MAIN", "cost")
