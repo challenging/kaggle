@@ -70,12 +70,14 @@ class StrategyEngine(object):
                     new_shape = ori_shape
                 elif self.strategy == "max":
                     idx = df_target["accuracy"] == df_target["accuracy"].max()
-                    x, y = df_target[idx]["x"], df_target[idx]["y"]
+                    x, y = df_target[idx]["x"].values[0], df_target[idx]["y"].values[0]
                     accuracy = df_target["accuracy"].max() if self.is_accuracy else -1
+
+                    new_shape = ori_shape
 
                 results.append([place_id, x, y, accuracy])
                 timestamp_end = time.time()
-                log("Cost {:8f} seconds to get the centroid({}, {}, {}) from [{} ---> {}]. Then, the remaining size of queue is {}".format(timestamp_end-timestamp_start, x, y, accuracy, ori_shape, new_shape, queue.qsize()), DEBUG)
+                log("Cost {:8f} seconds to get the centroid({}, {}, {}) from [{} ---> {}]. Then, the remaining size of queue is {}".format(timestamp_end-timestamp_start, x, y, accuracy, ori_shape, new_shape, queue.qsize()), INFO)
 
                 queue.task_done()
 
