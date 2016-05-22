@@ -82,7 +82,7 @@ class StrategyEngine(object):
                 queue.task_done()
 
         results = []
-        if self.is_exclude_outlier:
+        if self.strategy != "native":
             df = pd.read_csv(filepath, dtype={"row_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int}, index_col=["place_id"])
 
             timestamp_start = time.time()
