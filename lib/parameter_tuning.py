@@ -443,7 +443,7 @@ class XGBoostingTuning(ParameterTuning):
         return self.get_model_instance().get_params()
 
 def tuning(train_x, train_y, test_id, test_x, cost,
-           filepath_feature_importance, filepath_tuning, filepath_submission, methodology, nfold, top_feature, binsize,
+           filepath_feature_importance, filepath_tuning, filepath_submission, methodology, nfold, top_feature,
            thread=-1):
 
     algorithm, is_xgboosting, is_classifier = None, False, False

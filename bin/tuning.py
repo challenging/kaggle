@@ -77,7 +77,7 @@ def parameter_tuning(methodology, nfold, is_testing, is_feature_importance, thre
     log("{} data records with {} features, and filepath is {}".format(len(train_x), train_x.shape[1], filepath_tuning), INFO)
 
     params = tuning(train_x, train_y, test_id, test_x, cost,
-                    filepath_feature_importance if is_feature_importance else None, filepath_tuning, filepath_submission, methodology, nfold, top_feature, binsize,
+                    filepath_feature_importance if is_feature_importance else None, filepath_tuning, filepath_submission, methodology, nfold, top_feature,
                     thread=thread)
 
     log("The final parameters are {}".format(params))
