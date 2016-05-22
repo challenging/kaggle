@@ -11,6 +11,7 @@ import Queue
 
 import pandas as pd
 import numpy as np
+import xgboost as xgb
 
 from heapq import nlargest
 from scipy import stats
@@ -54,27 +55,35 @@ class StrategyEngine(object):
                 ori_shape = df_target.shape
 
                 x, y = -1, -1
+                accuracy = -1
                 if self.strategy == "mean":
                     if self.is_exclude_outlier and df_target.shape[0] > 10:
                         df_target = df_target[(stats.zscore(df_target["x"]) < threshold) & (stats.zscore(df_target["y"]) < threshold)]
                     new_shape = df_target.shape
 
                     x, y = df_target["x"].mean(), df_target["y"].mean()
+                    accuracy = df_target["accuracy"].mean() if self.is_accuracy else -1
                 elif self.strategy == "median":
                     x, y = df_target["x"].median(), df_target["y"].median()
-                    new_shape = ori_shape
+                    accuracy = df_target["accuracy"].median() if self.is_accuracy else -1
 
-                accuracy = df_target["accuracy"].mean() if self.is_accuracy else -1
+                    new_shape = ori_shape
+                elif self.strategy == "max":
+                    idx = df_target["accuracy"] == df_target["accuracy"].max()
+                    x, y = df_target[idx]["x"].values[0], df_target[idx]["y"].values[0]
+                    accuracy = df_target["accuracy"].max() if self.is_accuracy else -1
+
+                    new_shape = ori_shape
 
                 results.append([place_id, x, y, accuracy])
                 timestamp_end = time.time()
-                log("Cost {:8f} seconds to get the centroid({}, {}, {}) from [{} ---> {}]. Then, the remaining size of queue is {}".format(timestamp_end-timestamp_start, x, y, accuracy, ori_shape, new_shape, queue.qsize()), DEBUG)
+                log("Cost {:8f} seconds to get the centroid({}, {}, {}) from [{} ---> {}]. Then, the remaining size of queue is {}".format(timestamp_end-timestamp_start, x, y, accuracy, ori_shape, new_shape, queue.qsize()), INFO)
 
                 queue.task_done()
 
         results = []
-        if self.is_exclude_outlier:
-            df = pd.read_csv(filepath, dtype={"row_id": np.int32, "x":np.float32, "y":np.float32, "accuracy": np.int32, "time": np.int32}, index_col=["place_id"])
+        if self.strategy != "native":
+            df = pd.read_csv(filepath, dtype={"row_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int}, index_col=["place_id"])
 
             timestamp_start = time.time()
 
@@ -93,7 +102,7 @@ class StrategyEngine(object):
             timestamp_end = time.time()
             log("Cost {:8f} secends to filter out the outliner, {}".format(timestamp_end-timestamp_start, results.shape), INFO)
         else:
-            df = pd.read_csv(filepath, dtype={"row_id": np.int32, "place_id": np.int32, "x":np.float32, "y":np.float32, "accuracy": np.int32, "time": np.int32})
+            df = pd.read_csv(filepath, dtype={"row_id": np.int, "place_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int})
 
             results = df[["place_id", "x", "y", "accuracy"]].values
 
@@ -110,7 +119,7 @@ class StrategyEngine(object):
         else:
             training_dataset, mapping = info
 
-        training_dataset = training_dataset.astype(np.float32)
+        training_dataset = training_dataset.astype(np.float)
 
         return training_dataset, mapping
 
@@ -126,6 +135,29 @@ class StrategyEngine(object):
                 tree = KDTree(training_dataset, n_top)
             else:
                 tree = KDTree(training_dataset[:,0:2], n_top)
+
+            if not self.is_testing:
+                save_cache((tree, mapping), filepath_pkl)
+        else:
+            tree, mapping = info
+
+        timestamp_end = time.time()
+        log("Cost {:8f} secends to build up the KDTree solution".format(timestamp_end-timestamp_start), INFO)
+
+        return tree, mapping
+
+    def get_xgboost(self, filepath, filepath_train_pkl, n_top):
+        timestamp_start = time.time()
+
+        info = load_cache(filepath_pkl)
+        if not info or self.is_testing:
+            training_dataset, mapping = self.get_training_dataset(filepath, filepath_train_pkl, n_top)
+
+            model = xgb.XGBClassifier()
+            if self.is_accuracy:
+                model.fit(training_dataset, mapping)
+            else:
+                model.fit(training_dataset[:,0:2], mapping)
 
             if not self.is_testing:
                 save_cache((tree, mapping), filepath_pkl)

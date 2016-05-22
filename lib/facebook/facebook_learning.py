@@ -161,7 +161,7 @@ class ProcessThread(BaseCalculatorThread):
                 log("Not implement this method, {}".format(self.method), ERROR)
                 raise NotImplementError
 
-            df = pd.read_csv(filepath_test, dtype={"row_id": np.int32, "x":np.float32, "y":np.float32, "accuracy": np.int32, "time": np.int32})
+            df = pd.read_csv(filepath_test, dtype={"row_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int})
             if self.is_testing:
                 df = df.head(100)
             log("There are {} reocrds in {}".format(df.values.shape, filepath_test), INFO)

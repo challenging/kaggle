@@ -8,14 +8,11 @@ import click
 import threading
 import Queue
 
-BASEPATH = os.path.dirname(os.path.abspath(__file__))
-sys.path.append("{}/../lib".format(BASEPATH))
+from utils import log, INFO
+from facebook.facebook_learning import process, save_submission
+from configuration import FacebookConfiguration
 
 working_queue = Queue.Queue()
-
-from utils import log, INFO
-from facebook_learning import process, save_submission
-from configuration import FacebookConfiguration
 
 @click.command()
 @click.option("--conf", required=True, help="Filepath of Configuration")
