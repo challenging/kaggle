@@ -45,10 +45,17 @@ def run(n_jobs, is_testing, configuration):
 
         filepath_train = os.path.join(workspace, "train.csv")
         filepath_test = os.path.join(workspace, "test.csv")
-        cache_workspace = "{}/criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}_strategy={}.{}.{}".format(\
-                            cache_workspace, criteria if isinstance(criteria, str) else "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, strategy, stamp, n_top)
-        submission_workspace = "{}/criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}_strategy={}.{}.{}".format(\
-                            output_workspace, criteria if isinstance(criteria, str) else "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, strategy, stamp, n_top)
+
+        if method == "native":
+            cache_workspace = "{}/criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}.{}.{}".format(\
+                                cache_workspace, criteria if isinstance(criteria, str) else "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, stamp, n_top)
+            submission_workspace = "{}/criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}.{}.{}".format(\
+                                output_workspace, criteria if isinstance(criteria, str) else "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, stamp, n_top)
+        else:
+            cache_workspace = "{}/criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}_strategy={}.{}.{}".format(\
+                                cache_workspace, criteria if isinstance(criteria, str) else "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, strategy, stamp, n_top)
+            submission_workspace = "{}/criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}_strategy={}.{}.{}".format(\
+                                output_workspace, criteria if isinstance(criteria, str) else "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, strategy, stamp, n_top)
 
         log("The workspace is {}".format(workspace))
         log("The cache workspace is {}".format(cache_workspace), INFO)

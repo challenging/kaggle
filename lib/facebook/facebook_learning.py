@@ -36,18 +36,10 @@ class BaseCalculatorThread(threading.Thread):
 
     def update_results(self, results, is_adjust=False):
         for test_id, clusters in results.items():
-            #self.results.setdefault(test_id, {})
+            self.results.setdefault(test_id, {})
 
-            for adjust, place_id in enumerate(clusters):
+            for place_id, score in clusters.items():
                 self.results[test_id].setdefault(place_id, 0)
-
-                score = 1
-                if is_adjust:
-                    score = (len(clusters) - adjust)*1.0
-                else:
-                    if isinstance(clusters, dict):
-                        score = clusters[place_id]
-
                 self.results[test_id][place_id] += score*self.weights
 
     def run(self):
@@ -79,14 +71,15 @@ class MostPopularThread(BaseCalculatorThread):
 
             count_missing = 0
             for test_id, test_x in zip(test_ids, test_xs):
-                top.setdefault(test_id, [])
+                top.setdefault(test_id, {})
 
                 key = (self.transformer(test_x[0], self.range_x[0], self.range_x[1], self.range_x[2]), self.transformer(test_x[1], self.range_y[0], self.range_y[1], self.range_y[2]))
                 if key in self.metrics:
-                    for place_id, most_popular in self.metrics[key]:
-                        top[test_id].append(int(place_id))
+                    for place_id, score in self.metrics[key]:
+                        top[test_id].setdefault(place_id, 0)
+                        top[test_id][place_id] += score
                 else:
-                    log("The ({} ----> {}) of {} is not in metrics".format(test_x, key, test_id), WARN)
+                    log("The ({} ----> {}) of {} is not in metrics".format(test_x, key, test_id), DEBUG)
 
                     count_missing += 1
 
@@ -118,7 +111,7 @@ class KDTreeThread(BaseCalculatorThread):
 
                     d = distance[idx][loc_idx]
                     if d != 0:
-                        top[test_id][place_id] += -1.0*np.log(distance[idx][loc_idx])
+                        top[test_id][place_id] += -1.0*np.log(distance[idx][loc_idx])*self.score[locc]
 
             if not self.is_testing:
                 save_cache(top, filepath)
@@ -156,7 +149,7 @@ class ProcessThread(BaseCalculatorThread):
                 metrics, (min_x, len_x), (min_y, len_y) = self.strategy_engine.get_most_popular_metrics(filepath_train, filepath_train_pkl, f, self.n_top, self.criteria[0], self.criteria[1])
             elif self.method == self.strategy_engine.STRATEGY_KDTREE:
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_kdtree.__name__.lower(), filename))
-                metrics, mapping = self.strategy_engine.get_kdtree(filepath_train, filepath_train_pkl, f, self.n_top)
+                metrics, mapping, score = self.strategy_engine.get_kdtree(filepath_train, filepath_train_pkl, f, self.n_top)
             else:
                 log("Not implement this method, {}".format(self.method), ERROR)
                 raise NotImplementError
@@ -167,8 +160,6 @@ class ProcessThread(BaseCalculatorThread):
             log("There are {} reocrds in {}".format(df.values.shape, filepath_test), INFO)
 
             fields = ["x", "y"]
-            if self.is_accuracy:
-                fields.append("accuracy")
 
             test_id = df["row_id"].values
             test_x = df[fields].values
@@ -202,6 +193,7 @@ class ProcessThread(BaseCalculatorThread):
                                                   "cache_workspace": self.cache_workspace,
                                                   "metrics": metrics,
                                                   "mapping": mapping,
+                                                  "score": score,
                                                   "is_testing": self.is_testing,
                                                   "n_top": self.n_top})
                 else:
@@ -235,35 +227,32 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
 
     log("There are {} files in queue".format(queue.qsize()), INFO)
 
-    threads, results = [], load_cache(filepath_pkl)
-    if not results:
-        results = [{} for count in xrange(0, count_testing_dataset)]
+    threads, results = [], {}
+    for idx in range(0, n_jobs):
+        thread = ProcessThread(kwargs={"queue": queue,
+                                       "results": results,
+                                       "method": method,
+                                       "criteria": criteria,
+                                       "strategy": strategy,
+                                       "batch_size": batch_size,
+                                       "cache_workspace": cache_workspace,
+                                       "submission_workspace": output_workspace,
+                                       "is_accuracy": is_accuracy,
+                                       "is_exclude_outlier": is_exclude_outlier,
+                                       "is_testing": is_testing,
+                                       "n_top": n_top,
+                                       "n_jobs": n_jobs})
+        thread.setDaemon(True)
+        thread.start()
 
-        for idx in range(0, n_jobs):
-            thread = ProcessThread(kwargs={"queue": queue,
-                                           "results": results,
-                                           "method": method,
-                                           "criteria": criteria,
-                                           "strategy": strategy,
-                                           "batch_size": batch_size,
-                                           "cache_workspace": cache_workspace,
-                                           "submission_workspace": output_workspace,
-                                           "is_accuracy": is_accuracy,
-                                           "is_exclude_outlier": is_exclude_outlier,
-                                           "is_testing": is_testing,
-                                           "n_top": n_top,
-                                           "n_jobs": n_jobs})
-            thread.setDaemon(True)
-            thread.start()
+        threads.append(thread)
+    queue.join()
 
-            threads.append(thread)
-        queue.join()
-
-        #save_cache(results, filepath_pkl)
+    log("There are {} records in results".format(len(results)), INFO)
 
     timestamp_start = time.time()
     csv_format = {}
-    for test_id, rankings in enumerate(results):
+    for test_id, rankings in results.items():
         csv_format.setdefault(test_id, [])
 
         for place_id, most_popular in nlargest(n_top, sorted(rankings.items()), key=lambda (k, v): v):
