@@ -8,13 +8,26 @@ import numpy as np
 
 from utils import make_a_stamp
 
-class FacebookConfiguration(object):
+MAIN = "MAIN"
+
+FEATURE_IMPORTANCE = "FEATURE_IMPORTANCE"
+FEATURE_INTERACTION = "FEATURE_INTERACTION"
+
+class KaggleConfiguration(object):
     def __init__(self, filepath):
         self.config = ConfigParser.RawConfigParser()
         self.config.read(filepath)
 
+    def get_value(self, section, option):
+        value = None
+        if self.config.has_option(section, option):
+            value = self.config.get(section, option)
+
+        return value
+
+class FacebookConfiguration(KaggleConfiguration):
     def get_workspace(self, section):
-        return self.config.get(section, "workspace"), self.config.get("MAIN", "cache_workspace"), self.config.get("MAIN", "output_workspace")
+        return self.config.get(section, "workspace"), self.config.get(MAIN, "cache_workspace"), self.config.get(MAIN, "output_workspace")
 
     def get_methods(self):
         for section in self.config.sections():
@@ -51,7 +64,7 @@ class FacebookConfiguration(object):
 
     def get_size(self, section):
         window_size = "all"
-        t = re.search("windown_size=(\d+)", self.get_workspace(section)[0])
+        t = re.search("windown_size=([\d\.,]+)", self.get_workspace(section)[0])
         if t:
             window_size = t.groups(0)[0]
 
@@ -65,84 +78,71 @@ class FacebookConfiguration(object):
 
         return window_size, batch_size, n_top
 
-    def is_accuracy(self, section):
-        is_accuracy = self.config.getint(section, "is_accuracy")
+    def is_accuracy(self, section, option="is_accuracy"):
+        return self.is_exclude_outlier(section, option)
 
-        return True if is_accuracy == 1 else False
+    def is_exclude_outlier(self, section, option="is_exclude_outlier"):
+        return True if self.get_value(section, option) and self.get_value(section, option) == "1" else False
 
-    def is_exclude_outlier(self, section):
-        return True if self.config.getint(section, "is_exclude_outlier") == 1 else False
-
-class ModelConfParser(object):
-    def __init__(self, filepath):
-        self.config = ConfigParser.RawConfigParser()
-        self.config.read(filepath)
-
-    def get_value(self, section, option):
-        value = None
-        if self.config.has_option(section, option):
-            value = self.config.get(section, option)
-
-        return value
-
+class ModelConfParser(KaggleConfiguration):
     def get_filepaths(self):
-        return self.get_value("MAIN", "filepath_training"), self.get_value("MAIN", "filepath_testing"), self.get_value("MAIN", "filepath_submission")
-
-    def get_additional_filepaths(self):
-        return self.get_value("MAIN", "filepath_feature_importance"), self.get_value("MAIN", "filepath_tuning")
+        return self.get_value(MAIN, "filepath_training"), self.get_value(MAIN, "filepath_testing"), self.get_value(MAIN, "filepath_submission"), self.get_value(MAIN, "filepath_tuning")
 
     def get_workspace(self):
-        return self.config.get("MAIN", "workspace")
+        return self.config.get(MAIN, "workspace")
 
     def get_objective(self):
-        return self.config.get("MAIN", "objective")
+        return self.config.get(MAIN, "objective")
 
     def get_cost(self):
-        return self.config.get("MAIN", "cost")
+        return self.config.get(MAIN, "cost")
 
     def get_nfold(self):
         nfold = 10
 
-        if self.config.has_option("MAIN", "nfold"):
-            nfold = self.config.getint("MAIN", "nfold")
+        if self.config.has_option(MAIN, "nfold"):
+            nfold = self.config.getint(MAIN, "nfold")
 
         return nfold
 
     def get_n_jobs(self):
-        if self.config.has_option("MAIN", "n_jobs"):
-            return self.config.getint("MAIN", "n_jobs")
+        if self.config.has_option(MAIN, "n_jobs"):
+            return self.config.getint(MAIN, "n_jobs")
         else:
             return -1
 
     def get_top_feature(self):
         top_feature = None
 
-        if self.config.has_option("MAIN", "top_feature"):
-            top_feature = self.config.getint("MAIN", "top_feature")
+        if self.config.has_option(MAIN, "top_feature"):
+            top_feature = self.config.getint(MAIN, "top_feature")
 
         return top_feature
 
     def get_n_estimators(self):
         value = 1000
 
-        if self.config.has_option("MAIN", "n_estimators"):
-            value = self.config.getint("MAIN", "n_estimators")
+        if self.config.has_option(MAIN, "n_estimators"):
+            value = self.config.getint(MAIN, "n_estimators")
 
         return value
 
     def get_learning_rate(self):
         value = 0.05
 
-        if self.config.has_option("MAIN", "learning_rate"):
-            value = self.config.getfloat("MAIN", "learning_rate")
+        if self.config.has_option(MAIN, "learning_rate"):
+            value = self.config.getfloat(MAIN, "learning_rate")
 
         return value
 
-    def get_interaction_information(self):
-        return self.get_value("INTERACTION_INFORMATION", "binsize"), self.get_value("INTERACTION_INFORMATION", "top")
+    def get_feature_interaction(self):
+        return self.get_value(FEATURE_INTERACTION, "filepath"), self.get_value(FEATURE_INTERACTION, "binsize"), self.get_value(FEATURE_INTERACTION, "top")
+
+    def get_feature_importance(self):
+        return self.get_value(FEATURE_IMPORTANCE, "filepath"), self.get_value(FEATURE_IMPORTANCE, "top")
 
     def get_global_setting(self):
-        workspace, nfold, cost_string = self.config.get("MAIN", "workspace"), self.config.get("MAIN", "nfold"), self.config.get("MAIN", "cost")
+        workspace, nfold, cost_string = self.config.get(MAIN, "workspace"), self.config.get(MAIN, "nfold"), self.config.get(MAIN, "cost")
 
         return workspace, nfold, cust_string
 
