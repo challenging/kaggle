@@ -28,9 +28,11 @@ class ParameterTuning(object):
         self.n_estimator = n_estimator
         self.cost = cost
         if self.cost == "log_loss":
-            self.cost_function = log_loss
-        elif self.cost == "auc":
-            self.cost_function = roc_auc_score
+            self.cost_func = log_loss
+        elif self.cost == "aur_roc":
+            self.cost_func = roc_auc_score
+        else:
+            raise NotImplementError
 
         self.objective = objective
         self.cv = cv
@@ -157,7 +159,7 @@ class ParameterTuning(object):
 
             gsearch1 = GridSearchCV(estimator=model,
                                     param_grid=params,
-                                    scoring="roc_auc" if self.cost_function.__name__ == "roc_auc_score" else make_scorer(self.cost_function),
+                                    scoring=make_scorer(self.cost_func),
                                     n_jobs=self.n_jobs,
                                     iid=False,
                                     cv=self.cv,
@@ -166,7 +168,7 @@ class ParameterTuning(object):
             log("Training by {} features".format(n_features), INFO)
 
             best_cost, best_params, scores = self.get_best_params(gsearch1, training_x, training_y)
-            log("The {} of {}-model is {:.8f} based on {}".format(self.cost_function.__name__, phase, best_cost, best_params.keys()))
+            log("The {} of {}-model is {:.8f} based on {}".format(self.cost, phase, best_cost, best_params.keys()))
 
             self.done[phase] = best_cost, best_params, scores, gsearch1
             self.improve(gsearch1, phase, best_cost, best_params)
@@ -198,7 +200,7 @@ class ParameterTuning(object):
                 if advanced_params:
                     gsearch2 = GridSearchCV(estimator=self.get_model_instance(),
                                             param_grid=advanced_params,
-                                            scoring="roc_auc" if self.cost_function.__name__ == "roc_auc_score" else make_scorer(self.cost_function),
+                                            scoring=make_scorer(self.cost_func),
                                             n_jobs=self.n_jobs,
                                             iid=False,
                                             cv=self.cv,
@@ -227,31 +229,37 @@ class ParameterTuning(object):
     def process(self):
         raise NotImplementError
 
-    def submit(self, model, filepath_testing, mode="training"):
+    def submit(self, model, filepath, mode="training", n_top=3):
         (training_dataset, testing_dataset), results, predicted_proba = self.get_dataset(), None, None
 
         if mode == "training":
             if self.method == "classifier":
-                predicted_proba = model.predict_proba(training_dataset)[:,1]
+                if self.objective.find("binary") > -1:
+                    predicted_proba = model.predict_proba(training_dataset)[:,1]
+                else:
+                    predicted_proba = model.predict_proba(training_dataset)
             elif self.method == "regressor":
                 predicted_proba = model.predict(training_dataset)
             else:
                 raise NotImplementError
 
-            results = {"Target": self.train_y, "Predicted_Proba": predicted_proba}
+            results = {"Target": self.train_y, "Predicted_Proba": " ".join(str(s) for s in predicted_proba[:n_top])}
         else:
             if self.method == "classifier":
-                predicted_proba = model.predict_proba(testing_dataset)[:,1]
+                if self.objective.find("binary") > -1:
+                    predicted_proba = model.predict_proba(testing_dataset)[:,1]
+                else:
+                    predicted_proba = model.predict_proba(testing_dataset)
             elif self.method == "regressor":
                 predicted_proba = model.predict(testing_dataset)
             else:
                 raise NotImplementError
 
-            results = {"ID": self.test_id, "TARGET": predicted_proba}
+            results = {"ID": self.test_id, "TARGET": " ".join(str(s) for s in predicted_proba[:n_top])}
 
-        if not os.path.exists(filepath_testing):
-            log("Compile a submission results for kaggle in {}".format(filepath_testing), INFO)
-            save_kaggle_submission(results, filepath_testing)
+        if not os.path.exists(filepath):
+            log("Compile a submission results for kaggle in {}".format(filepath), INFO)
+            save_kaggle_submission(results, filepath)
 
     def calibrated_prediction(self):
         if self.method == "classifier":
@@ -442,34 +450,34 @@ class XGBoostingTuning(ParameterTuning):
 
         return self.get_model_instance().get_params()
 
-def tuning(train_x, train_y, test_id, test_x, cost,
+def tuning(train_x, train_y, test_id, test_x, cost, objective,
            filepath_feature_importance, filepath_tuning, filepath_submission, methodology, nfold, top_feature,
            thread=-1):
 
     algorithm, is_xgboosting, is_classifier = None, False, False
     if methodology.find("xg") > -1 or methodology.find("xgboosting") > -1:
         if methodology[-1] == "c" or methodology == "classifier":
-            algorithm = XGBoostingTuning("Target", "ID", "classifier", cost=cost, n_jobs=thread, cv=nfold)
+            algorithm = XGBoostingTuning("Target", "ID", "classifier", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
 
             is_classifier = True
         elif methodology[-1] == "r" or methodology == "regressor":
-            algorithm = XGBoostingTuning("Target", "ID", "regressor", cost=cost, n_jobs=thread, cv=nfold)
+            algorithm = XGBoostingTuning("Target", "ID", "regressor", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
 
         is_xgboosting = True
     elif methodology.find("rf") > -1 or methodology.find("randomforest") > -1:
         if methodology[-1] == "c" or methodology == "classifier":
-            algorithm = RandomForestTuning("Target", "ID", "classifier", cost=cost, n_jobs=thread, cv=nfold)
+            algorithm = RandomForestTuning("Target", "ID", "classifier", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
 
             is_classifier = True
         elif methodology[-1] == "r" or methodology == "regressor":
-            algorithm = RandomForestTuning("Target", "ID", "regressor", cost=cost, n_jobs=thread, cv=nfold)
+            algorithm = RandomForestTuning("Target", "ID", "regressor", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
     elif methodology.find("et") > -1 or methodology.find("extratree"):
         if methodology[-1] == "c" or methodology == "classifier":
-            algorithm = ExtraTreeTuning("Target", "ID", "classifier", cost=cost, n_jobs=thread, cv=nfold)
+            algorithm = ExtraTreeTuning("Target", "ID", "classifier", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
 
             is_classifier = True
         elif methodology[-1] == "r" or methodology == "regressor":
-            algorithm = ExtraTreeTuning("Target", "ID", "regressor", cost=cost, n_jobs=thread, cv=nfold)
+            algorithm = ExtraTreeTuning("Target", "ID", "regressor", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
 
     if algorithm == None:
         log("Not support this algorithm - {}".format(methodology), ERROR)

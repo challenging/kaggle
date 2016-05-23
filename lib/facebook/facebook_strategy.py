@@ -77,7 +77,9 @@ class StrategyEngine(object):
 
                 results.append([place_id, x, y, accuracy])
                 timestamp_end = time.time()
-                log("Cost {:8f} seconds to get the centroid({}, {}, {}) from [{} ---> {}]. Then, the remaining size of queue is {}".format(timestamp_end-timestamp_start, x, y, accuracy, ori_shape, new_shape, queue.qsize()), INFO)
+
+                if queue.qsize() % 10000 == 1:
+                    log("Cost {:8f} seconds to get the centroid({}, {}, {}) from [{} ---> {}]. Then, the remaining size of queue is {}".format(timestamp_end-timestamp_start, x, y, accuracy, ori_shape, new_shape, queue.qsize()), INFO)
 
                 queue.task_done()
 
@@ -130,21 +132,22 @@ class StrategyEngine(object):
         if not info or self.is_testing:
             training_dataset, mapping = self.get_training_dataset(filepath, filepath_train_pkl, n_top)
 
-            tree = None
+            score = None
+            tree = KDTree(training_dataset[:,0:2], n_top)
             if self.is_accuracy:
-                tree = KDTree(training_dataset, n_top)
+                score = map(lambda x: np.log2(x), training_dataset[:,2])
             else:
-                tree = KDTree(training_dataset[:,0:2], n_top)
+                score = np.ones_like(mapping)
 
             if not self.is_testing:
-                save_cache((tree, mapping), filepath_pkl)
+                save_cache((tree, mapping, score), filepath_pkl)
         else:
-            tree, mapping = info
+            tree, mapping, score = info
 
         timestamp_end = time.time()
         log("Cost {:8f} secends to build up the KDTree solution".format(timestamp_end-timestamp_start), INFO)
 
-        return tree, mapping
+        return tree, mapping, score
 
     def get_xgboost(self, filepath, filepath_train_pkl, n_top):
         timestamp_start = time.time()
@@ -169,7 +172,7 @@ class StrategyEngine(object):
 
         return tree, mapping
 
-    def get_most_popular_metrics(self, filepath, filepath_train_pkl, filepath_pkl, n_top=3, range_x=800, range_y=800):
+    def get_most_popular_metrics(self, filepath, filepath_train_pkl, filepath_pkl, n_top=6, range_x=800, range_y=800):
         timestamp_start = time.time()
 
         info = load_cache(filepath_pkl)
@@ -193,12 +196,16 @@ class StrategyEngine(object):
                     key = (x, y)
                     metrics.setdefault(key, {})
                     metrics[key].setdefault(place_id, 0)
-                    metrics[key][place_id] += 1
+
+                    if self.is_accuracy:
+                        metrics[key][place_id] += np.log2(training_dataset[idx, 2])
+                    else:
+                        metrics[key][place_id] += 1
 
                 for key in metrics.keys():
                     metrics[key] = nlargest(n_top, sorted(metrics[key].items()), key=lambda (k, v): v)
 
-                log("The compression rate is {}/{}={:4f}".format(len(metrics), training_dataset.shape[0], float(len(metrics))/training_dataset.shape[0]), INFO)
+                log("The compression rate is {}/{}={:4f}".format(len(metrics), training_dataset.shape[0], 1-float(len(metrics))/training_dataset.shape[0]), INFO)
 
                 if not self.is_testing:
                     save_cache((metrics, (min_x, len_x), (min_y, len_y)), filepath_pkl)
