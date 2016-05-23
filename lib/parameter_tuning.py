@@ -14,7 +14,7 @@ from sklearn.grid_search import GridSearchCV   #Perforing grid search
 from sklearn.metrics import roc_auc_score, log_loss, make_scorer
 from sklearn.feature_selection import SelectFromModel
 
-from utils import log, INFO, WARN
+from utils import create_folder, log, INFO, WARN
 from load import load_data, data_transform_2, load_cache, save_cache, load_interaction_information, load_feature_importance, save_kaggle_submission
 
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
@@ -27,12 +27,6 @@ class ParameterTuning(object):
 
         self.n_estimator = n_estimator
         self.cost = cost
-        if self.cost == "log_loss":
-            self.cost_func = log_loss
-        elif self.cost == "aur_roc":
-            self.cost_func = roc_auc_score
-        else:
-            raise NotImplementError
 
         self.objective = objective
         self.cv = cv
@@ -159,7 +153,7 @@ class ParameterTuning(object):
 
             gsearch1 = GridSearchCV(estimator=model,
                                     param_grid=params,
-                                    scoring=make_scorer(self.cost_func),
+                                    scoring=self.cost,
                                     n_jobs=self.n_jobs,
                                     iid=False,
                                     cv=self.cv,
@@ -200,7 +194,7 @@ class ParameterTuning(object):
                 if advanced_params:
                     gsearch2 = GridSearchCV(estimator=self.get_model_instance(),
                                             param_grid=advanced_params,
-                                            scoring=make_scorer(self.cost_func),
+                                            scoring=self.cost,
                                             n_jobs=self.n_jobs,
                                             iid=False,
                                             cv=self.cv,
@@ -230,6 +224,8 @@ class ParameterTuning(object):
         raise NotImplementError
 
     def submit(self, model, filepath, mode="training", n_top=3):
+        create_folder(filepath)
+
         (training_dataset, testing_dataset), results, predicted_proba = self.get_dataset(), None, None
 
         if mode == "training":
@@ -490,6 +486,7 @@ def tuning(train_x, train_y, test_id, test_x, cost, objective,
     algorithm.set_filepath(filepath_tuning, filepath_submission)
 
     if os.path.exists(filepath_tuning):
+        log("Load the cache file from {}".format(filepath_tuning), INFO)
         algorithm.load()
 
     return algorithm.process()
