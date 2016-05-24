@@ -197,8 +197,8 @@ class ProcessThread(BaseCalculatorThread):
                     else:
                         raise NotImplementError
 
-                self.queue_most_popular.join()
-                self.queue_kdtree.join()
+            self.queue_most_popular.join()
+            self.queue_kdtree.join()
 
             self.queue.task_done()
 
