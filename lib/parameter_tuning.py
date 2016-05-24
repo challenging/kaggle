@@ -239,7 +239,16 @@ class ParameterTuning(object):
             else:
                 raise NotImplementError
 
-            results = {"Target": self.train_y, "Predicted_Proba": " ".join(str(s) for s in predicted_proba[:n_top])}
+            pool = [dict(zip(model.best_estimator_.classes_, probas)) for probas in predicted_proba]
+            for idx, pair in enumerate(pool):
+                class_names = []
+
+                for class_name, class_proba in sorted(pair.items(), key=(lambda (k, v): v), reverse=True)[:n_top]:
+                    class_names.append(class_name)
+
+                pool[idx] = " ".join(class_names)
+
+            results = {"Target": self.train_y, "Predicted_Proba": pool}
         else:
             if self.method == "classifier":
                 if self.objective.find("binary") > -1:
@@ -251,7 +260,16 @@ class ParameterTuning(object):
             else:
                 raise NotImplementError
 
-            results = {"ID": self.test_id, "TARGET": " ".join(str(s) for s in predicted_proba[:n_top])}
+            pool = [dict(zip(model.best_estimator_.classes_, probas)) for probas in predicted_proba]
+            for idx, pair in enumerate(pool):
+                class_names = []
+
+                for class_name, class_proba in sorted(pair.items(), key=(lambda (k, v): v), reverse=True)[:n_top]:
+                    class_names.append(class_name)
+
+                pool[idx] = " ".join(class_names)
+
+            results = {"ID": self.test_id, "Target": pool}
 
         if not os.path.exists(filepath):
             log("Compile a submission results for kaggle in {}".format(filepath), INFO)

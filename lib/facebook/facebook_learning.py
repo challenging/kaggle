@@ -23,8 +23,9 @@ from utils import create_folder, make_a_stamp
 from load import save_cache, load_cache
 
 class BaseEngine(object):
-    def __init__(self, cache_workspace, is_testing):
+    def __init__(self, cache_workspace, n_top, is_testing):
         self.cache_workspace = cache_workspace
+        self.n_top = n_top
         self.is_testing = is_testing
 
     def process(self, test_ids, test_xs, metrics, others):
@@ -104,14 +105,17 @@ class XGBoostEngine(BaseEngine):
 
             predicted_proba = metrics.predict_proba(test_xs)
 
-            pool = [dict(zip(model.classes_, probas)) for probas in predicted_proba]
+            pool = [dict(zip(metrics.classes_, probas)) for probas in predicted_proba]
             for idx, pair in enumerate(pool):
                 test_id = test_ids[idx]
                 top.setdefault(test_id, {})
 
-                for place_id, proba in sorted(pair.items(), key=(lambda (k, v): v), reverse=True)[:n_top]:
+                for place_id, proba in sorted(pair.items(), key=(lambda (k, v): v), reverse=True)[:self.n_top]:
                     top[test_id].setdefault(place_id, 0)
-                    top[test_id][place_id] += -1.0*np.log(proba)
+                    top[test_id][place_id] += 10**proba
+
+                    if test_id == 5:
+                        log("{} --> {}, {}".format(place_id, proba, 10**proba))
 
             if not self.is_testing:
                 save_cache(top, filepath)
@@ -166,9 +170,9 @@ class ProcessThread(BaseCalculatorThread):
             setattr(self, key, value)
 
         self.strategy_engine = StrategyEngine(self.strategy, self.is_accuracy, self.is_exclude_outlier, self.is_testing)
-        self.kdtree_engine = KDTreeEngine(self.cache_workspace, self.is_testing)
-        self.most_popular_engine = MostPopularEngine(self.cache_workspace, self.is_testing)
-        self.xgboost_engine = XGBoostEngine(self.cache_workspace, self.is_testing)
+        self.kdtree_engine = KDTreeEngine(self.cache_workspace, self.n_top, self.is_testing)
+        self.most_popular_engine = MostPopularEngine(self.cache_workspace, self.n_top, self.is_testing)
+        self.xgboost_engine = XGBoostEngine(self.cache_workspace, self.n_top, self.is_testing)
 
     def run(self):
         while True:
@@ -205,10 +209,10 @@ class ProcessThread(BaseCalculatorThread):
 
             test_id = df["row_id"].values
             if self.method == self.strategy_engine.STRATEGY_XGBOOST:
-                test_x["hourofday"] = test_x["time"].map(self.strategy_engine.get_hourofday)
-                test_x["dayofmonth"] = test_x["time"].map(self.strategy_engine.get_dayofmonth)
+                df["hourofday"] = df["time"].map(self.strategy_engine.get_hourofday)
+                df["dayofmonth"] = df["time"].map(self.strategy_engine.get_dayofmonth)
 
-                test_x = test_x[["x", "y", "accuracy", "hourofday", "dayofmonth"]].values
+                test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth"]].values
             else:
                 test_x = df[["x", "y"]].values
 
@@ -224,6 +228,7 @@ class ProcessThread(BaseCalculatorThread):
             else:
                 raise NotImplementError
 
+            self.update_results(top)
             self.queue.task_done()
 
             timestamp_end = time.time()

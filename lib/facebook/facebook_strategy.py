@@ -158,7 +158,7 @@ class StrategyEngine(object):
         return x/1440%30
 
     def get_xgboost_classifier(self, filepath, filepath_pkl, n_top,
-                                     n_jobs=8, learning_rate=0.05, n_estimators=2000, max_depth=7, min_child_weight=3, gamma=0.25, subsample=0.8, colsample_bytree=0.6, reg_alpha=1.0, objective="multi:softprob", scale_pos_weight=1, seed=1201):
+                                     n_jobs=8, learning_rate=0.1, n_estimators=300, max_depth=7, min_child_weight=3, gamma=0.25, subsample=0.8, colsample_bytree=0.6, reg_alpha=1.0, objective="multi:softprob", scale_pos_weight=1, seed=1201):
         timestamp_start = time.time()
 
         info = load_cache(filepath_pkl)
@@ -188,7 +188,7 @@ class StrategyEngine(object):
             model = info
 
         timestamp_end = time.time()
-        log("Cost {:8f} secends to build up the KDTree solution".format(timestamp_end-timestamp_start), INFO)
+        log("Cost {:8f} secends to build up the XGBOOST CLASSIFIER solution".format(timestamp_end-timestamp_start), INFO)
 
         return model
 
