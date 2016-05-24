@@ -23,19 +23,23 @@ from utils import create_folder, make_a_stamp
 from load import save_cache, load_cache
 
 class BaseEngine(object):
-    def __init__(self, cache_workspace, is_testing):
+    def __init__(self, cache_workspace, n_top, is_testing):
         self.cache_workspace = cache_workspace
+        self.n_top = n_top
         self.is_testing = is_testing
 
     def process(self, test_ids, test_xs, metrics, others):
         raise NotImplementError
 
+    def get_filepath(self, test_ids, test_xs):
+        stamp = make_a_stamp(str(test_ids) + str(test_xs))
+        return os.path.join(self.cache_workspace, "{}.pkl".format(stamp))
+
 class MostPopularEngine(BaseEngine):
     def process(self, test_ids, test_xs, metrics, others):
         transformer, range_x, range_y = others
 
-        stamp = make_a_stamp(str(test_ids) + str(test_xs))
-        filepath = os.path.join(self.cache_workspace, "{}.pkl".format(stamp))
+        filepath = self.get_filepath(test_ids, test_xs)
 
         top = load_cache(filepath)
         if not top or self.is_testing:
@@ -66,8 +70,7 @@ class KDTreeEngine(BaseEngine):
     def process(self, test_ids, test_xs, metrics, others):
         mapping, score = others
 
-        stamp = make_a_stamp(str(test_ids) + str(test_xs))
-        filepath = os.path.join(self.cache_workspace, "{}.pkl".format(stamp))
+        filepath = self.get_filepath(test_ids, test_xs)
 
         top = load_cache(filepath)
         if not top or self.is_testing:
@@ -86,6 +89,33 @@ class KDTreeEngine(BaseEngine):
                     d = distance[idx][loc_idx]
                     if d != 0:
                         top[test_id][place_id] += -1.0*np.log(distance[idx][loc_idx])*score[locc]
+
+            if not self.is_testing:
+                save_cache(top, filepath)
+
+        return top
+
+class XGBoostEngine(BaseEngine):
+    def process(self, test_ids, test_xs, metrics, others=None):
+        filepath = self.get_filepath(test_ids, test_xs)
+
+        top = load_cache(filepath)
+        if not top or self.is_testing:
+            top = {}
+
+            predicted_proba = metrics.predict_proba(test_xs)
+
+            pool = [dict(zip(metrics.classes_, probas)) for probas in predicted_proba]
+            for idx, pair in enumerate(pool):
+                test_id = test_ids[idx]
+                top.setdefault(test_id, {})
+
+                for place_id, proba in sorted(pair.items(), key=(lambda (k, v): v), reverse=True)[:self.n_top]:
+                    top[test_id].setdefault(place_id, 0)
+                    top[test_id][place_id] += 10**proba
+
+                    if test_id == 5:
+                        log("{} --> {}, {}".format(place_id, proba, 10**proba))
 
             if not self.is_testing:
                 save_cache(top, filepath)
@@ -140,8 +170,9 @@ class ProcessThread(BaseCalculatorThread):
             setattr(self, key, value)
 
         self.strategy_engine = StrategyEngine(self.strategy, self.is_accuracy, self.is_exclude_outlier, self.is_testing)
-        self.kdtee_engine = KDTreeEngine(self.cache_workspace, self.is_testing)
-        self.most_popular_engine = MostPopularEngine(self.cache_workspace, self.is_testing)
+        self.kdtree_engine = KDTreeEngine(self.cache_workspace, self.n_top, self.is_testing)
+        self.most_popular_engine = MostPopularEngine(self.cache_workspace, self.n_top, self.is_testing)
+        self.xgboost_engine = XGBoostEngine(self.cache_workspace, self.n_top, self.is_testing)
 
     def run(self):
         while True:
@@ -164,6 +195,9 @@ class ProcessThread(BaseCalculatorThread):
             elif self.method == self.strategy_engine.STRATEGY_KDTREE:
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_kdtree.__name__.lower(), filename))
                 metrics, mapping, score = self.strategy_engine.get_kdtree(filepath_train, filepath_train_pkl, f, self.n_top)
+            elif self.method == self.strategy_engine.STRATEGY_XGBOOST:
+                f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_xgboost_classifier.__name__.lower(), filename))
+                metrics = self.strategy_engine.get_xgboost_classifier(filepath_train, f, self.n_top)
             else:
                 log("Not implement this method, {}".format(self.method), ERROR)
                 raise NotImplementError
@@ -173,10 +207,14 @@ class ProcessThread(BaseCalculatorThread):
                 df = df.head(100)
             log("There are {} reocrds in {}".format(df.values.shape, filepath_test), INFO)
 
-            fields = ["x", "y"]
-
             test_id = df["row_id"].values
-            test_x = df[fields].values
+            if self.method == self.strategy_engine.STRATEGY_XGBOOST:
+                df["hourofday"] = df["time"].map(self.strategy_engine.get_hourofday)
+                df["dayofmonth"] = df["time"].map(self.strategy_engine.get_dayofmonth)
+
+                test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth"]].values
+            else:
+                test_x = df[["x", "y"]].values
 
             top = []
             if self.method == self.strategy_engine.STRATEGY_KDTREE:
@@ -186,6 +224,8 @@ class ProcessThread(BaseCalculatorThread):
                 top = self.most_popular_engine.process(test_id, test_x, metrics, (self.strategy_engine.position_transformer,
                                                                                   (min_x, len_x, self.criteria[0]),
                                                                                   (min_y, len_y, self.criteria[1])))
+            elif self.method == self.strategy_engine.STRATEGY_XGBOOST:
+                top = self.xgboost_engine.process(test_id, test_x, metrics)
             else:
                 raise NotImplementError
 
