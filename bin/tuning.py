@@ -31,7 +31,7 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf):
     objective = parser.get_objective()
     cost = parser.get_cost()
 
-    filepath_training, filepath_testing, filepath_submission, filepath_tuning = parser.get_filepaths()
+    filepath_training, filepath_testing, filepath_submission, filepath_tuning = parser.get_filepaths(methodology)
     filepath_feature_importance, top = parser.get_feature_importance()
     filepath_feature_interaction, binsize, top_feature = parser.get_feature_interaction()
 
@@ -50,7 +50,7 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf):
     train_x["hourofday"] = train_x["time"].map(lambda x: x/60%24)
     train_x["dayofmonth"] = train_x["time"].map(lambda x: x/1440%30)
     train_x.drop(["time"], axis=1)
-    train_y = df_training["place_id"]
+    train_y = df_training["place_id"].astype(str)
 
     values, counts = np.unique(train_y, return_counts=True)
 
