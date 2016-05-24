@@ -169,6 +169,9 @@ class ProcessThread(BaseCalculatorThread):
             elif self.method == self.strategy_engine.STRATEGY_KDTREE:
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_kdtree.__name__.lower(), filename))
                 metrics, mapping, score = self.strategy_engine.get_kdtree(filepath_train, filepath_train_pkl, f, self.n_top)
+            elif self.method == self.strategy.STRATEGY_XGBOOST:
+                f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_xgboost_classifier.__name__.lower(), filename))
+                metrics = self.strategy_engine.get_xgboost_classifier(filepath_train, filepath_train_pkl, f, self.n_top)
             else:
                 log("Not implement this method, {}".format(self.method), ERROR)
                 raise NotImplementError
@@ -194,6 +197,8 @@ class ProcessThread(BaseCalculatorThread):
                                                                                                                       (min_y, len_y, self.criteria[1]))))
                     elif self.method == self.strategy_engine.STRATEGY_KDTREE:
                         self.queue_kdtree.put((test_id[idx_start:idx_end], test_x[idx_start:idx_end], metrics, (mapping, score)))
+                    elif self.method == self.strategy_engine.STRATEGY_XGBOOST:
+                        sel
                     else:
                         raise NotImplementError
 
