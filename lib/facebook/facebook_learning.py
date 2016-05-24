@@ -184,26 +184,27 @@ class ProcessThread(BaseCalculatorThread):
             fields = ["x", "y"]
 
             test_id = df["row_id"].values
-            test_x = df[fields].values
 
-            for idx in range(0, test_id.shape[0]/self.batch_size+1):
-                idx_start, idx_end = idx*self.batch_size, min(test_id.shape[0], (idx+1)*self.batch_size)
-                size = test_id[idx_start:idx_end].shape[0]
+            if self.method == self.strategy_engine.STRATEGY_XGBOOST:
+                test_x["hourofday"] = test_x["time"].map(self.strategy_engine.get_hourofday)
+                test_x["dayofmonth"] = test_x["time"].map(self.strategy_engine.get_dayofmonth)
 
-                if size > 0:
-                    if self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
-                        self.queue_most_popular.put((test_id[idx_start:idx_end], test_x[idx_start:idx_end], metrics, (self.strategy_engine.position_transformer,
-                                                                                                                      (min_x, len_x, self.criteria[0]),
-                                                                                                                      (min_y, len_y, self.criteria[1]))))
-                    elif self.method == self.strategy_engine.STRATEGY_KDTREE:
-                        self.queue_kdtree.put((test_id[idx_start:idx_end], test_x[idx_start:idx_end], metrics, (mapping, score)))
-                    elif self.method == self.strategy_engine.STRATEGY_XGBOOST:
-                        sel
-                    else:
-                        raise NotImplementError
+                test_x = test_x[["x", "y", "accuracy", "hourofday", "dayofmonth"]].values
+            else:
+                test_x = df[fields].values
 
-                self.queue_most_popular.join()
-                self.queue_kdtree.join()
+            if self.method == self.strategy_engine.STRATEGY_KDTREE:
+                top = self.kdtree_engine.process(test_id, test_x, metrics, (mapping, score))
+
+            elif self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
+                top = self.most_popular_engine.process(test_id, test_x, metrics, (self.strategy_engine.position_transformer,
+                                                                                  (min_x, len_x, self.criteria[0]),
+                                                                                  (min_y, len_y, self.criteria[1])))
+            elif self.method == self.strategy_engine.STRATEGY_XGBOOST:
+                top = self.xgboost_engine.process(test_id, test_x, metrics)
+            else:
+                raise NotImplementError
+
 
             self.queue.task_done()
 
