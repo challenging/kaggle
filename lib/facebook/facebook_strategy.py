@@ -109,10 +109,10 @@ class StrategyEngine(object):
 
         return results
 
-    def get_training_dataset(self, filepath, filepath_pkl, n_top, n_jobs=6):
+    def get_training_dataset(self, filepath, filepath_pkl, n_top):
         info = load_cache(filepath_pkl)
         if not info or self.is_testing:
-            results = self.get_centroid(filepath, n_jobs)
+            results = self.get_centroid(filepath)
             training_dataset, mapping = results[:,1:], results[:,0]
 
             if not self.is_testing:
@@ -124,12 +124,12 @@ class StrategyEngine(object):
 
         return training_dataset, mapping
 
-    def get_kdtree(self, filepath, filepath_train_pkl, filepath_pkl, n_top, n_jobs=6):
+    def get_kdtree(self, filepath, filepath_train_pkl, filepath_pkl, n_top):
         timestamp_start = time.time()
 
         info = load_cache(filepath_pkl)
         if not info or self.is_testing:
-            training_dataset, mapping = self.get_training_dataset(filepath, filepath_train_pkl, n_top, n_jobs)
+            training_dataset, mapping = self.get_training_dataset(filepath, filepath_train_pkl, n_top)
 
             score = None
             tree = KDTree(training_dataset[:,0:2], n_top)
@@ -148,12 +148,12 @@ class StrategyEngine(object):
 
         return tree, mapping, score
 
-    def get_xgboost(self, filepath, filepath_train_pkl, n_top, n_jobs=6):
+    def get_xgboost(self, filepath, filepath_train_pkl, n_top):
         timestamp_start = time.time()
 
         info = load_cache(filepath_pkl)
         if not info or self.is_testing:
-            training_dataset, mapping = self.get_training_dataset(filepath, filepath_train_pkl, n_top, n_jobs)
+            training_dataset, mapping = self.get_training_dataset(filepath, filepath_train_pkl, n_top)
 
             model = xgb.XGBClassifier()
             if self.is_accuracy:
@@ -171,12 +171,12 @@ class StrategyEngine(object):
 
         return tree, mapping
 
-    def get_most_popular_metrics(self, filepath, filepath_train_pkl, filepath_pkl, n_top=6, range_x=800, range_y=800, n_jobs=6):
+    def get_most_popular_metrics(self, filepath, filepath_train_pkl, filepath_pkl, n_top=6, range_x=1024, range_y=1024):
         timestamp_start = time.time()
 
         info = load_cache(filepath_pkl)
         if not info or self.is_testing:
-            training_dataset, mapping = self.get_training_dataset(filepath, filepath_train_pkl, n_top, n_jobs)
+            training_dataset, mapping = self.get_training_dataset(filepath, filepath_train_pkl, n_top)
 
             metrics, min_x, len_x, min_y, len_y = {}, np.nan, np.nan, np.nan, np.nan
 

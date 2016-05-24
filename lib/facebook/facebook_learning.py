@@ -165,10 +165,10 @@ class ProcessThread(BaseCalculatorThread):
             metrics, mapping = None, None
             if self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_most_popular_metrics.__name__.lower(), filename))
-                metrics, (min_x, len_x), (min_y, len_y) = self.strategy_engine.get_most_popular_metrics(filepath_train, filepath_train_pkl, f, self.n_top, self.criteria[0], self.criteria[1], max(1, int(self.n_jobs*0.3)))
+                metrics, (min_x, len_x), (min_y, len_y) = self.strategy_engine.get_most_popular_metrics(filepath_train, filepath_train_pkl, f, self.n_top, self.criteria[0], self.criteria[1])
             elif self.method == self.strategy_engine.STRATEGY_KDTREE:
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_kdtree.__name__.lower(), filename))
-                metrics, mapping, score = self.strategy_engine.get_kdtree(filepath_train, filepath_train_pkl, f, self.n_top, max(1, int(self.n_jobs*0.3)))
+                metrics, mapping, score = self.strategy_engine.get_kdtree(filepath_train, filepath_train_pkl, f, self.n_top)
             else:
                 log("Not implement this method, {}".format(self.method), ERROR)
                 raise NotImplementError
