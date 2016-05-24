@@ -23,6 +23,7 @@ from load import save_cache, load_cache
 class StrategyEngine(object):
     STRATEGY_MOST_POPULAR = "most_popular"
     STRATEGY_KDTREE = "kdtree"
+    STRATEGY_XGBOOST = "xgc"
 
     def __init__(self, strategy, is_accuracy, is_exclude_outlier, is_testing, n_jobs=4):
         self.is_accuracy = is_accuracy
@@ -156,8 +157,8 @@ class StrategyEngine(object):
     def get_dayofmonth(x):
         return x/1440%30
 
-    def get_xgboost_classifier(self, filepath, filepath_train_pkl, n_top,
-                                     n_jobs=8, learning_rate=0.05, n_estimators=2000, max_depth=7, min_child_weight=3, gamma=0.25, colsample_bytree=0.6, reg_alpha=1.0, objective="multi:softprob", scale_pos_weight=1, seed=1201):
+    def get_xgboost_classifier(self, filepath, filepath_pkl, n_top,
+                                     n_jobs=8, learning_rate=0.05, n_estimators=2000, max_depth=7, min_child_weight=3, gamma=0.25, subsample=0.8, colsample_bytree=0.6, reg_alpha=1.0, objective="multi:softprob", scale_pos_weight=1, seed=1201):
         timestamp_start = time.time()
 
         info = load_cache(filepath_pkl)
@@ -166,8 +167,9 @@ class StrategyEngine(object):
             df["hourofday"] = df["time"].map(self.get_hourofday)
             df["dayofmonth"] = df["time"].map(self.get_dayofmonth)
 
+            log("Start to train the XGBOOST CLASSIFIER model from {}".format(filepath), INFO)
             model = xgb.XGBClassifier(learning_rate=learning_rate,
-                                      n_estimators=n_estimator,
+                                      n_estimators=n_estimators,
                                       max_depth=max_depth,
                                       min_child_weight=min_child_weight,
                                       gamma=gamma,

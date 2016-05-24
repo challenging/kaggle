@@ -104,6 +104,14 @@ class XGBoostEngine(BaseEngine):
 
             predicted_proba = metrics.predict_proba(test_xs)
 
+            pool = [dict(zip(model.classes_, probas)) for probas in predicted_proba]
+            for idx, pair in enumerate(pool):
+                test_id = test_ids[idx]
+                top.setdefault(test_id, {})
+
+                for place_id, proba in sorted(pair.items(), key=(lambda (k, v): v), reverse=True)[:n_top]:
+                    top[test_id].setdefault(place_id, 0)
+                    top[test_id][place_id] += -1.0*np.log(proba)
 
             if not self.is_testing:
                 save_cache(top, filepath)
@@ -183,9 +191,9 @@ class ProcessThread(BaseCalculatorThread):
             elif self.method == self.strategy_engine.STRATEGY_KDTREE:
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_kdtree.__name__.lower(), filename))
                 metrics, mapping, score = self.strategy_engine.get_kdtree(filepath_train, filepath_train_pkl, f, self.n_top)
-            elif self.method == self.strategy.STRATEGY_XGBOOST:
+            elif self.method == self.strategy_engine.STRATEGY_XGBOOST:
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_xgboost_classifier.__name__.lower(), filename))
-                metrics = self.strategy_engine.get_xgboost_classifier(filepath_train, filepath_train_pkl, f, self.n_top)
+                metrics = self.strategy_engine.get_xgboost_classifier(filepath_train, f, self.n_top)
             else:
                 log("Not implement this method, {}".format(self.method), ERROR)
                 raise NotImplementError
@@ -195,17 +203,14 @@ class ProcessThread(BaseCalculatorThread):
                 df = df.head(100)
             log("There are {} reocrds in {}".format(df.values.shape, filepath_test), INFO)
 
-            fields = ["x", "y"]
-
             test_id = df["row_id"].values
-
             if self.method == self.strategy_engine.STRATEGY_XGBOOST:
                 test_x["hourofday"] = test_x["time"].map(self.strategy_engine.get_hourofday)
                 test_x["dayofmonth"] = test_x["time"].map(self.strategy_engine.get_dayofmonth)
 
                 test_x = test_x[["x", "y", "accuracy", "hourofday", "dayofmonth"]].values
             else:
-                test_x = df[fields].values
+                test_x = df[["x", "y"]].values
 
             if self.method == self.strategy_engine.STRATEGY_KDTREE:
                 top = self.kdtree_engine.process(test_id, test_x, metrics, (mapping, score))
@@ -218,7 +223,6 @@ class ProcessThread(BaseCalculatorThread):
                 top = self.xgboost_engine.process(test_id, test_x, metrics)
             else:
                 raise NotImplementError
-
 
             self.queue.task_done()
 
