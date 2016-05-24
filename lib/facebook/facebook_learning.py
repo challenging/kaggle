@@ -202,34 +202,38 @@ class ProcessThread(BaseCalculatorThread):
                 log("Not implement this method, {}".format(self.method), ERROR)
                 raise NotImplementedError
 
-            df = pd.read_csv(filepath_test, dtype={"row_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int})
-            if self.is_testing:
-                df = df.head(100)
-            log("There are {} reocrds in {}".format(df.values.shape, filepath_test), INFO)
+            if os.path.exists(filepath_test):
+                df = pd.read_csv(filepath_test, dtype={"row_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int})
+                if self.is_testing:
+                    df = df.head(100)
+                log("There are {} reocrds in {}".format(df.values.shape, filepath_test), INFO)
 
-            test_id = df["row_id"].values
-            if self.method == self.strategy_engine.STRATEGY_XGBOOST:
-                df["hourofday"] = df["time"].map(self.strategy_engine.get_hourofday)
-                df["dayofmonth"] = df["time"].map(self.strategy_engine.get_dayofmonth)
+                test_id = df["row_id"].values
+                if self.method == self.strategy_engine.STRATEGY_XGBOOST:
+                    df["hourofday"] = df["time"].map(self.strategy_engine.get_hourofday)
+                    df["dayofmonth"] = df["time"].map(self.strategy_engine.get_dayofmonth)
 
-                test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth"]].values
+                    test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth"]].values
+                else:
+                    test_x = df[["x", "y"]].values
+
+                top = []
+                if self.method == self.strategy_engine.STRATEGY_KDTREE:
+                    top = self.kdtree_engine.process(test_id, test_x, metrics, (mapping, score))
+
+                elif self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
+                    top = self.most_popular_engine.process(test_id, test_x, metrics, (self.strategy_engine.position_transformer,
+                                                                                      (min_x, len_x, self.criteria[0]),
+                                                                                      (min_y, len_y, self.criteria[1])))
+                elif self.method == self.strategy_engine.STRATEGY_XGBOOST:
+                    top = self.xgboost_engine.process(test_id, test_x, metrics)
+                else:
+                    raise NotImplementedError
+
+                self.update_results(top)
             else:
-                test_x = df[["x", "y"]].values
+                log("Not Found the testing file in {}".format(filepath_test), WARN)
 
-            top = []
-            if self.method == self.strategy_engine.STRATEGY_KDTREE:
-                top = self.kdtree_engine.process(test_id, test_x, metrics, (mapping, score))
-
-            elif self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
-                top = self.most_popular_engine.process(test_id, test_x, metrics, (self.strategy_engine.position_transformer,
-                                                                                  (min_x, len_x, self.criteria[0]),
-                                                                                  (min_y, len_y, self.criteria[1])))
-            elif self.method == self.strategy_engine.STRATEGY_XGBOOST:
-                top = self.xgboost_engine.process(test_id, test_x, metrics)
-            else:
-                raise NotImplementedError
-
-            self.update_results(top)
             self.queue.task_done()
 
             timestamp_end = time.time()
