@@ -46,7 +46,10 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf):
     df_training = pd.read_csv(filepath_training)
     df_testing = pd.read_csv(filepath_testing)
 
-    train_x = df_training[["x", "y"]]
+    train_x = df_training[["x", "y", "accuracy", "time"]]
+    train_x["hourofday"] = train_x["time"].map(lambda x: x/60%24)
+    train_x["dayofmonth"] = train_x["time"].map(lambda x: x/1440%30)
+    train_x.drop(["time"], axis=1)
     train_y = df_training["place_id"]
 
     values, counts = np.unique(train_y, return_counts=True)
@@ -61,7 +64,12 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf):
     train_x = train_x[idxs].values
     train_y = train_y[idxs].astype(str).values
 
-    test_x = df_testing[["x", "y"]].values
+    test_x = df_testing[["x", "y", "accuracy", "time"]]
+    test_x["hourofday"] = test_x["time"].map(lambda x: x/60%24)
+    test_x["hourofday"] = test_x["time"].map(lambda x: x/1440%30)
+    test_x.drop(["time"], axis=1)
+
+    test_x = test_x.values
     test_id = df_testing["row_id"].values
 
     if filepath_feature_interaction:

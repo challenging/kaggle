@@ -21,18 +21,23 @@ from utils import log, DEBUG, INFO, WARN, ERROR
 from load import save_cache, load_cache
 
 class StrategyEngine(object):
-    STRATEGY_DISTANCE = "distance"
     STRATEGY_MOST_POPULAR = "most_popular"
     STRATEGY_KDTREE = "kdtree"
 
-    def __init__(self, is_accuracy, is_exclude_outlier, is_testing, strategy="mean"):
+    def __init__(self, strategy, is_accuracy, is_exclude_outlier, is_testing, n_jobs=4):
         self.is_accuracy = is_accuracy
         self.is_exclude_outlier = is_exclude_outlier
         self.is_testing = is_testing
         self.strategy = strategy
+        self.queue = Queue.Queue()
+
+        for idx in xrange(0, n_jobs):
+            thread = threading.Thread(target=StrategyEngine.data_preprocess, kwargs={"queue": self.queue})
+            thread.setDaemon(True)
+            thread.start()
 
     @staticmethod
-    def position_transformer(x, min_x, len_x, range_x="800"):
+    def position_transformer(x, min_x, len_x, range_x="1024"):
         new_x = int(float(x)*int(range_x))
 
         try:
@@ -43,61 +48,55 @@ class StrategyEngine(object):
 
         return new_x
 
-    def get_centroid(self, filepath, n_jobs=6):
-        queue = Queue.Queue()
+    @staticmethod
+    def data_preprocess(queue, threshold=3):
+        while True:
+            timestamp_start = time.time()
+            df, place_id, results, strategy, is_exclude_outlier, is_accuracy = queue.get()
 
-        def data_preprocess(df, results, threshold=3):
-            while True:
-                timestamp_start = time.time()
-                place_id, filepath = queue.get()
+            df_target = df[df.index == place_id]
+            ori_shape = df_target.shape
 
-                df_target = df[df.index == place_id]
-                ori_shape = df_target.shape
+            x, y = -1, -1
+            accuracy = -1
+            if strategy == "mean":
+                if is_exclude_outlier and df_target.shape[0] > 10:
+                    df_target = df_target[(stats.zscore(df_target["x"]) < threshold) & (stats.zscore(df_target["y"]) < threshold)]
+                new_shape = df_target.shape
 
-                x, y = -1, -1
-                accuracy = -1
-                if self.strategy == "mean":
-                    if self.is_exclude_outlier and df_target.shape[0] > 10:
-                        df_target = df_target[(stats.zscore(df_target["x"]) < threshold) & (stats.zscore(df_target["y"]) < threshold)]
-                    new_shape = df_target.shape
+                x, y = df_target["x"].mean(), df_target["y"].mean()
+                accuracy = df_target["accuracy"].mean() if is_accuracy else -1
+            elif strategy == "median":
+                x, y = df_target["x"].median(), df_target["y"].median()
+                accuracy = df_target["accuracy"].median() if is_accuracy else -1
 
-                    x, y = df_target["x"].mean(), df_target["y"].mean()
-                    accuracy = df_target["accuracy"].mean() if self.is_accuracy else -1
-                elif self.strategy == "median":
-                    x, y = df_target["x"].median(), df_target["y"].median()
-                    accuracy = df_target["accuracy"].median() if self.is_accuracy else -1
+                new_shape = ori_shape
+            elif strategy == "max":
+                idx = df_target["accuracy"] == df_target["accuracy"].max()
+                x, y = df_target[idx]["x"].values[0], df_target[idx]["y"].values[0]
+                accuracy = df_target["accuracy"].max() if is_accuracy else -1
 
-                    new_shape = ori_shape
-                elif self.strategy == "max":
-                    idx = df_target["accuracy"] == df_target["accuracy"].max()
-                    x, y = df_target[idx]["x"].values[0], df_target[idx]["y"].values[0]
-                    accuracy = df_target["accuracy"].max() if self.is_accuracy else -1
+                new_shape = ori_shape
+            else:
+                raise NotImplementError
 
-                    new_shape = ori_shape
+            results.append([place_id, x, y, accuracy])
+            timestamp_end = time.time()
 
-                results.append([place_id, x, y, accuracy])
-                timestamp_end = time.time()
+            if queue.qsize() % 10000 == 1:
+                log("Cost {:8f} seconds to get the centroid({}, {}, {}) from [{} ---> {}]. Then, the remaining size of queue is {}".format(timestamp_end-timestamp_start, x, y, accuracy, ori_shape, new_shape, queue.qsize()), INFO)
 
-                if queue.qsize() % 10000 == 1:
-                    log("Cost {:8f} seconds to get the centroid({}, {}, {}) from [{} ---> {}]. Then, the remaining size of queue is {}".format(timestamp_end-timestamp_start, x, y, accuracy, ori_shape, new_shape, queue.qsize()), INFO)
+            queue.task_done()
 
-                queue.task_done()
-
+    def get_centroid(self, filepath):
         results = []
         if self.strategy != "native":
+            timestamp_start = time.time()
             df = pd.read_csv(filepath, dtype={"row_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int}, index_col=["place_id"])
 
-            timestamp_start = time.time()
-
             for place_id in df.index.unique():
-                queue.put((place_id, filepath))
-
-            for idx in range(0, n_jobs):
-                thread = threading.Thread(target=data_preprocess, kwargs={"df": df, "results": results})
-                thread.setDaemon(True)
-                thread.start()
-
-            queue.join()
+                self.queue.put((df, place_id, results, self.strategy, self.is_exclude_outlier, self.is_accuracy))
+            self.queue.join()
 
             results = np.array(results)
 
