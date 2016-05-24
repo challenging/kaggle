@@ -29,7 +29,7 @@ class BaseEngine(object):
         self.is_testing = is_testing
 
     def process(self, test_ids, test_xs, metrics, others):
-        raise NotImplementError
+        raise NotImplementedError
 
     def get_filepath(self, test_ids, test_xs):
         stamp = make_a_stamp(str(test_ids) + str(test_xs))
@@ -158,7 +158,7 @@ class BaseCalculatorThread(threading.Thread):
                 timestamp_end-timestamp_start, test_ids[0], test_ids[-1], len(top), self.n_top, self.queue.qsize()), INFO)
 
     def process(self, test_ids, test_xs, metrics, others):
-        raise NotImplementError
+        raise NotImplementedError
 
 class ProcessThread(BaseCalculatorThread):
     def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
@@ -200,7 +200,7 @@ class ProcessThread(BaseCalculatorThread):
                 metrics = self.strategy_engine.get_xgboost_classifier(filepath_train, f, self.n_top)
             else:
                 log("Not implement this method, {}".format(self.method), ERROR)
-                raise NotImplementError
+                raise NotImplementedError
 
             df = pd.read_csv(filepath_test, dtype={"row_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int})
             if self.is_testing:
@@ -227,7 +227,7 @@ class ProcessThread(BaseCalculatorThread):
             elif self.method == self.strategy_engine.STRATEGY_XGBOOST:
                 top = self.xgboost_engine.process(test_id, test_x, metrics)
             else:
-                raise NotImplementError
+                raise NotImplementedError
 
             self.update_results(top)
             self.queue.task_done()
