@@ -23,6 +23,7 @@ from load import save_cache, load_cache
 class StrategyEngine(object):
     STRATEGY_MOST_POPULAR = "most_popular"
     STRATEGY_KDTREE = "kdtree"
+    STRATEGY_XGBOOST = "xgc"
 
     def __init__(self, strategy, is_accuracy, is_exclude_outlier, is_testing, n_jobs=4):
         self.is_accuracy = is_accuracy
@@ -148,28 +149,48 @@ class StrategyEngine(object):
 
         return tree, mapping, score
 
-    def get_xgboost(self, filepath, filepath_train_pkl, n_top):
+    @staticmethod
+    def get_hourofday(x):
+        return x/60%24
+
+    @staticmethod
+    def get_dayofmonth(x):
+        return x/1440%30
+
+    def get_xgboost_classifier(self, filepath, filepath_pkl, n_top,
+                                     n_jobs=8, learning_rate=0.1, n_estimators=300, max_depth=7, min_child_weight=3, gamma=0.25, subsample=0.8, colsample_bytree=0.6, reg_alpha=1.0, objective="multi:softprob", scale_pos_weight=1, seed=1201):
         timestamp_start = time.time()
 
         info = load_cache(filepath_pkl)
         if not info or self.is_testing:
-            training_dataset, mapping = self.get_training_dataset(filepath, filepath_train_pkl, n_top)
+            df = pd.read_csv(filepath)
+            df["hourofday"] = df["time"].map(self.get_hourofday)
+            df["dayofmonth"] = df["time"].map(self.get_dayofmonth)
 
-            model = xgb.XGBClassifier()
-            if self.is_accuracy:
-                model.fit(training_dataset, mapping)
-            else:
-                model.fit(training_dataset[:,0:2], mapping)
+            log("Start to train the XGBOOST CLASSIFIER model from {}".format(filepath), INFO)
+            model = xgb.XGBClassifier(learning_rate=learning_rate,
+                                      n_estimators=n_estimators,
+                                      max_depth=max_depth,
+                                      min_child_weight=min_child_weight,
+                                      gamma=gamma,
+                                      subsample=subsample,
+                                      colsample_bytree=colsample_bytree,
+                                      reg_alpha=reg_alpha,
+                                      objective=objective,
+                                      nthread=n_jobs,
+                                      scale_pos_weight=scale_pos_weight,
+                                      seed=seed)
+            model.fit(df[["x", "y", "accuracy", "hourofday", "dayofmonth"]].values, df["place_id"].values.astype(str))
 
             if not self.is_testing:
-                save_cache((tree, mapping), filepath_pkl)
+                save_cache(model, filepath_pkl)
         else:
-            tree, mapping = info
+            model = info
 
         timestamp_end = time.time()
-        log("Cost {:8f} secends to build up the KDTree solution".format(timestamp_end-timestamp_start), INFO)
+        log("Cost {:8f} secends to build up the XGBOOST CLASSIFIER solution".format(timestamp_end-timestamp_start), INFO)
 
-        return tree, mapping
+        return model
 
     def get_most_popular_metrics(self, filepath, filepath_train_pkl, filepath_pkl, n_top=6, range_x=800, range_y=800):
         timestamp_start = time.time()

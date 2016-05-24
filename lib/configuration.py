@@ -35,7 +35,7 @@ class FacebookConfiguration(KaggleConfiguration):
                 yield section
 
     def get_method_detail(self, section):
-        method, criteria, strategy = "most_popular", ("1024", "1024"), "mean"
+        method, criteria, strategy = "most_popular", ("4096", "4096"), "xxxx"
 
         if self.config.has_option(section, "name"):
             method = self.config.get(section, "name")
