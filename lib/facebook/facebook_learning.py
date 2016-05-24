@@ -22,45 +22,14 @@ from utils import log, DEBUG, INFO, WARN, ERROR
 from utils import create_folder, make_a_stamp
 from load import save_cache, load_cache
 
-class BaseCalculatorThread(threading.Thread):
-    def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
-        threading.Thread.__init__(self, group=group, target=target, name=name, verbose=verbose)
-
-        self.args = args
-
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
-        if not hasattr(self, "weights"):
-            self.weights = 1
-
-    def update_results(self, results, is_adjust=False):
-        for test_id, clusters in results.items():
-            self.results.setdefault(test_id, {})
-
-            for place_id, score in clusters.items():
-                self.results[test_id].setdefault(place_id, 0)
-                self.results[test_id][place_id] += score*self.weights
-
-    def run(self):
-        while True:
-            timestamp_start = time.time()
-
-            test_ids, test_xs, metrics, others = self.queue.get()
-
-            top = self.process(test_ids, test_xs, metrics, others)
-            self.update_results(top, True)
-
-            self.queue.task_done()
-
-            timestamp_end = time.time()
-            log("Cost {:4f} secends to finish this batch job({} - {}, {}) getting TOP-{} clusters. The remaining size of queue is {}".format(\
-                timestamp_end-timestamp_start, test_ids[0], test_ids[-1], len(top), self.n_top, self.queue.qsize()), INFO)
+class BaseEngine(object):
+    def __init__(self, cache_workspace):
+        self.cache_workspace = cache_workspace
 
     def process(self, test_ids, test_xs, metrics, others):
         raise NotImplementError
 
-class MostPopularThread(BaseCalculatorThread):
+class MostPopularEngine(BaseEngine):
     def process(self, test_ids, test_xs, metrics, others):
         transformer, range_x, range_y = others
 
@@ -92,7 +61,7 @@ class MostPopularThread(BaseCalculatorThread):
 
         return top
 
-class KDTreeThread(BaseCalculatorThread):
+class KDTreeEngine(BaseEngine):
     def process(self, test_ids, test_xs, metrics, others):
         mapping, score = others
 
@@ -122,6 +91,44 @@ class KDTreeThread(BaseCalculatorThread):
 
         return top
 
+class BaseCalculatorThread(threading.Thread):
+    def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
+        threading.Thread.__init__(self, group=group, target=target, name=name, verbose=verbose)
+
+        self.args = args
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+        if not hasattr(self, "weights"):
+            self.weights = 1
+
+    def update_results(self, results):
+        for test_id, clusters in results.items():
+            self.results.setdefault(test_id, {})
+
+            for place_id, score in clusters.items():
+                self.results[test_id].setdefault(place_id, 0)
+                self.results[test_id][place_id] += score*self.weights
+
+    def run(self):
+        while True:
+            timestamp_start = time.time()
+
+            test_ids, test_xs, metrics, others = self.queue.get()
+
+            top = self.process(test_ids, test_xs, metrics, others)
+            self.update_results(top)
+
+            self.queue.task_done()
+
+            timestamp_end = time.time()
+            log("Cost {:4f} secends to finish this batch job({} - {}, {}) getting TOP-{} clusters. The remaining size of queue is {}".format(\
+                timestamp_end-timestamp_start, test_ids[0], test_ids[-1], len(top), self.n_top, self.queue.qsize()), INFO)
+
+    def process(self, test_ids, test_xs, metrics, others):
+        raise NotImplementError
+
 class ProcessThread(BaseCalculatorThread):
     def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
         threading.Thread.__init__(self, group=group, target=target, name=name, verbose=verbose)
@@ -132,21 +139,8 @@ class ProcessThread(BaseCalculatorThread):
             setattr(self, key, value)
 
         self.strategy_engine = StrategyEngine(self.strategy, self.is_accuracy, self.is_exclude_outlier, self.is_testing)
-
-        # MostPopularThread
-        self.queue_most_popular = Queue.Queue()
-        for idx in range(0, self.n_jobs):
-            thread = MostPopularThread(kwargs={"queue": self.queue_most_popular, "results": self.results, "cache_workspace": self.cache_workspace, "transformer": self.strategy_engine.position_transformer,
-                                               "is_testing": self.is_testing, "n_top":self.n_top})
-            thread.setDaemon(True)
-            thread.start()
-
-        # KDTreeThread
-        self.queue_kdtree = Queue.Queue()
-        for idx in range(0, self.n_jobs):
-            thread = KDTreeThread(kwargs={"queue": self.queue_kdtree, "results": self.results, "cache_workspace": self.cache_workspace, "is_testing": self.is_testing, "n_top": self.n_top})
-            thread.setDaemon(True)
-            thread.start()
+        self.kdtee_engine = KDTreeEngine(self.cache_workspace)
+        self.most_popular_engine = MostPopularEngine(self.cache_workspace)
 
     def run(self):
         while True:
@@ -183,23 +177,18 @@ class ProcessThread(BaseCalculatorThread):
             test_id = df["row_id"].values
             test_x = df[fields].values
 
-            for idx in range(0, test_id.shape[0]/self.batch_size+1):
-                idx_start, idx_end = idx*self.batch_size, min(test_id.shape[0], (idx+1)*self.batch_size)
-                size = test_id[idx_start:idx_end].shape[0]
+            top = []
+            if self.method == self.strategy_engine.STRATEGY_KDTREE:
+                top = self.kdtree_engine.process(test_id, test_x, metrics, (mapping, score))
 
-                if size > 0:
-                    if self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
-                        self.queue_most_popular.put((test_id[idx_start:idx_end], test_x[idx_start:idx_end], metrics, (self.strategy_engine.position_transformer,
-                                                                                                                      (min_x, len_x, self.criteria[0]),
-                                                                                                                      (min_y, len_y, self.criteria[1]))))
-                    elif self.method == self.strategy_engine.STRATEGY_KDTREE:
-                        self.queue_kdtree.put((test_id[idx_start:idx_end], test_x[idx_start:idx_end], metrics, (mapping, score)))
-                    else:
-                        raise NotImplementError
+            elif self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
+                top = self.most_popular_engine.process(test_id, test_x, metrics, (self.strategy_engine.position_transformer,
+                                                                                  (min_x, len_x, self.criteria[0]),
+                                                                                  (min_y, len_y, self.criteria[1])))
+            else:
+                raise NotImplementError
 
-            self.queue_most_popular.join()
-            self.queue_kdtree.join()
-
+            self.update_resutls(top)
             self.queue.task_done()
 
             timestamp_end = time.time()
