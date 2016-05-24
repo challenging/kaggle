@@ -216,6 +216,7 @@ class ProcessThread(BaseCalculatorThread):
             else:
                 test_x = df[["x", "y"]].values
 
+            top = []
             if self.method == self.strategy_engine.STRATEGY_KDTREE:
                 top = self.kdtree_engine.process(test_id, test_x, metrics, (mapping, score))
 

@@ -192,7 +192,7 @@ class StrategyEngine(object):
 
         return model
 
-    def get_most_popular_metrics(self, filepath, filepath_train_pkl, filepath_pkl, n_top=6, range_x=800, range_y=800):
+    def get_most_popular_metrics(self, filepath, filepath_train_pkl, filepath_pkl, n_top=6, range_x=1024, range_y=1024):
         timestamp_start = time.time()
 
         info = load_cache(filepath_pkl)

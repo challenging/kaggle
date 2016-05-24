@@ -85,8 +85,8 @@ class FacebookConfiguration(KaggleConfiguration):
         return True if self.get_value(section, option) and self.get_value(section, option) == "1" else False
 
 class ModelConfParser(KaggleConfiguration):
-    def get_filepaths(self):
-        return self.get_value(MAIN, "filepath_training"), self.get_value(MAIN, "filepath_testing"), self.get_value(MAIN, "filepath_submission"), self.get_value(MAIN, "filepath_tuning")
+    def get_filepaths(self, method):
+        return self.get_value(MAIN, "filepath_training"), self.get_value(MAIN, "filepath_testing"), self.get_value(MAIN, "filepath_submission").format(method=method), self.get_value(MAIN, "filepath_tuning").format(method=method)
 
     def get_workspace(self):
         return self.config.get(MAIN, "workspace")

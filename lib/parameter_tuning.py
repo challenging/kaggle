@@ -3,6 +3,8 @@
 import os
 import sys
 
+import pprint
+
 import numpy as np
 import pandas as pd
 import xgboost as xgb
@@ -20,7 +22,9 @@ from load import load_data, data_transform_2, load_cache, save_cache, load_inter
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
 class ParameterTuning(object):
-    def __init__(self, target, data_id, method, n_estimator, cost, objective, cv, n_jobs):
+    def __init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs):
+        self.method = methodology
+
         self.target = target
         self.data_id = data_id
         self.method = method
@@ -95,10 +99,10 @@ class ParameterTuning(object):
                 setattr(self, key, value)
                 log("Set {} to be {}".format(key, getattr(self, key)))
 
-            filepath_testing = self.filepath_testing.replace("submission", phase)
+            filepath_testing = self.filepath_testing.replace("submission", "{}/{}".format(self.method, phase))
             self.submit(model, filepath_testing, "testing")
 
-            filepath_training = self.filepath_testing.replace("submission", "training_{}".format(phase))
+            filepath_training = self.filepath_testing.replace("submission", "{}/training_{}".format(self.method, phase))
             self.submit(model, filepath_training, "training")
 
             log("Improve the {} from {} to {}".format(self.cost, old_cost, self.best_cost))
@@ -223,9 +227,8 @@ class ParameterTuning(object):
     def process(self):
         raise NotImplementError
 
-    def submit(self, model, filepath, mode="training", n_top=3):
+    def submit(self, model, filepath, mode="training", n_top=10):
         create_folder(filepath)
-
         (training_dataset, testing_dataset), results, predicted_proba = self.get_dataset(), None, None
 
         if mode == "training":
@@ -296,8 +299,8 @@ class ParameterTuning(object):
             log("Not support calibrated prediction model for {}".format(self.method), WARN)
 
 class RandomForestTuning(ParameterTuning):
-    def __init__(self, target, data_id, method, n_estimator=200, cost="logloss", objective="entropy", cv=10, n_jobs=-1):
-        ParameterTuning.__init__(self, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
+    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="logloss", objective="entropy", cv=10, n_jobs=-1):
+        ParameterTuning.__init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
 
         self.default_criterion, self.criterion = "entropy", None
         self.default_max_features, self.max_features = 0.5, None
@@ -392,8 +395,8 @@ class ExtraTreeTuning(RandomForestTuning):
                                        n_jobs=-1)
 
 class XGBoostingTuning(ParameterTuning):
-    def __init__(self, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1):
-        ParameterTuning.__init__(self, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
+    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1):
+        ParameterTuning.__init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
 
         self.default_learning_rate, self.learning_rate = 0.1, None
         self.default_max_depth, self.max_depth = 5, None
@@ -471,27 +474,27 @@ def tuning(train_x, train_y, test_id, test_x, cost, objective,
     algorithm, is_xgboosting, is_classifier = None, False, False
     if methodology.find("xg") > -1 or methodology.find("xgboosting") > -1:
         if methodology[-1] == "c" or methodology == "classifier":
-            algorithm = XGBoostingTuning("Target", "ID", "classifier", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+            algorithm = XGBoostingTuning(methodology, "Target", "ID", "classifier", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
 
             is_classifier = True
         elif methodology[-1] == "r" or methodology == "regressor":
-            algorithm = XGBoostingTuning("Target", "ID", "regressor", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+            algorithm = XGBoostingTuning(methodology, "Target", "ID", "regressor", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
 
         is_xgboosting = True
     elif methodology.find("rf") > -1 or methodology.find("randomforest") > -1:
         if methodology[-1] == "c" or methodology == "classifier":
-            algorithm = RandomForestTuning("Target", "ID", "classifier", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+            algorithm = RandomForestTuning(methodology, "Target", "ID", "classifier", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
 
             is_classifier = True
         elif methodology[-1] == "r" or methodology == "regressor":
-            algorithm = RandomForestTuning("Target", "ID", "regressor", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+            algorithm = RandomForestTuning(methodology, "Target", "ID", "regressor", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
     elif methodology.find("et") > -1 or methodology.find("extratree"):
         if methodology[-1] == "c" or methodology == "classifier":
-            algorithm = ExtraTreeTuning("Target", "ID", "classifier", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+            algorithm = ExtraTreeTuning(methodology, "Target", "ID", "classifier", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
 
             is_classifier = True
         elif methodology[-1] == "r" or methodology == "regressor":
-            algorithm = ExtraTreeTuning("Target", "ID", "regressor", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+            algorithm = ExtraTreeTuning(methodology, "Target", "ID", "regressor", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
 
     if algorithm == None:
         log("Not support this algorithm - {}".format(methodology), ERROR)
