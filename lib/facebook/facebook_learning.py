@@ -23,8 +23,9 @@ from utils import create_folder, make_a_stamp
 from load import save_cache, load_cache
 
 class BaseEngine(object):
-    def __init__(self, cache_workspace):
+    def __init__(self, cache_workspace, is_testing):
         self.cache_workspace = cache_workspace
+        self.is_testing = is_testing
 
     def process(self, test_ids, test_xs, metrics, others):
         raise NotImplementError
@@ -109,7 +110,7 @@ class BaseCalculatorThread(threading.Thread):
 
             for place_id, score in clusters.items():
                 self.results[test_id].setdefault(place_id, 0)
-                self.results[test_id][place_id] += score*self.weights
+                self.results[test_id][place_id] += score
 
     def run(self):
         while True:
@@ -139,8 +140,8 @@ class ProcessThread(BaseCalculatorThread):
             setattr(self, key, value)
 
         self.strategy_engine = StrategyEngine(self.strategy, self.is_accuracy, self.is_exclude_outlier, self.is_testing)
-        self.kdtee_engine = KDTreeEngine(self.cache_workspace)
-        self.most_popular_engine = MostPopularEngine(self.cache_workspace)
+        self.kdtee_engine = KDTreeEngine(self.cache_workspace, self.is_testing)
+        self.most_popular_engine = MostPopularEngine(self.cache_workspace, self.is_testing)
 
     def run(self):
         while True:
@@ -188,7 +189,7 @@ class ProcessThread(BaseCalculatorThread):
             else:
                 raise NotImplementError
 
-            self.update_resutls(top)
+            self.update_results(top)
             self.queue.task_done()
 
             timestamp_end = time.time()
