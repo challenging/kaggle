@@ -79,7 +79,7 @@ class StrategyEngine(object):
 
                 new_shape = ori_shape
             else:
-                raise NotImplementError
+                raise NotImplementedError
 
             results.append([place_id, x, y, accuracy])
             timestamp_end = time.time()

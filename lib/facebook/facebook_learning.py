@@ -250,7 +250,7 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
                 queue.put(filepath_train)
                 log("Push {} in queue".format(filepath_train), INFO)
 
-    log("There are {} files in queue".format(queue.qsize()), INFO)
+    log("For {}({}), there are {} files in queue".format(method, criteria, queue.qsize()), INFO)
 
     threads, results = [], {}
     for idx in range(0, n_jobs):

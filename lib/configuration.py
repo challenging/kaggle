@@ -30,12 +30,15 @@ class FacebookConfiguration(KaggleConfiguration):
         return self.config.get(section, "workspace"), self.config.get(MAIN, "cache_workspace"), self.config.get(MAIN, "output_workspace")
 
     def get_methods(self):
+        sections = []
         for section in self.config.sections():
             if section.find("METHOD") > -1:
-                yield section
+                sections.append(section)
+
+        return sorted(sections)
 
     def get_method_detail(self, section):
-        method, criteria, strategy = "most_popular", ("4096", "4096"), "xxxx"
+        method, criteria, strategy = "most_popular", ("4096", "4096"), "native"
 
         if self.config.has_option(section, "name"):
             method = self.config.get(section, "name")
