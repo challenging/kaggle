@@ -245,41 +245,41 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
     for folder in [os.path.join(cache_workspace, "1.txt"), os.path.join(output_workspace, "1.txt")]:
         create_folder(folder)
 
-    queue = Queue.Queue()
-    for filepath_train in glob.iglob(workspace):
-        #filepath_train = filename.path
+    results = load_cache(filepath_pkl)
+    if not results:
+        queue = Queue.Queue()
+        for filepath_train in glob.iglob(workspace):
+            if filepath_train.find(".csv") != -1 and filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:
+                # Avoid the empty file
+                if os.stat(filepath_train).st_size > 238:
+                    queue.put(filepath_train)
+                    log("Push {} in queue".format(filepath_train), INFO)
 
-        if filepath_train.find(".csv") != -1 and filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:
-            # Avoid the empty file
-            if os.stat(filepath_train).st_size > 238:
-                queue.put(filepath_train)
-                log("Push {} in queue".format(filepath_train), INFO)
+        if queue.qsize() == 0:
+            log("Not found any files in {}".format(workspace), WARN)
+            return None
 
-    if queue.qsize() == 0:
-        log("Not found any files in {}".format(workspace), WARN)
+        log("For {}({}), there are {} files in queue".format(method, criteria, queue.qsize()), INFO)
 
-        return None
+        for idx in range(0, n_jobs):
+            thread = ProcessThread(kwargs={"queue": queue,
+                                           "results": results,
+                                           "method": method,
+                                           "criteria": criteria,
+                                           "strategy": strategy,
+                                           "batch_size": batch_size,
+                                           "cache_workspace": cache_workspace,
+                                           "submission_workspace": output_workspace,
+                                           "is_accuracy": is_accuracy,
+                                           "is_exclude_outlier": is_exclude_outlier,
+                                           "is_testing": is_testing,
+                                           "n_top": n_top,
+                                           "n_jobs": n_jobs})
+            thread.setDaemon(True)
+            thread.start()
+        queue.join()
 
-    log("For {}({}), there are {} files in queue".format(method, criteria, queue.qsize()), INFO)
-
-    results = {}
-    for idx in range(0, n_jobs):
-        thread = ProcessThread(kwargs={"queue": queue,
-                                       "results": results,
-                                       "method": method,
-                                       "criteria": criteria,
-                                       "strategy": strategy,
-                                       "batch_size": batch_size,
-                                       "cache_workspace": cache_workspace,
-                                       "submission_workspace": output_workspace,
-                                       "is_accuracy": is_accuracy,
-                                       "is_exclude_outlier": is_exclude_outlier,
-                                       "is_testing": is_testing,
-                                       "n_top": n_top,
-                                       "n_jobs": n_jobs})
-        thread.setDaemon(True)
-        thread.start()
-    queue.join()
+        save_cache(results, filepath_pkl)
 
     log("There are {} records in results".format(len(results)), INFO)
 
