@@ -7,12 +7,19 @@ import time
 import pickle
 import operator
 
+import json
+
 import numpy as np
 import pandas as pd
 
+from bz2 import BZ2File
 from memory_profiler import profile
 from utils import log, DEBUG, INFO, WARN, create_folder
 from sklearn.preprocessing import PolynomialFeatures
+
+MONGODB_URL = "mongodb://127.0.0.1:27017"
+MONGODB_DATABASE = "kaggle_cache"
+MONGODB_BATCHSIZE = 10000
 
 def data_load(filepath_train="../input/train.csv", filepath_test="../input/test.csv", drop_fields=[], filepath_cache=None):
     log("Load data...", INFO)
@@ -248,37 +255,50 @@ def load_feature_importance(filepath_pkl, top=512):
 def save_kaggle_submission(results, filepath):
     pd.DataFrame(results).to_csv(filepath, index=False)
 
-def save_cache(obj, filepath):
-    create_folder(filepath)
-    with open(filepath, "wb") as OUTPUT:
-        pickle.dump(obj, OUTPUT)
+def save_cache(obj, filepath, is_json=False):
+    if is_json:
+        filepath += ".json.bz2"
 
-    log("Save {}'s cache in {}".format(obj.__class__, filepath), DEBUG)
+        with BZ2File(filepath, "wb") as OUTPUT:
+            json.dump(obj, OUTPUT)
 
-def load_cache(filepath):
+        log("Save cache in JSON format({})".format(filepath), INFO)
+    else:
+        create_folder(filepath)
+        with open(filepath, "wb") as OUTPUT:
+            pickle.dump(obj, OUTPUT)
+
+        log("Save {}'s cache in {}".format(obj.__class__, filepath), DEBUG)
+
+def load_cache(filepath, is_json=False):
     obj = None
-    try:
-        if os.path.exists(filepath):
-            timestamp_start = time.time()
-            with open(filepath, "rb") as INPUT:
-                obj = pickle.load(INPUT)
-            timestamp_end = time.time()
+    if is_json:
+        filepath += ".json.bz2"
 
-            log("Spend {:8f} seconds to load cache from {}".format(timestamp_end-timestamp_start, filepath), INFO)
-        else:
-            pass
-    except ValueError as e:
-        log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
-        os.remove(filepath)
-    except EOFError as e:
-        log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
-        os.remove(filepath)
-    except KeyError as e:
-        log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
-        os.remove(filepath)
-    except IndexError as e:
-        log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
-        os.remove(filepath)
+        if os.path.exists(filepath):
+            with BZ2File(filepath, "rb") as INPUT:
+                obj = json.load(INPUT)
+    else:
+        try:
+            if os.path.exists(filepath):
+                timestamp_start = time.time()
+                with open(filepath, "rb") as INPUT:
+                    obj = pickle.load(INPUT)
+                timestamp_end = time.time()
+
+                log("Spend {:8f} seconds to load cache from {}".format(timestamp_end-timestamp_start, filepath), INFO)
+        except ValueError as e:
+            log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
+            os.remove(filepath)
+        except EOFError as e:
+            log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
+            os.remove(filepath)
+        except KeyError as e:
+            log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
+            os.remove(filepath)
+        except IndexError as e:
+            log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
+            os.remove(filepath)
 
     return obj
 

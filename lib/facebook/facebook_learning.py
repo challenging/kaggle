@@ -50,7 +50,7 @@ class MostPopularEngine(BaseEngine):
             for test_id, test_x in zip(test_ids, test_xs):
                 top.setdefault(test_id, {})
 
-                key = (transformer(test_x[0], range_x[0], range_x[1], range_x[2]), transformer(test_x[1], range_y[0], range_y[1], range_y[2]))
+                key = "{}-{}".format(transformer(test_x[0], range_x[0], range_x[1], range_x[2]), transformer(test_x[1], range_y[0], range_y[1], range_y[2]))
                 if key in metrics:
                     for place_id, score in metrics[key]:
                         top[test_id].setdefault(place_id, 0)
@@ -245,7 +245,7 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
     for folder in [os.path.join(cache_workspace, "1.txt"), os.path.join(output_workspace, "1.txt")]:
         create_folder(folder)
 
-    results = load_cache(filepath_pkl)
+    results = load_cache(filepath_pkl, is_json=True)
     if not results:
         results = {}
 
@@ -281,7 +281,7 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
             thread.start()
         queue.join()
 
-        save_cache(results, filepath_pkl)
+        save_cache(results, filepath_pkl, is_json=True)
 
     log("There are {} records in results".format(len(results)), INFO)
 

@@ -195,7 +195,7 @@ class StrategyEngine(object):
     def get_most_popular_metrics(self, filepath, filepath_train_pkl, filepath_pkl, n_top=6, range_x=1024, range_y=1024):
         timestamp_start = time.time()
 
-        info = load_cache(filepath_pkl)
+        info = load_cache(filepath_pkl, is_json=True)
         if not info or self.is_testing:
             training_dataset, mapping = self.get_training_dataset(filepath, filepath_train_pkl, n_top)
 
@@ -213,7 +213,7 @@ class StrategyEngine(object):
                     y = StrategyEngine.position_transformer(training_dataset[idx,1], min_y, len_y, range_y)
                     place_id = mapping[idx]
 
-                    key = (x, y)
+                    key = "{}-{}".format(x, y)
                     metrics.setdefault(key, {})
                     metrics[key].setdefault(place_id, 0)
 
@@ -228,7 +228,7 @@ class StrategyEngine(object):
                 log("The compression rate is {}/{}={:4f}".format(len(metrics), training_dataset.shape[0], 1-float(len(metrics))/training_dataset.shape[0]), INFO)
 
                 if not self.is_testing:
-                    save_cache((metrics, (min_x, len_x), (min_y, len_y)), filepath_pkl)
+                    save_cache([metrics, [min_x, len_x], [min_y, len_y]], filepath_pkl, is_json=True)
             else:
                 log("Get {} records from {}".format(training_dataset.shape, filepath), ERROR)
         else:
