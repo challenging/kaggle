@@ -16,9 +16,10 @@ working_queue = Queue.Queue()
 
 @click.command()
 @click.option("--conf", required=True, help="Filepath of Configuration")
-@click.option("--n-jobs", default=4, help="Number of thread")
+@click.option("--method-jobs", default=1, help="Number of thread for sections")
+@click.option("--n-jobs", default=4, help="Number of thread of methods")
 @click.option("--is-testing", is_flag=True, help="Testing Mode")
-def facebook(conf, n_jobs, is_testing):
+def facebook(conf, method_jobs, n_jobs, is_testing):
     global working_queue
 
     configuration = FacebookConfiguration(conf)
@@ -26,7 +27,7 @@ def facebook(conf, n_jobs, is_testing):
     for section in configuration.get_methods():
         working_queue.put(section)
 
-    for idx in range(0, 1):
+    for idx in range(0, method_jobs):
         thread = threading.Thread(target=run, kwargs={"n_jobs": n_jobs, "is_testing": is_testing, "configuration": configuration})
         thread.setDaemon(True)
         thread.start()
