@@ -304,6 +304,6 @@ def save_submission(filepath, results, n_top=3):
     for test_id, info in results.items():
         results[test_id] = " ".join(info.split(" ")[:n_top])
 
-    pd.DataFrame(results.items(), columns=["row_id", "place_id"]).to_csv(filepath, index=False, compression="gzip")
+    pd.DataFrame(results.items(), columns=["row_id", "place_id"]).to_csv(filepath, index=False)
 
     log("The submission file is stored in {}".format(filepath), INFO)

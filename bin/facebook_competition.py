@@ -66,9 +66,8 @@ def run(n_jobs, is_testing, configuration):
         results = process(method, (workspace, cache_workspace, submission_workspace), filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_testing, n_top=n_top, n_jobs=max(1, n_jobs))
 
         if results:
-            filepath_output = submission_workspace + ".csv.gz"
             for size in [n_top, 3]:
-                filepath_output = submission_workspace + ".{}.csv.gz".format(size)
+                filepath_output = submission_workspace + ".{}.csv".format(size)
                 save_submission(filepath_output, results, size)
 
         working_queue.task_done()
