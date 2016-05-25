@@ -247,6 +247,8 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
 
     results = load_cache(filepath_pkl)
     if not results:
+        results = {}
+
         queue = Queue.Queue()
         for filepath_train in glob.iglob(workspace):
             if filepath_train.find(".csv") != -1 and filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:
