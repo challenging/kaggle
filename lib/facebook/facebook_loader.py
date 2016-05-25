@@ -9,7 +9,7 @@ import pandas as pd
 
 from joblib import Parallel, delayed
 
-from utils import log, INFO
+from utils import create_folder, log, INFO
 
 def _complex_split_data(df, time_column, time_id, range_x, range_y, size_x, size_y, output_folder):
     c1 = (df[time_column] == time_id)
@@ -72,6 +72,21 @@ def pos_split_data(filepath, range_x=[x for x in range(0, 11, 1)], range_y=[y fo
     for window_size_x, window_size_y in zip(size_x, size_y):
         Parallel(n_jobs=8)(delayed(_pos_split_data)(df, x, range_y, window_size_x, window_size_y, output_folder) for x in range_x)
 
+def _time_split_data(df, new_column, value, output_folder):
+    idx = (df[new_column] == value)
+
+    filepath_output = os.path.join(output_folder, "{}.csv".format(value))
+    create_folder(filepath_output)
+
+    df[idx].to_csv(filepath_output, index=False)
+
+def time_split_data(filepath, column, column_func, new_column, output_folder):
+    df = pd.read_csv(filepath)
+
+    df[new_column] = df[column].map(column_func)
+
+    Parallel(n_jobs=4)(delayed(_time_split_data)(df, new_column, value, output_folder) for value in df[new_column].unique())
+
 def plot_place_history(filepath):
     history = {}
 
@@ -106,8 +121,11 @@ if __name__ == "__main__":
     #complex_split_data(filepath_train, time_column, time_func, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "2_way", "train"))
     #complex_split_data(filepath_test, time_column, time_func, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "2_way", "test"))
 
-    pos_split_data(filepath_train, range_x, range_y, size_x, size_y, output_folder=os.path.join(folder.replace("original", ""), "1_way", "train", "pos"))
-    pos_split_data(filepath_test, range_x, range_y, size_x, size_y, output_folder=os.path.join(folder.replace("original", ""), "1_way", "test", "pos"))
+    #pos_split_data(filepath_train, range_x, range_y, size_x, size_y, output_folder=os.path.join(folder.replace("original", ""), "1_way", "train", "pos"))
+    #pos_split_data(filepath_test, range_x, range_y, size_x, size_y, output_folder=os.path.join(folder.replace("original", ""), "1_way", "test", "pos"))
+
+    for t, filepath in zip(["train", "test"], [filepath_train, filepath_test]):
+        time_split_data(filepath, "time", time_func, time_column, os.path.join(folder.replace("original", ""), "1_way", t, time_column))
 
     #filepath_time_sort_train = os.path.join(folder, "train_sort=time.csv")
     #plot_place_history(filepath_time_sort_train)/
