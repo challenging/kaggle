@@ -256,7 +256,7 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
 
     log("For {}({}), there are {} files in queue".format(method, criteria, queue.qsize()), INFO)
 
-    threads, results = [], {}
+    results = {}
     for idx in range(0, n_jobs):
         thread = ProcessThread(kwargs={"queue": queue,
                                        "results": results,
@@ -273,8 +273,6 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
                                        "n_jobs": n_jobs})
         thread.setDaemon(True)
         thread.start()
-
-        threads.append(thread)
     queue.join()
 
     log("There are {} records in results".format(len(results)), INFO)
