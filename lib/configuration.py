@@ -2,6 +2,7 @@
 
 import re
 import copy
+import getpass
 import ConfigParser
 
 import numpy as np
@@ -27,7 +28,13 @@ class KaggleConfiguration(object):
 
 class FacebookConfiguration(KaggleConfiguration):
     def get_workspace(self, section):
-        return self.config.get(section, "workspace"), self.config.get(MAIN, "cache_workspace"), self.config.get(MAIN, "output_workspace")
+        workspace, cache_workspace, submission_workspace = self.config.get(section, "workspace"), self.config.get(MAIN, "cache_workspace"), self.config.get(MAIN, "output_workspace")
+
+        if getpass.getuser() != "RungChiChen":
+            for folder in [workspace, cache_workspace, submission_workspace]:
+                folder = folder.replace("RungChiChen", "rongqichen")
+
+        return workspace, cache_workspace, submission_workspace
 
     def get_methods(self):
         sections = []

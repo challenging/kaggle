@@ -4,6 +4,7 @@ import os
 import sys
 import math
 import time
+import glob
 
 import threading
 import Queue
@@ -245,14 +246,19 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
         create_folder(folder)
 
     queue = Queue.Queue()
-    for filename in scandir(os.path.join(workspace)):
-        filepath_train = filename.path
+    for filepath_train in glob.iglob(workspace):
+        #filepath_train = filename.path
 
         if filepath_train.find(".csv") != -1 and filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:
             # Avoid the empty file
             if os.stat(filepath_train).st_size > 238:
                 queue.put(filepath_train)
                 log("Push {} in queue".format(filepath_train), INFO)
+
+    if queue.qsize() == 0:
+        log("Not found any files in {}".format(workspace), WARN)
+
+        return None
 
     log("For {}({}), there are {} files in queue".format(method, criteria, queue.qsize()), INFO)
 
