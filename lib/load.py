@@ -301,7 +301,7 @@ def load_cache(filepath, is_json=False, is_hdb=False, others=None):
         cursor = hdb.cursor()
         rec = cursor.first()
         while rec:
-            test_id, value = int(rec[0]), pickle.loads(rec[1])
+            test_id, value = rec[0], pickle.loads(rec[1])
             obj.setdefault(test_id, {})
 
             for place_id, score in value.items():
