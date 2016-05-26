@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from bz2 import BZ2File
+from bsddb3 import db
 from memory_profiler import profile
 from utils import log, DEBUG, INFO, WARN, create_folder
 from sklearn.preprocessing import PolynomialFeatures
@@ -255,8 +256,21 @@ def load_feature_importance(filepath_pkl, top=512):
 def save_kaggle_submission(results, filepath):
     pd.DataFrame(results).to_csv(filepath, index=False)
 
-def save_cache(obj, filepath, is_json=False):
-    if is_json:
+def save_cache(obj, filepath, is_json=False, is_hdb=False):
+    if is_hdb:
+        filepath += ".hdb"
+
+        hdb = db.DB()
+        hdb.open(filepath, None, db.DB_HASH, db.DB_CREATE)
+
+        for test_id, info in obj.items():
+            hdb.put(str(test_id), pickle.dumps(info))
+
+        hdb.sync()
+        hdb.close()
+
+        log("Save cache in BerkeleyDB format({})".format(filepath), INFO)
+    elif is_json:
         filepath += ".json.bz2"
 
         with BZ2File(filepath, "wb") as OUTPUT:
@@ -268,37 +282,70 @@ def save_cache(obj, filepath, is_json=False):
         with open(filepath, "wb") as OUTPUT:
             pickle.dump(obj, OUTPUT)
 
-        log("Save {}'s cache in {}".format(obj.__class__, filepath), DEBUG)
+        log("Save {}'s cache in {}".format(obj.__class__, filepath), INFO)
 
-def load_cache(filepath, is_json=False):
-    obj = None
-    if is_json:
+def load_cache(filepath, is_json=False, is_hdb=False, others=None):
+    obj = {}
+    weight = 1
+
+    timestamp_start = time.time()
+    if is_hdb:
+        if others:
+            obj, weight = others
+
+        filepath += ".hdb"
+
+        hdb = db.DB()
+        hdb.open(filepath, None, db.DB_HASH, db.DB_CREATE)
+
+        cursor = hdb.cursor()
+        rec = cursor.first()
+        while rec:
+            test_id, value = int(rec[0]), pickle.loads(rec[1])
+            obj.setdefault(test_id, {})
+
+            for place_id, score in value.items():
+                place_id = int(float(place_id))
+
+                obj[test_id].setdefault(place_id, 0)
+                obj[test_id][place_id] += score*weight
+
+                if test_id == "7":
+                    log("{} -> {},{} -> {}".format(place_id, score, weight, obj[test_id][place_id]))
+
+            rec = cursor.next()
+
+        hdb.close()
+    elif is_json:
         filepath += ".json.bz2"
 
         if os.path.exists(filepath):
             with BZ2File(filepath, "rb") as INPUT:
-                obj = json.load(INPUT)
+                obj = json.load(INPUT).items()
+        else:
+            log("Not found file in {}".format(filepath), WARN)
     else:
         try:
             if os.path.exists(filepath):
-                timestamp_start = time.time()
                 with open(filepath, "rb") as INPUT:
                     obj = pickle.load(INPUT)
-                timestamp_end = time.time()
-
-                log("Spend {:8f} seconds to load cache from {}".format(timestamp_end-timestamp_start, filepath), INFO)
+            else:
+                log("Not found file in {}".format(filepath), WARN)
         except ValueError as e:
-            log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
+            log("when loading pickle file so removing {}".format(filepath), WARN)
             os.remove(filepath)
         except EOFError as e:
-            log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
+            log("when loading pickle file so removing {}".format(filepath), WARN)
             os.remove(filepath)
         except KeyError as e:
-            log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
+            log("when loading pickle file so removing {}".format(filepath), WARN)
             os.remove(filepath)
         except IndexError as e:
-            log("{} when loading pickle file so removing {}".format(str(e), filepath), WARN)
+            log("when loading pickle file so removing {}".format(filepath), WARN)
             os.remove(filepath)
+
+    timestamp_end = time.time()
+    log("Spend {:8f} seconds to load cache from {}".format(timestamp_end-timestamp_start, filepath), INFO)
 
     return obj
 

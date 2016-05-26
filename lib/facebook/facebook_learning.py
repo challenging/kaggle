@@ -148,10 +148,7 @@ class BaseCalculatorThread(threading.Thread):
             timestamp_start = time.time()
 
             test_ids, test_xs, metrics, others = self.queue.get()
-
-            top = self.process(test_ids, test_xs, metrics, others)
-            self.update_results(top)
-
+            self.update_results(self.process(test_ids, test_xs, metrics, others))
             self.queue.task_done()
 
             timestamp_end = time.time()
@@ -160,6 +157,10 @@ class BaseCalculatorThread(threading.Thread):
 
     def process(self, test_ids, test_xs, metrics, others):
         raise NotImplementedError
+
+class KDTreeThread(BaseCalculatorThread):
+    def process(self, test_ids, test_xs, metrics, others):
+        return self.kdtree_engine.process(test_ids, test_xs, metrics, others)
 
 class ProcessThread(BaseCalculatorThread):
     def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
@@ -174,6 +175,13 @@ class ProcessThread(BaseCalculatorThread):
         self.kdtree_engine = KDTreeEngine(self.cache_workspace, self.n_top, self.is_testing)
         self.most_popular_engine = MostPopularEngine(self.cache_workspace, self.n_top, self.is_testing)
         self.xgboost_engine = XGBoostEngine(self.cache_workspace, self.n_top, self.is_testing)
+
+        # KDTreeThread
+        self.queue_kdtree = Queue.Queue()
+        for idx in range(0, self.n_jobs):
+            thread = KDTreeThread(kwargs={"queue": self.queue_kdtree, "results": self.results, "kdtree_engine": self.kdtree_engine, "cache_workspace": self.cache_workspace, "is_testing": self.is_testing, "n_top": self.n_top})
+            thread.setDaemon(True)
+            thread.start()
 
     def run(self):
         while True:
@@ -220,8 +228,16 @@ class ProcessThread(BaseCalculatorThread):
 
                 top = []
                 if self.method == self.strategy_engine.STRATEGY_KDTREE:
-                    top = self.kdtree_engine.process(test_id, test_x, metrics, (mapping, score))
+                    #top = self.kdtree_engine.process(test_id, test_x, metrics, (mapping, score))
+                    for idx in range(0, test_id.shape[0]/self.batch_size+1):
+                        idx_start, idx_end = idx*self.batch_size, min(test_id.shape[0], (idx+1)*self.batch_size)
+                        size = test_id[idx_start:idx_end].shape[0]
 
+                        if size > 0:
+                            self.queue_kdtree.put((test_id[idx_start:idx_end], test_x[idx_start:idx_end], metrics, (mapping, score)))
+
+                    log("There are {} items in the Queue of KDTree".format(self.queue_kdtree.qsize()), INFO)
+                    self.queue_kdtree.join()
                 elif self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
                     top = self.most_popular_engine.process(test_id, test_x, metrics, (self.strategy_engine.position_transformer,
                                                                                       (min_x, len_x, self.criteria[0]),
@@ -238,14 +254,14 @@ class ProcessThread(BaseCalculatorThread):
             self.queue.task_done()
 
             timestamp_end = time.time()
-            log("Cost {:8f} seconds to finish the prediction of {} by {}".format(timestamp_end-timestamp_start, filepath_train, self.method), INFO)
+            log("Cost {:8f} seconds to finish the prediction of {} by {}, {}".format(timestamp_end-timestamp_start, filepath_train, self.method, self.queue.qsize()), INFO)
 
 def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_jobs=8, count_testing_dataset=8607230):
     workspace, cache_workspace, output_workspace = workspaces
     for folder in [os.path.join(cache_workspace, "1.txt"), os.path.join(output_workspace, "1.txt")]:
         create_folder(folder)
 
-    results = load_cache(filepath_pkl, is_json=True)
+    results = load_cache(filepath_pkl, is_hdb=True)
     if not results:
         results = {}
 
@@ -281,7 +297,9 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
             thread.start()
         queue.join()
 
-        save_cache(results, filepath_pkl, is_json=True)
+        log("Start to save results in cache", INFO)
+        save_cache(results, filepath_pkl, is_hdb=True)
+        log("Finish saving cache", INFO)
 
     log("There are {} records in results".format(len(results)), INFO)
 

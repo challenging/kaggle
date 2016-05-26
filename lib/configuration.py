@@ -94,6 +94,9 @@ class FacebookConfiguration(KaggleConfiguration):
     def is_exclude_outlier(self, section, option="is_exclude_outlier"):
         return True if self.get_value(section, option) and self.get_value(section, option) == "1" else False
 
+    def get_weight(self, section, option="weight"):
+        return float(self.get_value(section, option))
+
 class ModelConfParser(KaggleConfiguration):
     def get_filepaths(self, method):
         return self.get_value(MAIN, "filepath_training"), self.get_value(MAIN, "filepath_testing"), self.get_value(MAIN, "filepath_submission").format(method=method), self.get_value(MAIN, "filepath_tuning").format(method=method)

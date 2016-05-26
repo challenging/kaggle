@@ -79,13 +79,14 @@ def _time_split_data(df, new_column, value, output_folder):
     create_folder(filepath_output)
 
     df[idx].to_csv(filepath_output, index=False)
+    log("Save file in {}".format(filepath_output), INFO)
 
 def time_split_data(filepath, column, column_func, new_column, output_folder):
     df = pd.read_csv(filepath)
 
     df[new_column] = df[column].map(column_func)
 
-    Parallel(n_jobs=4)(delayed(_time_split_data)(df, new_column, value, output_folder) for value in df[new_column].unique())
+    Parallel(n_jobs=8)(delayed(_time_split_data)(df, new_column, value, output_folder) for value in df[new_column].unique())
 
 def plot_place_history(filepath):
     history = {}
@@ -124,8 +125,8 @@ if __name__ == "__main__":
     #pos_split_data(filepath_train, range_x, range_y, size_x, size_y, output_folder=os.path.join(folder.replace("original", ""), "1_way", "train", "pos"))
     #pos_split_data(filepath_test, range_x, range_y, size_x, size_y, output_folder=os.path.join(folder.replace("original", ""), "1_way", "test", "pos"))
 
-    for t, filepath in zip(["train", "test"], [filepath_train, filepath_test]):
-        time_split_data(filepath, "time", time_func, time_column, os.path.join(folder.replace("original", ""), "1_way", t, time_column))
+    #time_split_data(filepath_train, "time", time_func, time_column, os.path.join(folder.replace("original", ""), "1_way", "train", time_column))
+    time_split_data(filepath_test, "time", time_func, time_column, os.path.join(folder.replace("original", ""), "1_way", "test", time_column))
 
     #filepath_time_sort_train = os.path.join(folder, "train_sort=time.csv")
     #plot_place_history(filepath_time_sort_train)/
