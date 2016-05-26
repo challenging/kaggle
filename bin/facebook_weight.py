@@ -9,7 +9,7 @@ import click
 
 from load import load_cache
 from utils import log, INFO
-from facebook.facebook_learning import process, save_submission
+from facebook.facebook_learning import process, transform_to_submission_format, save_submission
 from configuration import FacebookConfiguration
 
 @click.command()
@@ -44,8 +44,11 @@ def facebook_weight(conf, is_testing):
 
         final_submission_filename.append("-".join([stamp, str(weight)]))
 
-    filepath_output = "{}.{}.csv".format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"), "_".join(final_submission_filename))
-    save_submission(filepath_output, results, 3)
+    csv = transform_to_submission_format(results)
+
+    for size in [10, 3]:
+        filepath_output = "{}.{}.{}.csv".format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"), "_".join(final_submission_filename), size)
+        save_submission(filepath_output, csv, size)
 
 if __name__ == "__main__":
     facebook_weight()
