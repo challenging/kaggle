@@ -303,9 +303,9 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
 
     log("There are {} records in results".format(len(results)), INFO)
 
-    return transform_to_submission_format(results)
+    return transform_to_submission_format(results, n_top)
 
-def transform_to_submission_format(results):
+def transform_to_submission_format(results, n_top):
     timestamp_start = time.time()
     csv_format = {}
     for test_id, rankings in results.items():

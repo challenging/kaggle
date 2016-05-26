@@ -44,8 +44,7 @@ def facebook_weight(conf, is_testing):
 
         final_submission_filename.append("-".join([stamp, str(weight)]))
 
-    csv = transform_to_submission_format(results)
-
+    csv = transform_to_submission_format(results, 10)
     for size in [10, 3]:
         filepath_output = "{}.{}.{}.csv".format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"), "_".join(final_submission_filename), size)
         save_submission(filepath_output, csv, size)
