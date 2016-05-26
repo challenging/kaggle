@@ -321,7 +321,7 @@ def load_cache(filepath, is_json=False, is_hdb=False, others=None):
 
         if os.path.exists(filepath):
             with BZ2File(filepath, "rb") as INPUT:
-                obj = json.load(INPUT).items()
+                obj = json.load(INPUT)
         else:
             log("Not found file in {}".format(filepath), WARN)
     else:
