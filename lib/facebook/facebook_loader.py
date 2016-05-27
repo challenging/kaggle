@@ -43,7 +43,7 @@ def complex_split_data(filepath, time_column, time_func,
     df = pd.read_csv(filepath)
     df[time_column] = df["time"].map(time_func)
 
-    Parallel(n_jobs=7)(delayed(_complex_split_data)(df, time_column, time_id, range_x, range_y, size_x, size_y, output_folder) for time_id in df[time_column].unique())
+    Parallel(n_jobs=6)(delayed(_complex_split_data)(df, time_column, time_id, range_x, range_y, size_x, size_y, output_folder) for time_id in df[time_column].unique())
 
 def _pos_split_data(df, x, range_y, window_size_x, window_size_y, output_folder):
     start_x, end_x = x, min(x+window_size_x, 11)
