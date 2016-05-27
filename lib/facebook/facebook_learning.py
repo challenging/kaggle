@@ -148,7 +148,10 @@ class BaseCalculatorThread(threading.Thread):
             timestamp_start = time.time()
 
             test_ids, test_xs, metrics, others = self.queue.get()
-            self.update_results(self.process(test_ids, test_xs, metrics, others))
+
+            top = self.process(test_ids, test_xs, metrics, others)
+            self.update_results(top)
+
             self.queue.task_done()
 
             timestamp_end = time.time()
@@ -242,12 +245,12 @@ class ProcessThread(BaseCalculatorThread):
                     top = self.most_popular_engine.process(test_id, test_x, metrics, (self.strategy_engine.position_transformer,
                                                                                       (min_x, len_x, self.criteria[0]),
                                                                                       (min_y, len_y, self.criteria[1])))
+                    self.update_results(top)
                 elif self.method == self.strategy_engine.STRATEGY_XGBOOST:
                     top = self.xgboost_engine.process(test_id, test_x, metrics)
+                    self.update_results(top)
                 else:
                     raise NotImplementedError
-
-                self.update_results(top)
             else:
                 log("Not Found the testing file in {}".format(filepath_test), WARN)
 
