@@ -322,25 +322,12 @@ def load_cache(filepath, is_json=False, is_hdb=False, others=None):
         if os.path.exists(filepath):
             with BZ2File(filepath, "rb") as INPUT:
                 obj = json.load(INPUT)
-        else:
-            log("Not found file in {}".format(filepath), WARN)
     else:
         try:
             if os.path.exists(filepath):
                 with open(filepath, "rb") as INPUT:
                     obj = pickle.load(INPUT)
-            else:
-                log("Not found file in {}".format(filepath), WARN)
-        except ValueError as e:
-            log("when loading pickle file so removing {}".format(filepath), WARN)
-            os.remove(filepath)
-        except EOFError as e:
-            log("when loading pickle file so removing {}".format(filepath), WARN)
-            os.remove(filepath)
-        except KeyError as e:
-            log("when loading pickle file so removing {}".format(filepath), WARN)
-            os.remove(filepath)
-        except IndexError as e:
+        except (ValueError, EOFError, KeyError, IndexError) as e:
             log("when loading pickle file so removing {}".format(filepath), WARN)
             os.remove(filepath)
 
