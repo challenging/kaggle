@@ -334,7 +334,7 @@ def transform_to_submission_format(results, n_top):
 def save_submission(filepath, results, n_top=3, is_full=False):
     if is_full and len(results) < 8607230:
         for test_id in range(0, 8607230):
-            results.setdefault(test_id, {})
+            results.setdefault(test_id, "")
     else:
         for test_id, info in results.items():
             results[test_id] = " ".join(info.split(" ")[:n_top])
