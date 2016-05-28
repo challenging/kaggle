@@ -14,6 +14,8 @@ MAIN = "MAIN"
 FEATURE_IMPORTANCE = "FEATURE_IMPORTANCE"
 FEATURE_INTERACTION = "FEATURE_INTERACTION"
 
+OPTION_IS_FULL = "is_full"
+
 class KaggleConfiguration(object):
     def __init__(self, filepath):
         self.config = ConfigParser.RawConfigParser()
@@ -39,10 +41,23 @@ class FacebookConfiguration(KaggleConfiguration):
     def get_methods(self):
         sections = []
         for section in self.config.sections():
-            if section.find("METHOD") > -1:
+            if section.find("METHOD") > -1 and section.find("-") == -1:
                 sections.append(section)
 
         return sorted(sections)
+
+    def get_setting(self, section):
+        setting = {}
+
+        if self.config.has_section(section):
+            setting = dict(self.config.items(section))
+            for key, value in setting.items():
+                if value.isdigit():
+                    setting[key] = int(value)
+                else:
+                    setting[key] = float(value)
+
+        return setting
 
     def get_method_detail(self, section):
         method, criteria, strategy = "most_popular", ("4096", "4096"), "native"
@@ -93,6 +108,9 @@ class FacebookConfiguration(KaggleConfiguration):
 
     def is_exclude_outlier(self, section, option="is_exclude_outlier"):
         return True if self.get_value(section, option) and self.get_value(section, option) == "1" else False
+
+    def is_full(self, section=MAIN, option=OPTION_IS_FULL):
+        return self.get_value(section, option)
 
     def get_weight(self, section, option="weight"):
         return float(self.get_value(section, option))

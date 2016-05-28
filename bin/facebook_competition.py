@@ -41,6 +41,8 @@ def run(n_jobs, is_testing, configuration):
         m = working_queue.get()
 
         workspace, cache_workspace, output_workspace = configuration.get_workspace(m)
+        is_full = configuration.is_full()
+
         method, criteria, strategy, stamp, (window_size, batch_size, n_top), is_accuracy, is_exclude_outlier = configuration.get_method_detail(m)
         log("The method is {}, window_size is {}, batch_size is {}. n_top is {}. is_exclude_outlier is {}. is_accuracy is {}".format(method, window_size, batch_size, n_top, is_exclude_outlier, is_accuracy))
 
@@ -63,12 +65,12 @@ def run(n_jobs, is_testing, configuration):
         log("The submission workspace is {}".format(submission_workspace), INFO)
 
         filepath_pkl = os.path.join(cache_workspace, "final_results.pkl")
-        results = process(method, (workspace, cache_workspace, submission_workspace), filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_testing, n_top=n_top, n_jobs=max(1, n_jobs))
+        results = process((method, configuration.get_setting("{}-SETTING".format(m))), (workspace, cache_workspace, submission_workspace), filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_testing, n_top=n_top, n_jobs=max(1, n_jobs))
 
         if results:
             for size in [n_top, 3]:
                 filepath_output = submission_workspace + ".{}.csv".format(size)
-                save_submission(filepath_output, results, size)
+                save_submission(filepath_output, results, size, is_full=is_full)
 
         working_queue.task_done()
 

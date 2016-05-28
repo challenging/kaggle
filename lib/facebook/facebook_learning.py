@@ -174,6 +174,9 @@ class ProcessThread(BaseCalculatorThread):
         for key, value in kwargs.items():
             setattr(self, key, value)
 
+        self.method = self.m[0]
+        self.setting = self.m[1]
+
         self.strategy_engine = StrategyEngine(self.strategy, self.is_accuracy, self.is_exclude_outlier, self.is_testing)
         self.kdtree_engine = KDTreeEngine(self.cache_workspace, self.n_top, self.is_testing)
         self.most_popular_engine = MostPopularEngine(self.cache_workspace, self.n_top, self.is_testing)
@@ -209,7 +212,8 @@ class ProcessThread(BaseCalculatorThread):
                 metrics, mapping, score = self.strategy_engine.get_kdtree(filepath_train, filepath_train_pkl, f, self.n_top)
             elif self.method == self.strategy_engine.STRATEGY_XGBOOST:
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_xgboost_classifier.__name__.lower(), filename))
-                metrics = self.strategy_engine.get_xgboost_classifier(filepath_train, f, self.n_top)
+                log("The setting of XGC is {}".format(self.setting), INFO)
+                metrics = self.strategy_engine.get_xgboost_classifier(filepath_train, f, self.n_top, **self.setting)
             else:
                 log("Not implement this method, {}".format(self.method), ERROR)
                 raise NotImplementedError
@@ -224,8 +228,9 @@ class ProcessThread(BaseCalculatorThread):
                 if self.method == self.strategy_engine.STRATEGY_XGBOOST:
                     df["hourofday"] = df["time"].map(self.strategy_engine.get_hourofday)
                     df["dayofmonth"] = df["time"].map(self.strategy_engine.get_dayofmonth)
+                    df["monthofyear"] = df["time"].map(self.strategy_engine.get_monthofyear)
 
-                    test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth"]].values
+                    test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear"]].values
                 else:
                     test_x = df[["x", "y"]].values
 
@@ -259,7 +264,9 @@ class ProcessThread(BaseCalculatorThread):
             timestamp_end = time.time()
             log("Cost {:8f} seconds to finish the prediction of {} by {}, {}".format(timestamp_end-timestamp_start, filepath_train, self.method, self.queue.qsize()), INFO)
 
-def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_jobs=8, count_testing_dataset=8607230):
+def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_jobs=8, count_testing_dataset=8607230):
+    method, setting = m
+
     workspace, cache_workspace, output_workspace = workspaces
     for folder in [os.path.join(cache_workspace, "1.txt"), os.path.join(output_workspace, "1.txt")]:
         create_folder(folder)
@@ -285,7 +292,7 @@ def process(method, workspaces, filepath_pkl, batch_size, criteria, strategy, is
         for idx in range(0, n_jobs):
             thread = ProcessThread(kwargs={"queue": queue,
                                            "results": results,
-                                           "method": method,
+                                           "m": m,
                                            "criteria": criteria,
                                            "strategy": strategy,
                                            "batch_size": batch_size,
@@ -324,9 +331,13 @@ def transform_to_submission_format(results, n_top):
 
     return csv_format
 
-def save_submission(filepath, results, n_top=3):
-    for test_id, info in results.items():
-        results[test_id] = " ".join(info.split(" ")[:n_top])
+def save_submission(filepath, results, n_top=3, is_full=False):
+    if is_full and len(results) < 8607230:
+        for test_id in range(0, 8607230):
+            results.setdefault(test_id, {})
+    else:
+        for test_id, info in results.items():
+            results[test_id] = " ".join(info.split(" ")[:n_top])
 
     pd.DataFrame(results.items(), columns=["row_id", "place_id"]).to_csv(filepath, index=False)
 

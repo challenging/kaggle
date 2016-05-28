@@ -5,8 +5,8 @@ import sys
 import datetime
 
 import click
+import pandas as pd
 
-from load import load_cache
 from utils import log, INFO
 from facebook.facebook_learning import transform_to_submission_format, save_submission
 from configuration import FacebookConfiguration
@@ -18,7 +18,7 @@ def facebook_weight(conf, is_testing):
     configuration = FacebookConfiguration(conf)
 
     results = {}
-    final_submission_filename = []
+    final_submission_filename = ["vote"]
     for m in configuration.get_methods():
         workspace, cache_workspace, output_workspace = configuration.get_workspace(m)
         method, criteria, strategy, stamp, (window_size, batch_size, n_top), is_accuracy, is_exclude_outlier = configuration.get_method_detail(m)
@@ -36,10 +36,24 @@ def facebook_weight(conf, is_testing):
             submission_workspace = "{}/criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}_strategy={}.{}.{}".format(\
                                 output_workspace, criteria if isinstance(criteria, str) else "x".join(criteria), window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, strategy, stamp, n_top)
 
-        filepath_pkl = os.path.join(cache_workspace, "final_results.pkl")
-        log("The filepath_pkl is {}".format(filepath_pkl), INFO)
+        filepath_submission = submission_workspace + ".10.csv"
 
-        load_cache(filepath_pkl, is_hdb=True, others=(results, weight))
+        log("start to read {}".format(filepath_submission), INFO)
+        df = pd.read_csv(filepath_submission, dtype={"row_id": str, "place_id": str})
+        for value in df.values:
+            [row_id, place_ids] = value
+
+            # No Place ID
+            if isinstance(place_ids, float):
+                continue
+
+            results.setdefault(row_id, {})
+            for place_id, vote in zip(place_ids.split(" "), [6, 5, 5, 5, 4, 4, 4, 2, 2, 2]):
+                results[row_id].setdefault(place_id, 0)
+                results[row_id][place_id] += vote
+
+                if row_id == "7":
+                    log("{} -- {} --> {}".format(place_id, vote, results[row_id][place_id]))
 
         final_submission_filename.append("-".join([stamp, str(weight)]))
 

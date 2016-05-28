@@ -242,6 +242,10 @@ class ParameterTuning(object):
             else:
                 raise NotImplementError
 
+            estimator = model
+            if hasattr(model, "best_estimator_"):
+                estimator = model.best_estimator_
+
             pool = [dict(zip(model.best_estimator_.classes_, probas)) for probas in predicted_proba]
             for idx, pair in enumerate(pool):
                 class_names = []
@@ -263,7 +267,11 @@ class ParameterTuning(object):
             else:
                 raise NotImplementError
 
-            pool = [dict(zip(model.best_estimator_.classes_, probas)) for probas in predicted_proba]
+            estimator = model
+            if hasattr(model, "best_estimator_"):
+                estimator = model.best_estimator_
+
+            pool = [dict(zip(estimator.classes_, probas)) for probas in predicted_proba]
             for idx, pair in enumerate(pool):
                 class_names = []
 

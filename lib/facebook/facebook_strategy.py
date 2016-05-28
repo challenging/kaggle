@@ -157,8 +157,13 @@ class StrategyEngine(object):
     def get_dayofmonth(x):
         return x/1440%30
 
+    @staticmethod
+    def get_monthofyear(x):
+        return x/43200%12
+
     def get_xgboost_classifier(self, filepath, filepath_pkl, n_top,
-                                     n_jobs=8, learning_rate=0.1, n_estimators=300, max_depth=7, min_child_weight=3, gamma=0.25, subsample=0.8, colsample_bytree=0.6, reg_alpha=1.0, objective="multi:softprob", scale_pos_weight=1, seed=1201):
+                                     n_jobs=8,
+                                     learning_rate=0.1, n_estimators=300, max_depth=7, min_child_weight=3, gamma=0.25, subsample=0.8, colsample_bytree=0.6, reg_alpha=1.0, objective="multi:softprob", scale_pos_weight=1, seed=1201):
         timestamp_start = time.time()
 
         info = load_cache(filepath_pkl)
@@ -166,6 +171,7 @@ class StrategyEngine(object):
             df = pd.read_csv(filepath)
             df["hourofday"] = df["time"].map(self.get_hourofday)
             df["dayofmonth"] = df["time"].map(self.get_dayofmonth)
+            df["monthofyear"] = df["time"].map(self.get_monthofyear)
 
             log("Start to train the XGBOOST CLASSIFIER model from {}".format(filepath), INFO)
             model = xgb.XGBClassifier(learning_rate=learning_rate,

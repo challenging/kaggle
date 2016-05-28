@@ -302,6 +302,7 @@ def load_cache(filepath, is_json=False, is_hdb=False, others=None):
         rec = cursor.first()
         while rec:
             test_id, value = rec[0], pickle.loads(rec[1])
+
             obj.setdefault(test_id, {})
 
             for place_id, score in value.items():
@@ -309,9 +310,6 @@ def load_cache(filepath, is_json=False, is_hdb=False, others=None):
 
                 obj[test_id].setdefault(place_id, 0)
                 obj[test_id][place_id] += score*weight
-
-                if test_id == "7":
-                    log("{} -> {},{} -> {}".format(place_id, score, weight, obj[test_id][place_id]))
 
             rec = cursor.next()
 
@@ -331,8 +329,9 @@ def load_cache(filepath, is_json=False, is_hdb=False, others=None):
             log("when loading pickle file so removing {}".format(filepath), WARN)
             os.remove(filepath)
 
-    timestamp_end = time.time()
-    log("Spend {:8f} seconds to load cache from {}".format(timestamp_end-timestamp_start, filepath), INFO)
+    if obj:
+        timestamp_end = time.time()
+        log("Spend {:8f} seconds to load cache from {}".format(timestamp_end-timestamp_start, filepath), INFO)
 
     return obj
 
