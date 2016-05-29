@@ -230,8 +230,9 @@ class ProcessThread(BaseCalculatorThread):
                     df["hourofday"] = df["time"].map(self.strategy_engine.get_hourofday)
                     df["dayofmonth"] = df["time"].map(self.strategy_engine.get_dayofmonth)
                     df["monthofyear"] = df["time"].map(self.strategy_engine.get_monthofyear)
+                    df["weekday"] = df["time"].map(self.strategy_engine.get_weekday)
 
-                    test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear"]].values
+                    test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday"]].values
                 else:
                     test_x = df[["x", "y"]].values
 

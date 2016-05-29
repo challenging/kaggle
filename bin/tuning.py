@@ -49,8 +49,9 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf):
     train_x = df_training[["x", "y", "accuracy", "time"]]
     train_x["hourofday"] = train_x["time"].map(lambda x: x/60%24)
     train_x["dayofmonth"] = train_x["time"].map(lambda x: x/1440%30)
+    train_x["weekday"] = train_x["time"].map(lambda x: x/1440%7)
     train_x["monthofyear"] = train_x["time"].map(lambda x: x/43200%12)
-    train_x.drop(["time"], axis=1)
+    train_x = train_x.drop(["time"], axis=1)
     train_y = df_training["place_id"].astype(str)
 
     values, counts = np.unique(train_y, return_counts=True)
@@ -68,8 +69,9 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf):
     test_x = df_testing[["x", "y", "accuracy", "time"]]
     test_x["hourofday"] = test_x["time"].map(lambda x: x/60%24)
     test_x["dayofmonth"] = test_x["time"].map(lambda x: x/1440%30)
+    test_x["weekday"] = test_x["time"].map(lambda x: x/1440%7)
     test_x["monthofyear"] = test_x["time"].map(lambda x: x/43200%12)
-    test_x.drop(["time"], axis=1)
+    test_x = test_x.drop(["time"], axis=1)
 
     test_x = test_x.values
     test_id = df_testing["row_id"].values

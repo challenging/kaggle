@@ -163,6 +163,10 @@ class StrategyEngine(object):
     def get_monthofyear(x):
         return x/43200%12
 
+    @staticmethod
+    def get_weekday(x):
+        return x/1440%7
+
     def get_xgboost_classifier(self, filepath, filepath_pkl, n_top,
                                      n_jobs=8,
                                      learning_rate=0.1, n_estimators=300, max_depth=7, min_child_weight=3, gamma=0.25, subsample=0.8, colsample_bytree=0.6, reg_alpha=1.0, objective="multi:softprob", scale_pos_weight=1, seed=1201):
@@ -174,8 +178,9 @@ class StrategyEngine(object):
             df["hourofday"] = df["time"].map(self.get_hourofday)
             df["dayofmonth"] = df["time"].map(self.get_dayofmonth)
             df["monthofyear"] = df["time"].map(self.get_monthofyear)
+            df["weekday"] = df["time"].map(self.get_weekday)
 
-            log("Start to train the XGBOOST CLASSIFIER model from {}".format(filepath), INFO)
+            log("Start to train the XGBOOST CLASSIFIER model({}) from {}".format(df.shape, filepath), INFO)
             model = xgb.XGBClassifier(learning_rate=learning_rate,
                                       n_estimators=n_estimators,
                                       max_depth=max_depth,
@@ -188,7 +193,7 @@ class StrategyEngine(object):
                                       nthread=n_jobs,
                                       scale_pos_weight=scale_pos_weight,
                                       seed=seed)
-            model.fit(df[["x", "y", "accuracy", "hourofday", "dayofmonth"]].values, df["place_id"].values.astype(str))
+            model.fit(df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday"]].values, df["place_id"].values.astype(str))
 
             if not self.is_testing:
                 save_cache(model, filepath_pkl)
@@ -211,15 +216,16 @@ class StrategyEngine(object):
             df["hourofday"] = df["time"].map(self.get_hourofday)
             df["dayofmonth"] = df["time"].map(self.get_dayofmonth)
             df["monthofyear"] = df["time"].map(self.get_monthofyear)
+            df["weekday"] = df["time"],map(self.get_weekday)
 
-            log("Start to train the RANDOM FOREST CLASSIFIER model from {}".format(filepath), INFO)
+            log("Start to train the RANDOM FOREST CLASSIFIER model({}) from {}".format(df.shape, filepath), INFO)
             model = RandomForestClassifier(n_estimators=n_estimators,
                                            max_depth=max_depth,
                                            max_fetures=max_fetures,
                                            min_samples_split=min_samples_split,
                                            min_sample_leaf=min_sample_leaf,
                                            seed=seed)
-            model.fit(df[["x", "y", "accuracy", "hourofday", "dayofmonth"]].values, df["place_id"].values.astype(str))
+            model.fit(df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday"]].values, df["place_id"].values.astype(str))
 
             if not self.is_testing:
                 save_cache(model, filepath_pkl)
