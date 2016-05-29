@@ -315,7 +315,7 @@ class RandomForestTuning(ParameterTuning):
         self.default_max_depth, self.max_depth = 8, None
         self.default_min_samples_split, self.min_samples_split = 4, None
         self.default_min_samples_leaf, self.min_samples_leaf = 2, None
-        self.default_class_weight, self.class_weight = None, None
+        self.default_class_weight, self.class_weight = "auto", None
 
     def get_model_instance(self):
         n_estimator = self.get_value("n_estimator")
@@ -363,7 +363,7 @@ class RandomForestTuning(ParameterTuning):
         param3 = {"min_samples_leaf": range(2, 5, 2), "min_samples_split": range(4, 9, 2)}
         _, _, _, model = self.phase("phase3", param3, True)
 
-        if self.method == "classifier":
+        if self.method == "classifier" and self.objective.find("binary") > -1:
             param4 = {"class_weight": ["balanced", {0: 1.5, 1: 1}, {0: 2, 1: 1}, {0: 2.5, 1: 1}]}
             _, _, _, model = self.phase("phase4", param4)
 

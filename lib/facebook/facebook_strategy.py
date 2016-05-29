@@ -16,6 +16,7 @@ import xgboost as xgb
 from heapq import nlargest
 from scipy import stats
 from sklearn.neighbors import NearestCentroid, DistanceMetric, KDTree
+from sklearn.ensemble import RandomForestClassifier
 
 from utils import log, DEBUG, INFO, WARN, ERROR
 from load import save_cache, load_cache
@@ -24,6 +25,7 @@ class StrategyEngine(object):
     STRATEGY_MOST_POPULAR = "most_popular"
     STRATEGY_KDTREE = "kdtree"
     STRATEGY_XGBOOST = "xgc"
+    STRATEGY_RANDOMFOREST = "rfc"
 
     def __init__(self, strategy, is_accuracy, is_exclude_outlier, is_testing, n_jobs=4):
         self.is_accuracy = is_accuracy
@@ -195,6 +197,37 @@ class StrategyEngine(object):
 
         timestamp_end = time.time()
         log("Cost {:8f} secends to build up the XGBOOST CLASSIFIER solution".format(timestamp_end-timestamp_start), INFO)
+
+        return model
+
+    def get_randomforest_classifier(self, filepath, filepath_pkl, n_top,
+                                     n_jobs=8,
+                                     n_estimators=300, max_depth=8, max_fetures=0.25, min_samples_split=6, min_sample_leaf=4, class_weight="auto", seed=1201):
+        timestamp_start = time.time()
+
+        info = load_cache(filepath_pkl)
+        if not info or self.is_testing:
+            df = pd.read_csv(filepath)
+            df["hourofday"] = df["time"].map(self.get_hourofday)
+            df["dayofmonth"] = df["time"].map(self.get_dayofmonth)
+            df["monthofyear"] = df["time"].map(self.get_monthofyear)
+
+            log("Start to train the RANDOM FOREST CLASSIFIER model from {}".format(filepath), INFO)
+            model = RandomForestClassifier(n_estimators=n_estimators,
+                                           max_depth=max_depth,
+                                           max_fetures=max_fetures,
+                                           min_samples_split=min_samples_split,
+                                           min_sample_leaf=min_sample_leaf,
+                                           seed=seed)
+            model.fit(df[["x", "y", "accuracy", "hourofday", "dayofmonth"]].values, df["place_id"].values.astype(str))
+
+            if not self.is_testing:
+                save_cache(model, filepath_pkl)
+        else:
+            model = info
+
+        timestamp_end = time.time()
+        log("Cost {:8f} secends to build up the RANDOM FOREST CLASSIFIER solution".format(timestamp_end-timestamp_start), INFO)
 
         return model
 

@@ -96,7 +96,7 @@ class KDTreeEngine(BaseEngine):
 
         return top
 
-class XGBoostEngine(BaseEngine):
+class ClassifierEngine(BaseEngine):
     def process(self, test_ids, test_xs, metrics, others=None):
         filepath = self.get_filepath(test_ids, test_xs)
 
@@ -114,9 +114,6 @@ class XGBoostEngine(BaseEngine):
                 for place_id, proba in sorted(pair.items(), key=(lambda (k, v): v), reverse=True)[:self.n_top]:
                     top[test_id].setdefault(place_id, 0)
                     top[test_id][place_id] += 10**proba
-
-                    if test_id == 5:
-                        log("{} --> {}, {}".format(place_id, proba, 10**proba))
 
             if not self.is_testing:
                 save_cache(top, filepath)
@@ -180,7 +177,7 @@ class ProcessThread(BaseCalculatorThread):
         self.strategy_engine = StrategyEngine(self.strategy, self.is_accuracy, self.is_exclude_outlier, self.is_testing)
         self.kdtree_engine = KDTreeEngine(self.cache_workspace, self.n_top, self.is_testing)
         self.most_popular_engine = MostPopularEngine(self.cache_workspace, self.n_top, self.is_testing)
-        self.xgboost_engine = XGBoostEngine(self.cache_workspace, self.n_top, self.is_testing)
+        self.classifier_engine = ClassifierEngine(self.cache_workspace, self.n_top, self.is_testing)
 
         # KDTreeThread
         self.queue_kdtree = Queue.Queue()
@@ -214,6 +211,10 @@ class ProcessThread(BaseCalculatorThread):
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_xgboost_classifier.__name__.lower(), filename))
                 log("The setting of XGC is {}".format(self.setting), INFO)
                 metrics = self.strategy_engine.get_xgboost_classifier(filepath_train, f, self.n_top, **self.setting)
+            elif self.method == self.strategy_engine.STRATEGY_RANDOM_FOREST:
+                f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_randomforest_classifier.__name__.lower(), filename))
+                log("The setting of RFC is {}".format(self.setting), INFO)
+                metrics = self.strategy_enging.get_randomforest_classifier(filepath_train, f, self.n_top, **self.setting)
             else:
                 log("Not implement this method, {}".format(self.method), ERROR)
                 raise NotImplementedError
@@ -225,7 +226,7 @@ class ProcessThread(BaseCalculatorThread):
                 log("There are {} reocrds in {}".format(df.values.shape, filepath_test), INFO)
 
                 test_id = df["row_id"].values
-                if self.method == self.strategy_engine.STRATEGY_XGBOOST:
+                if self.method in [self.strategy_engine.STRATEGY_XGBOOST, self.strategy_engine.STRATEGY_RANDOMFOREST]:
                     df["hourofday"] = df["time"].map(self.strategy_engine.get_hourofday)
                     df["dayofmonth"] = df["time"].map(self.strategy_engine.get_dayofmonth)
                     df["monthofyear"] = df["time"].map(self.strategy_engine.get_monthofyear)
@@ -251,8 +252,8 @@ class ProcessThread(BaseCalculatorThread):
                                                                                       (min_x, len_x, self.criteria[0]),
                                                                                       (min_y, len_y, self.criteria[1])))
                     self.update_results(top)
-                elif self.method == self.strategy_engine.STRATEGY_XGBOOST:
-                    top = self.xgboost_engine.process(test_id, test_x, metrics)
+                elif self.method in [self.strategy_engine.STRATEGY_XGBOOST, self.strategy_engine.STRATEGY_RANDOMFOREST]:
+                    top = self.classifier_engine.process(test_id, test_x, metrics)
                     self.update_results(top)
                 else:
                     raise NotImplementedError

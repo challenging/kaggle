@@ -67,7 +67,7 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf):
 
     test_x = df_testing[["x", "y", "accuracy", "time"]]
     test_x["hourofday"] = test_x["time"].map(lambda x: x/60%24)
-    test_x["hourofday"] = test_x["time"].map(lambda x: x/1440%30)
+    test_x["dayofmonth"] = test_x["time"].map(lambda x: x/1440%30)
     test_x["monthofyear"] = test_x["time"].map(lambda x: x/43200%12)
     test_x.drop(["time"], axis=1)
 

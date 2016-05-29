@@ -118,17 +118,17 @@ if __name__ == "__main__":
     range_y, size_y = [float(x)/20 for x in range(0, 220, 1)], [0.1]
     '''
 
-    range_x, size_x = [float(x)/10 for x in range(0, 110, 1)], [0.2]
-    range_y, size_y = [float(x)/10 for x in range(0, 110, 1)], [0.4]
+    range_x, size_x = [float(x)/20 for x in range(0, 220, 1)], [0.05]
+    range_y, size_y = [float(x)/20 for x in range(0, 220, 1)], [0.05]
 
     time_column = "hourofday"
     time_func = lambda t: (t/60)%24
 
-    complex_split_data(filepath_train, time_column, time_func, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "2_way", "train"))
-    complex_split_data(filepath_test, time_column, time_func, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "2_way", "test"))
+    #complex_split_data(filepath_train, time_column, time_func, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "2_way", "train"))
+    #complex_split_data(filepath_test, time_column, time_func, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "2_way", "test"))
 
-    #pos_split_data(filepath_train, range_x, range_y, size_x, size_y, output_folder=os.path.join(folder.replace("original", ""), "1_way", "train", "pos"))
-    #pos_split_data(filepath_test, range_x, range_y, size_x, size_y, output_folder=os.path.join(folder.replace("original", ""), "1_way", "test", "pos"))
+    pos_split_data(filepath_train, range_x, range_y, size_x, size_y, output_folder=os.path.join(folder.replace("original", ""), "1_way", "train", "pos"))
+    pos_split_data(filepath_test, range_x, range_y, size_x, size_y, output_folder=os.path.join(folder.replace("original", ""), "1_way", "test", "pos"))
 
     #time_split_data(filepath_train, "time", time_func, time_column, os.path.join(folder.replace("original", ""), "1_way", "train", time_column))
     #time_split_data(filepath_test, "time", time_func, time_column, os.path.join(folder.replace("original", ""), "1_way", "test", time_column))

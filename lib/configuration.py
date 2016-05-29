@@ -55,7 +55,10 @@ class FacebookConfiguration(KaggleConfiguration):
                 if value.isdigit():
                     setting[key] = int(value)
                 else:
-                    setting[key] = float(value)
+                    try:
+                        setting[key] = float(value)
+                    except Exception as e:
+                        setting[key] = value
 
         return setting
 
