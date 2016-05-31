@@ -52,9 +52,6 @@ def facebook_weight(conf, is_testing):
                 results[row_id].setdefault(place_id, 0)
                 results[row_id][place_id] += vote
 
-                if row_id == "7":
-                    log("{} -- {} --> {}".format(place_id, vote, results[row_id][place_id]))
-
         final_submission_filename.append("-".join([stamp, str(weight)]))
 
     csv = transform_to_submission_format(results, 3)

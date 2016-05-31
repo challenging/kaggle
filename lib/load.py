@@ -284,7 +284,7 @@ def save_cache(obj, filepath, is_json=False, is_hdb=False):
 
         log("Save {}'s cache in {}".format(obj.__class__, filepath), INFO)
 
-def load_cache(filepath, is_json=False, is_hdb=False, others=None):
+def load_cache(filepath, is_json=False, is_hdb=False, others=None, top=6):
     obj = {}
     weight = 1
 
@@ -305,7 +305,7 @@ def load_cache(filepath, is_json=False, is_hdb=False, others=None):
 
             obj.setdefault(test_id, {})
 
-            for place_id, score in value.items():
+            for place_id, score in sorted(value.items(), key=lambda (k, v): v)[:top]:
                 place_id = int(float(place_id))
 
                 obj[test_id].setdefault(place_id, 0)
