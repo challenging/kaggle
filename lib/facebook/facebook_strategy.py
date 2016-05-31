@@ -193,7 +193,25 @@ class StrategyEngine(object):
                                       nthread=n_jobs,
                                       scale_pos_weight=scale_pos_weight,
                                       seed=seed)
-            model.fit(df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday"]].values, df["place_id"].values.astype(str))
+
+            try:
+                model.fit(df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday"]].values, df["place_id"].values.astype(str))
+            except xgb.core.XGBoostError as e:
+                log("Use binary:logistic instead of multi:softprob", WARN)
+                model = xgb.XGBClassifier(learning_rate=learning_rate,
+                                          n_estimators=n_estimators,
+                                          max_depth=max_depth,
+                                          min_child_weight=min_child_weight,
+                                          gamma=gamma,
+                                          subsample=subsample,
+                                          colsample_bytree=colsample_bytree,
+                                          reg_alpha=reg_alpha,
+                                          objective="binary:logistic",
+                                          nthread=n_jobs,
+                                          scale_pos_weight=scale_pos_weight,
+                                          seed=seed)
+
+                model.fit(df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday"]].values, df["place_id"].values.astype(str))
 
             if not self.is_testing:
                 save_cache(model, filepath_pkl)
