@@ -73,9 +73,11 @@ class FacebookConfiguration(KaggleConfiguration):
                 criteria = self.config.get(section, "criteria").split(",")
 
         if method == "kdtree":
-            strategy = self.config.get(section, "strategy")
+            strategy = self.get_value(section, "strategy")
+            if strategy == None:
+                strategy = "native"
 
-        return method, criteria, strategy, self.get_stamp(section), self.get_size(section), self.is_accuracy(section), self.is_exclude_outlier(section)
+        return method, criteria, strategy, self.get_stamp(section), self.get_size(section), self.is_accuracy(section), self.is_exclude_outlier(section), self.is_normalization(section)
 
     def get_stamp(self, section):
         names = self.get_workspace(section)[0].split("/")
@@ -105,6 +107,9 @@ class FacebookConfiguration(KaggleConfiguration):
             n_top = self.config.getint(section, "n_top")
 
         return window_size, batch_size, n_top
+
+    def is_normalization(self, section, option="is_normalization"):
+        return self.is_exclude_outlier(section, option)
 
     def is_accuracy(self, section, option="is_accuracy"):
         return self.is_exclude_outlier(section, option)

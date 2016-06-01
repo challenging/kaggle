@@ -79,7 +79,7 @@ class KDTreeEngine(BaseEngine):
 
             distance, ind = metrics.query(test_xs, k=min(self.n_top, len(mapping)))
             for idx, loc in enumerate(ind):
-                /test_id = test_ids[idx]
+                test_id = test_ids[idx]
 
                 top.setdefault(test_id, {})
                 for loc_idx, locc in enumerate(loc):
@@ -201,20 +201,23 @@ class ProcessThread(BaseCalculatorThread):
             filepath_submission = os.path.join(self.submission_workspace, "{}.{}.pkl".format(type(self).__name__.lower(), filename))
 
             metrics, mapping = None, None
+            ave_x, std_x, ave_y, std_y = None, None, None, None
+
             if self.method == self.strategy_engine.STRATEGY_MOST_POPULAR:
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_most_popular_metrics.__name__.lower(), filename))
-                metrics, (min_x, len_x), (min_y, len_y) = self.strategy_engine.get_most_popular_metrics(filepath_train, filepath_train_pkl, f, self.n_top, self.criteria[0], self.criteria[1])
+                metrics, (min_x, len_x), (min_y, len_y), (ave_x, std_x), (ave_y, std_y) =\
+                    self.strategy_engine.get_most_popular_metrics(filepath_train, filepath_train_pkl, f, self.n_top, self.criteria[0], self.criteria[1], self.is_normalization)
             elif self.method == self.strategy_engine.STRATEGY_KDTREE:
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_kdtree.__name__.lower(), filename))
-                metrics, mapping, score = self.strategy_engine.get_kdtree(filepath_train, filepath_train_pkl, f, self.n_top)
+                metrics, mapping, score, (ave_x, std_x), (ave_y, std_y) = self.strategy_engine.get_kdtree(filepath_train, filepath_train_pkl, f, self.n_top, self.is_normalization)
             elif self.method == self.strategy_engine.STRATEGY_XGBOOST:
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_xgboost_classifier.__name__.lower(), filename))
                 log("The setting of XGC is {}".format(self.setting), INFO)
-                metrics = self.strategy_engine.get_xgboost_classifier(filepath_train, f, self.n_top, **self.setting)
+                metrics, (ave_x, std_x), (ave_y, std_y) = self.strategy_engine.get_xgboost_classifier(filepath_train, f, self.n_top, self.is_normalization, **self.setting)
             elif self.method == self.strategy_engine.STRATEGY_RANDOM_FOREST:
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_randomforest_classifier.__name__.lower(), filename))
                 log("The setting of RFC is {}".format(self.setting), INFO)
-                metrics = self.strategy_enging.get_randomforest_classifier(filepath_train, f, self.n_top, **self.setting)
+                metrics, (ave_x, std_x), (ave_y, std_y) = self.strategy_enging.get_randomforest_classifier(filepath_train, f, self.n_top, self.is_normalization, **self.setting)
             else:
                 log("Not implement this method, {}".format(self.method), ERROR)
                 raise NotImplementedError
@@ -235,8 +238,16 @@ class ProcessThread(BaseCalculatorThread):
                     df["monthofyear"] = d_times.month
                     df["year"] = d_times.year
 
+                    if self.is_normalization:
+                        df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
+                        df["y"] = (df["y"] - ave_y) / (std_y + 0.00000001)
+
                     test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday", "year"]].values
                 else:
+                    if self.is_normalization:
+                        df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
+                        df["y"] = (df["y"] - ave_y) / (std_y + 0.00000001)
+
                     test_x = df[["x", "y"]].values
 
                 top = []
@@ -269,7 +280,7 @@ class ProcessThread(BaseCalculatorThread):
             timestamp_end = time.time()
             log("Cost {:8f} seconds to finish the prediction of {} by {}, {}".format(timestamp_end-timestamp_start, filepath_train, self.method, self.queue.qsize()), INFO)
 
-def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_testing, n_top=3, n_jobs=8, count_testing_dataset=8607230):
+def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_normalization, is_testing, n_top=3, n_jobs=8, count_testing_dataset=8607230):
     method, setting = m
 
     workspace, cache_workspace, output_workspace = workspaces
@@ -284,7 +295,7 @@ def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accu
         for filepath_train in glob.iglob(workspace):
             if filepath_train.find(".csv") != -1 and filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:
                 # Avoid the empty file
-                if os.stat(filepath_train).st_size > 238:
+                if os.stat(filepath_train).st_size > 34:
                     queue.put(filepath_train)
                     log("Push {} in queue".format(filepath_train), INFO)
 
@@ -305,6 +316,7 @@ def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accu
                                            "submission_workspace": output_workspace,
                                            "is_accuracy": is_accuracy,
                                            "is_exclude_outlier": is_exclude_outlier,
+                                           "is_normalization": is_normalization,
                                            "is_testing": is_testing,
                                            "n_top": n_top,
                                            "n_jobs": n_jobs})
