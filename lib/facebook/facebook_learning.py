@@ -79,7 +79,7 @@ class KDTreeEngine(BaseEngine):
 
             distance, ind = metrics.query(test_xs, k=min(self.n_top, len(mapping)))
             for idx, loc in enumerate(ind):
-                test_id = test_ids[idx]
+                /test_id = test_ids[idx]
 
                 top.setdefault(test_id, {})
                 for loc_idx, locc in enumerate(loc):
@@ -227,12 +227,15 @@ class ProcessThread(BaseCalculatorThread):
 
                 test_id = df["row_id"].values
                 if self.method in [self.strategy_engine.STRATEGY_XGBOOST, self.strategy_engine.STRATEGY_RANDOMFOREST]:
-                    df["hourofday"] = df["time"].map(self.strategy_engine.get_hourofday)
-                    df["dayofmonth"] = df["time"].map(self.strategy_engine.get_dayofmonth)
-                    df["monthofyear"] = df["time"].map(self.strategy_engine.get_monthofyear)
-                    df["weekday"] = df["time"].map(self.strategy_engine.get_weekday)
+                    d_times = self.strategy_engine.get_d_time(df["time"].values)
 
-                    test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday"]].values
+                    df["hourofday"] = d_times.hour
+                    df["dayofmonth"] = d_times.day
+                    df["weekday"] = d_times.weekday
+                    df["monthofyear"] = d_times.month
+                    df["year"] = d_times.year
+
+                    test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday", "year"]].values
                 else:
                     test_x = df[["x", "y"]].values
 

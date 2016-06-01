@@ -48,7 +48,7 @@ def facebook_weight(conf, is_testing):
                 continue
 
             results.setdefault(row_id, {})
-            for place_id, vote in zip(place_ids.split(" "), [6, 5, 5, 5, 4, 4, 4, 2, 2, 2]):
+            for place_id, vote in zip(place_ids.split(" "), [6, 5, 5, 5, 4, 4, 4, 3, 3, 3]):
                 results[row_id].setdefault(place_id, 0)
                 results[row_id][place_id] += vote
 

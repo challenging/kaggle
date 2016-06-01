@@ -152,20 +152,21 @@ class StrategyEngine(object):
         return tree, mapping, score
 
     @staticmethod
-    def get_hourofday(x):
-        return x/60%24
+    def get_d_time(values):
+        initial_date = np.datetime64('2014-01-01T01:01', dtype='datetime64[m]')
+        return pd.DatetimeIndex(initial_date + np.timedelta64(int(mn), 'm') for mn in values)
 
-    @staticmethod
-    def get_dayofmonth(x):
-        return x/1440%30
+    def preprocess_classifier(self, filepath):
+        df = pd.read_csv(filepath)
 
-    @staticmethod
-    def get_monthofyear(x):
-        return x/43200%12
+        d_times = self.get_d_time(df["time"].values)
+        df["hourofday"] = d_times.hour
+        df["dayofmonth"] = d_times.day
+        df["weekday"] = d_times.weekday
+        df["monthofyear"] = d_times.month
+        df["year"] = d_times.year
 
-    @staticmethod
-    def get_weekday(x):
-        return x/1440%7
+        return df, ["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday", "year"], "place_id"
 
     def get_xgboost_classifier(self, filepath, filepath_pkl, n_top,
                                      n_jobs=8,
@@ -174,11 +175,7 @@ class StrategyEngine(object):
 
         info = load_cache(filepath_pkl)
         if not info or self.is_testing:
-            df = pd.read_csv(filepath)
-            df["hourofday"] = df["time"].map(self.get_hourofday)
-            df["dayofmonth"] = df["time"].map(self.get_dayofmonth)
-            df["monthofyear"] = df["time"].map(self.get_monthofyear)
-            df["weekday"] = df["time"].map(self.get_weekday)
+            df, cols, target_col = self.preprocess_classifier(filepath)
 
             log("Start to train the XGBOOST CLASSIFIER model({}) from {}".format(df.shape, filepath), INFO)
             model = xgb.XGBClassifier(learning_rate=learning_rate,
@@ -195,7 +192,7 @@ class StrategyEngine(object):
                                       seed=seed)
 
             try:
-                model.fit(df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday"]].values, df["place_id"].values.astype(str))
+                model.fit(df[cols].values, df[target_col].values.astype(str))
             except xgb.core.XGBoostError as e:
                 log("Use binary:logistic instead of multi:softprob", WARN)
                 model = xgb.XGBClassifier(learning_rate=learning_rate,
@@ -211,7 +208,7 @@ class StrategyEngine(object):
                                           scale_pos_weight=scale_pos_weight,
                                           seed=seed)
 
-                model.fit(df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday"]].values, df["place_id"].values.astype(str))
+                model.fit(df[cols].values, df[target_col].values.astype(str))
 
             if not self.is_testing:
                 save_cache(model, filepath_pkl)
@@ -230,11 +227,7 @@ class StrategyEngine(object):
 
         info = load_cache(filepath_pkl)
         if not info or self.is_testing:
-            df = pd.read_csv(filepath)
-            df["hourofday"] = df["time"].map(self.get_hourofday)
-            df["dayofmonth"] = df["time"].map(self.get_dayofmonth)
-            df["monthofyear"] = df["time"].map(self.get_monthofyear)
-            df["weekday"] = df["time"],map(self.get_weekday)
+            df, cols, target_col = self.preprocess_classifier(filepath)
 
             log("Start to train the RANDOM FOREST CLASSIFIER model({}) from {}".format(df.shape, filepath), INFO)
             model = RandomForestClassifier(n_estimators=n_estimators,
@@ -243,7 +236,7 @@ class StrategyEngine(object):
                                            min_samples_split=min_samples_split,
                                            min_sample_leaf=min_sample_leaf,
                                            seed=seed)
-            model.fit(df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday"]].values, df["place_id"].values.astype(str))
+            model.fit(df[cols].values, df[target_col].values.astype(str))
 
             if not self.is_testing:
                 save_cache(model, filepath_pkl)

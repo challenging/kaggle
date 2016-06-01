@@ -46,15 +46,44 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf):
     df_training = pd.read_csv(filepath_training)
     df_testing = pd.read_csv(filepath_testing)
 
+    initial_date = np.datetime64('2014-01-01T01:01', dtype='datetime64[m]')
+    d_times = pd.DatetimeIndex(initial_date + np.timedelta64(int(mn), 'm') for mn in df_training["time"].values)
+
+    eps = 0.00001
+
     train_x = df_training[["x", "y", "accuracy", "time"]]
-    train_x["hourofday"] = train_x["time"].map(lambda x: x/60%24)
-    train_x["dayofmonth"] = train_x["time"].map(lambda x: x/1440%30)
-    train_x["weekday"] = train_x["time"].map(lambda x: x/1440%7)
-    train_x["monthofyear"] = train_x["time"].map(lambda x: x/43200%12)
+    train_x["hourofday"] = d_times.hour
+    train_x["dayofmonth"] = d_times.day
+    train_x["weekday"] = d_times.weekday
+    train_x["monthofyear"] = d_times.month
+    train_x["year"] = d_times.year
+    train_x['x_d_y'] = train_x.x.values / (train_x.y.values + eps)
+    train_x['x_t_y'] = train_x.x.values * train_x.y.values
+
     train_x = train_x.drop(["time"], axis=1)
     train_y = df_training["place_id"].astype(str)
 
     values, counts = np.unique(train_y, return_counts=True)
+
+    d_times = pd.DatetimeIndex(initial_date + np.timedelta64(int(mn), 'm') for mn in df_testing["time"].values) 
+
+    test_x = df_testing[["x", "y", "accuracy", "time"]]
+    test_x["hourofday"] = d_times.hour
+    test_x["dayofmonth"] = d_times.day
+    test_x["weekday"] = d_times.weekday
+    test_x["monthofyear"] = d_times.month
+    test_x["year"] = d_times.year
+    test_x['x_d_y'] = test_x.x.values / (test_x.y.values + eps)
+    test_x['x_t_y'] = test_x.x.values * test_x.y.values
+    test_x = test_x.drop(["time"], axis=1)
+
+    '''
+    cols = ['x', 'y', 'accuracy', 'x_d_y', 'x_t_y', 'hourofday', 'weekday', 'dayofmonth', 'monthofyear']
+    for cl in cols:
+        ave, std = train_x[cl].mean(), train_x[cl].std()
+        train_x[cl] = (train_x[cl].values - ave) / std
+        test_x[cl] = (test_x[cl].values - ave) / std
+    '''
 
     pool = []
     for value, count in zip(values, counts):
@@ -65,13 +94,6 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf):
 
     train_x = train_x[idxs].values
     train_y = train_y[idxs].astype(str).values
-
-    test_x = df_testing[["x", "y", "accuracy", "time"]]
-    test_x["hourofday"] = test_x["time"].map(lambda x: x/60%24)
-    test_x["dayofmonth"] = test_x["time"].map(lambda x: x/1440%30)
-    test_x["weekday"] = test_x["time"].map(lambda x: x/1440%7)
-    test_x["monthofyear"] = test_x["time"].map(lambda x: x/43200%12)
-    test_x = test_x.drop(["time"], axis=1)
 
     test_x = test_x.values
     test_id = df_testing["row_id"].values
