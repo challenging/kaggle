@@ -98,7 +98,7 @@ def place_info(filepath, column_name, column_func, output_folder="."):
         target_df = df[df[column_name] == hour]
 
         folder = os.path.join(output_folder, "{}={}".format(column_name, hour))
-        Parallel(n_jobs=8)(delayed(_place_info)(target_df, place_id, folder) for place_id in target_df["place_id"].unique())
+        Parallel(n_jobs=12)(delayed(_place_info)(target_df, place_id, folder) for place_id in target_df["place_id"].unique())
 
 def _place_info_index(df, range_x, range_y, size_x, size_y, output_folder):
     for window_size_x, window_size_y in zip(size_x, size_y):
@@ -118,8 +118,9 @@ def _place_info_index(df, range_x, range_y, size_x, size_y, output_folder):
                         create_folder(filepath_output)
 
                         with open(filepath_output, "wb") as OUTPUT:
-                            for place_id in df[c2 & c3]["place_id"].unique():
-                                OUTPUT.write("{}\n".format(place_id))
+                            place_ids, counts = np.unique(df[c2 & c3]["place_id"].values, return_counts=True)
+                            for place_id, count in zip(place_ids, counts):
+                                OUTPUT.write("{},{}\n".format(place_id, count))
 
                         log("Save file in {}".format(filepath_output), INFO)
                     else:
@@ -169,7 +170,7 @@ def plot_place_history(filepath):
             OUTPUT.write("{},{}\n".format(key, "-".join(values)))
 
 if __name__ == "__main__":
-    mode = "testing"
+    mode = "original"
 
     folder = "/Users/rongqichen/Documents/programs/kaggle/cases/Facebook V - Predicting Check Ins/input/{}".format(mode)
     parent_folder = os.path.dirname(folder)
@@ -187,17 +188,14 @@ if __name__ == "__main__":
     range_y, size_y = [float(x)/20 for x in range(0, 220, 1)], [0.05]
     '''
 
-    range_x, size_x = [float(x)/10 for x in range(0, 110, 1)], [0.1]
-    range_y, size_y = [float(x)/10 for x in range(0, 110, 1)], [0.1]
+    range_x, size_x = [float(x)/20 for x in range(0, 220, 1)], [0.1]
+    range_y, size_y = [float(x)/20 for x in range(0, 220, 1)], [0.1]
 
     time_column = "hourofday"
     time_func = lambda t: (t/60)%24
 
     place_info_index(filepath_train, time_column, time_func, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "place_index", "train"))
-    #place_info_index(filepath_test, time_column, time_func, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "place_index", "test"))
-
     place_info(filepath_train, time_column, time_func, output_folder=os.path.join(parent_folder, "place", "train"))
-    #place_info(filepath_test, time_column, time_func, output_folder=os.path.join(parent_folder, "place", "test"))
 
     #complex_split_data(filepath_train, time_column, time_func, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "2_way", "train"))
     #complex_split_data(filepath_test, time_column, time_func, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "2_way", "test"))
