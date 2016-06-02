@@ -50,7 +50,15 @@ class MostPopularEngine(BaseEngine):
             for test_id, test_x in zip(test_ids, test_xs):
                 top.setdefault(test_id, {})
 
-                key = "{}-{}".format(transformer(test_x[0], range_x[0], range_x[1], range_x[2]), transformer(test_x[1], range_y[0], range_y[1], range_y[2]))
+                key_x = test_x[0]
+                if range_x[1] > 0:
+                    key_x = transformer(test_x[0], range_x[0], range_x[1], range_x[2])
+
+                key_y = test_x[1]
+                if range_y[1]:
+                    key_y = transformer(test_x[1], range_y[0], range_y[1], range_y[2])
+
+                key = "{}-{}".format(key_x, key_y)
                 if key in metrics:
                     for place_id, score in metrics[key]:
                         top[test_id].setdefault(place_id, 0)

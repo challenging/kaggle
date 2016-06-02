@@ -96,7 +96,10 @@ class StrategyEngine(object):
 
         for col in normalization:
             ave, std = df[col].mean(), df[col].std()
-            df[col] = (df[col]-ave)/std
+            if std > 0:
+                df[col] = (df[col]-ave)/std
+            else:
+                df[col] = (df[col]-ave)/1
 
             results["ave_{}".format(col)] = ave
             results["std_{}".format(col)] = std
@@ -311,9 +314,16 @@ class StrategyEngine(object):
                 len_y = max_y - min_y
                 '''
 
+                print training_dataset
                 for idx in range(0, training_dataset.shape[0]):
-                    x = StrategyEngine.position_transformer(training_dataset[idx,0], min_x, len_x, range_x)
-                    y = StrategyEngine.position_transformer(training_dataset[idx,1], min_y, len_y, range_y)
+                    x = training_dataset[idx,0]
+                    if len_x > 0:
+                        x = StrategyEngine.position_transformer(training_dataset[idx,0], min_x, len_x, range_x)
+
+                    y = training_dataset[idx,1]
+                    if len_y > 0:
+                        y = StrategyEngine.position_transformer(training_dataset[idx,1], min_y, len_y, range_y)
+
                     place_id = mapping[idx]
 
                     key = "{}-{}".format(x, y)
