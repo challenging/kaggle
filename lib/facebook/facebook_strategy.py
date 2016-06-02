@@ -246,7 +246,10 @@ class StrategyEngine(object):
             if not self.is_testing:
                 save_cache((model, (ave_x, std_x), (ave_y, std_y)), filepath_pkl)
         else:
-            model, (ave_x, std_x), (ave_y, std_y) = info
+            if isinstance(info, tuple):
+                model, (ave_x, std_x), (ave_y, std_y) = info
+            else:
+                model = info
 
         timestamp_end = time.time()
         log("Cost {:8f} secends to build up the XGBOOST CLASSIFIER solution".format(timestamp_end-timestamp_start), INFO)
@@ -295,14 +298,18 @@ class StrategyEngine(object):
         if not info or self.is_testing:
             training_dataset, mapping, (ave_x, std_x), (ave_y, std_y) = self.get_training_dataset(filepath, filepath_train_pkl, n_top, is_normalization)
 
-            metrics, min_x, len_x, min_y, len_y = {}, np.nan, np.nan, np.nan, np.nan
+            metrics, min_x, len_x, min_y, len_y = {}, 0, 1, 0, 1
+            if is_normalization:
+                min_x, len_x, min_y, len_y = ave_x, std_x, ave_y, std_y
 
             if training_dataset.shape[0] > 0:
+                '''
                 min_x, max_x = training_dataset[:,0].min(), training_dataset[:,0].max()
                 len_x = max_x - min_x
 
                 min_y, max_y = training_dataset[:,1].min(), training_dataset[:,1].max()
                 len_y = max_y - min_y
+                '''
 
                 for idx in range(0, training_dataset.shape[0]):
                     x = StrategyEngine.position_transformer(training_dataset[idx,0], min_x, len_x, range_x)

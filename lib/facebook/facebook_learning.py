@@ -198,7 +198,6 @@ class ProcessThread(BaseCalculatorThread):
             create_folder(filepath_train_pkl)
 
             filepath_test = filepath_train.replace("train", "test")
-            filepath_submission = os.path.join(self.submission_workspace, "{}.{}.pkl".format(type(self).__name__.lower(), filename))
 
             metrics, mapping = None, None
             ave_x, std_x, ave_y, std_y = None, None, None, None
@@ -230,6 +229,7 @@ class ProcessThread(BaseCalculatorThread):
 
                 test_id = df["row_id"].values
                 if self.method in [self.strategy_engine.STRATEGY_XGBOOST, self.strategy_engine.STRATEGY_RANDOMFOREST]:
+                    '''
                     d_times = self.strategy_engine.get_d_time(df["time"].values)
 
                     df["hourofday"] = d_times.hour
@@ -237,12 +237,19 @@ class ProcessThread(BaseCalculatorThread):
                     df["weekday"] = d_times.weekday
                     df["monthofyear"] = d_times.month
                     df["year"] = d_times.year
+                    '''
+
+                    df["hourofday"] = df["time"].map(lambda x: x/60%24)
+                    df["dayofmonth"] = df["time"].map(lambda x: x/1440%30)
+                    df["weekday"] = df["time"].map(lambda x: x/(1440)%7)
+                    df["monthofyear"] = df["time"].map(lambda x: x/(43200)%12)
 
                     if self.is_normalization:
                         df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
                         df["y"] = (df["y"] - ave_y) / (std_y + 0.00000001)
 
-                    test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday", "year"]].values
+                    #test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday", "year"]].values
+                    test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday"]].values
                 else:
                     if self.is_normalization:
                         df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
@@ -280,7 +287,7 @@ class ProcessThread(BaseCalculatorThread):
             timestamp_end = time.time()
             log("Cost {:8f} seconds to finish the prediction of {} by {}, {}".format(timestamp_end-timestamp_start, filepath_train, self.method, self.queue.qsize()), INFO)
 
-def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_normalization, is_testing, n_top=3, n_jobs=8, count_testing_dataset=8607230):
+def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_normalization, is_testing, n_top=3, n_jobs=8):
     method, setting = m
 
     workspace, cache_workspace, output_workspace = workspaces

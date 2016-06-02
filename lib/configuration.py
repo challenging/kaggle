@@ -70,6 +70,7 @@ class FacebookConfiguration(KaggleConfiguration):
 
         if self.config.has_option(section, "criteria"):
             if method == "most_popular":
+                strategy = "native"
                 criteria = self.config.get(section, "criteria").split(",")
 
         if method == "kdtree":
