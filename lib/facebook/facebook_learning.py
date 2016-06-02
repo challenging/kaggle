@@ -55,7 +55,7 @@ class MostPopularEngine(BaseEngine):
                     key_x = transformer(test_x[0], range_x[0], range_x[1], range_x[2])
 
                 key_y = test_x[1]
-                if range_y[1]:
+                if range_y[1] > 0:
                     key_y = transformer(test_x[1], range_y[0], range_y[1], range_y[2])
 
                 key = "{}-{}".format(key_x, key_y)
