@@ -306,15 +306,6 @@ class StrategyEngine(object):
                 min_x, len_x, min_y, len_y = ave_x, std_x, ave_y, std_y
 
             if training_dataset.shape[0] > 0:
-                '''
-                min_x, max_x = training_dataset[:,0].min(), training_dataset[:,0].max()
-                len_x = max_x - min_x
-
-                min_y, max_y = training_dataset[:,1].min(), training_dataset[:,1].max()
-                len_y = max_y - min_y
-                '''
-
-                print training_dataset
                 for idx in range(0, training_dataset.shape[0]):
                     x = training_dataset[idx,0]
                     if len_x > 0:
