@@ -6,6 +6,10 @@ import math
 import time
 import glob
 
+import json
+import base64
+import beanstalkc
+
 import threading
 import Queue
 
@@ -23,13 +27,16 @@ from utils import log, DEBUG, INFO, WARN, ERROR
 from utils import create_folder, make_a_stamp
 from load import save_cache, load_cache
 
+IP_BEANSTALK, PORT_BEANSTALK = "127.0.0.1", 11300
+TASK_BEANSTALK = "facebook_checkin_competition"
+
 class BaseEngine(object):
     def __init__(self, cache_workspace, n_top, is_testing):
         self.cache_workspace = cache_workspace
         self.n_top = n_top
         self.is_testing = is_testing
 
-    def process(self, test_ids, test_xs, metrics, others):
+    def process(self, test_ids, test_xs, metrics, others, is_cache=True):
         raise NotImplementedError
 
     def get_filepath(self, test_ids, test_xs):
@@ -37,15 +44,17 @@ class BaseEngine(object):
         return os.path.join(self.cache_workspace, "{}.pkl".format(stamp))
 
 class MostPopularEngine(BaseEngine):
-    def process(self, test_ids, test_xs, metrics, others):
+    def process(self, test_ids, test_xs, metrics, others, is_cache=True):
         transformer, range_x, range_y = others
 
         filepath = self.get_filepath(test_ids, test_xs)
 
-        top = load_cache(filepath)
-        if not top or self.is_testing:
-            top = {}
+        top = {}
 
+        if is_cache:
+            top = load_cache(filepath)
+
+        if not top or self.is_testing:
             count_missing = 0
             for test_id, test_x in zip(test_ids, test_xs):
                 top.setdefault(test_id, {})
@@ -55,7 +64,7 @@ class MostPopularEngine(BaseEngine):
                     key_x = transformer(test_x[0], range_x[0], range_x[1], range_x[2])
 
                 key_y = test_x[1]
-                if range_y[1]:
+                if range_y[1] > 0:
                     key_y = transformer(test_x[1], range_y[0], range_y[1], range_y[2])
 
                 key = "{}-{}".format(key_x, key_y)
@@ -70,21 +79,23 @@ class MostPopularEngine(BaseEngine):
 
             log("The missing ratio is {}/{}={:4f}".format(count_missing, len(top), float(count_missing)/len(top)), INFO)
 
-            if not self.is_testing:
+            if not self.is_testing and is_cache:
                 save_cache(top, filepath)
 
         return top
 
 class KDTreeEngine(BaseEngine):
-    def process(self, test_ids, test_xs, metrics, others):
+    def process(self, test_ids, test_xs, metrics, others, is_cache=True):
         mapping, score = others
 
         filepath = self.get_filepath(test_ids, test_xs)
 
-        top = load_cache(filepath)
-        if not top or self.is_testing:
-            top = {}
+        top = {}
 
+        if is_cache:
+            top = load_cache(filepath)
+
+        if not top or self.is_testing:
             distance, ind = metrics.query(test_xs, k=min(self.n_top, len(mapping)))
             for idx, loc in enumerate(ind):
                 test_id = test_ids[idx]
@@ -99,19 +110,21 @@ class KDTreeEngine(BaseEngine):
                     if d != 0:
                         top[test_id][place_id] += -1.0*np.log(distance[idx][loc_idx])*score[locc]
 
-            if not self.is_testing:
+            if not self.is_testing and is_cache:
                 save_cache(top, filepath)
 
         return top
 
 class ClassifierEngine(BaseEngine):
-    def process(self, test_ids, test_xs, metrics, others=None):
+    def process(self, test_ids, test_xs, metrics, others=None, is_cache=True):
         filepath = self.get_filepath(test_ids, test_xs)
 
-        top = load_cache(filepath)
-        if not top or self.is_testing:
-            top = {}
+        top = {}
 
+        if is_cache:
+            top = load_cache(filepath)
+
+        if not top or self.is_testing:
             predicted_proba = metrics.predict_proba(test_xs)
 
             pool = [dict(zip(metrics.classes_, probas)) for probas in predicted_proba]
@@ -123,7 +136,7 @@ class ClassifierEngine(BaseEngine):
                     top[test_id].setdefault(place_id, 0)
                     top[test_id][place_id] += 10**proba
 
-            if not self.is_testing:
+            if not self.is_testing and is_cache:
                 save_cache(top, filepath)
 
         return top
@@ -154,7 +167,7 @@ class BaseCalculatorThread(threading.Thread):
 
             test_ids, test_xs, metrics, others = self.queue.get()
 
-            top = self.process(test_ids, test_xs, metrics, others)
+            top = self.process(test_ids, test_xs, metrics, others, is_cache=True)
             self.update_results(top)
 
             self.queue.task_done()
@@ -237,27 +250,19 @@ class ProcessThread(BaseCalculatorThread):
 
                 test_id = df["row_id"].values
                 if self.method in [self.strategy_engine.STRATEGY_XGBOOST, self.strategy_engine.STRATEGY_RANDOMFOREST]:
-                    '''
-                    d_times = self.strategy_engine.get_d_time(df["time"].values)
+                    d_times = StrategyEngine.get_d_time(df["time"].values)
 
                     df["hourofday"] = d_times.hour
                     df["dayofmonth"] = d_times.day
                     df["weekday"] = d_times.weekday
                     df["monthofyear"] = d_times.month
                     df["year"] = d_times.year
-                    '''
-
-                    df["hourofday"] = df["time"].map(lambda x: x/60%24)
-                    df["dayofmonth"] = df["time"].map(lambda x: x/1440%30)
-                    df["weekday"] = df["time"].map(lambda x: x/(1440)%7)
-                    df["monthofyear"] = df["time"].map(lambda x: x/(43200)%12)
 
                     if self.is_normalization:
                         df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
                         df["y"] = (df["y"] - ave_y) / (std_y + 0.00000001)
 
-                    #test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday", "year"]].values
-                    test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday"]].values
+                    test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday", "year"]].values
                 else:
                     if self.is_normalization:
                         df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
@@ -295,55 +300,89 @@ class ProcessThread(BaseCalculatorThread):
             timestamp_end = time.time()
             log("Cost {:8f} seconds to finish the prediction of {} by {}, {}".format(timestamp_end-timestamp_start, filepath_train, self.method, self.queue.qsize()), INFO)
 
-def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_normalization, is_testing, n_top=3, n_jobs=8):
+def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_normalization, is_beanstalk, is_testing,
+            n_top=3, n_jobs=8):
+
+    results = {}
     method, setting = m
-
     workspace, cache_workspace, output_workspace = workspaces
-    for folder in [os.path.join(cache_workspace, "1.txt"), os.path.join(output_workspace, "1.txt")]:
-        create_folder(folder)
 
-    results = load_cache(filepath_pkl, is_hdb=True)
-    if not results:
-        results = {}
+    if is_beanstalk:
+        global IP_BEANSTALK, PORT_BEANSTALK, TASK_BEANSTALK
 
-        queue = Queue.Queue()
+        talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
+        talk.use(TASK_BEANSTALK)
+
         for filepath_train in glob.iglob(workspace):
             if filepath_train.find(".csv") != -1 and filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:
                 # Avoid the empty file
                 if os.stat(filepath_train).st_size > 34:
-                    queue.put(filepath_train)
-                    log("Push {} in queue".format(filepath_train), INFO)
+                    string = {"method": method,
+                              "strategy": strategy,
+                              "setting": setting,
+                              "n_top": n_top,
+                              "criteria": criteria,
+                              "is_normalization": is_normalization,
+                              "is_accuracy": is_accuracy,
+                              "is_exclude_outlier": is_exclude_outlier,
+                              "is_testing": is_testing,
+                              "cache_workspace": cache_workspace,
+                              "filepath_training": filepath_train,
+                              "filepath_testing": filepath_train.replace("train", "test")}
 
-        if queue.qsize() == 0:
-            log("Not found any files in {}".format(workspace), WARN)
-            return None
+                    e_string = json.dumps(string)
+                    request = base64.b64encode(e_string)
 
-        log("For {}({}), there are {} files in queue".format(method, criteria, queue.qsize()), INFO)
+                    talk.put(request)
+                    log("Request {} to the beanstalk server".format(e_string), INFO)
 
-        for idx in range(0, n_jobs):
-            thread = ProcessThread(kwargs={"queue": queue,
-                                           "results": results,
-                                           "m": m,
-                                           "criteria": criteria,
-                                           "strategy": strategy,
-                                           "batch_size": batch_size,
-                                           "cache_workspace": cache_workspace,
-                                           "submission_workspace": output_workspace,
-                                           "is_accuracy": is_accuracy,
-                                           "is_exclude_outlier": is_exclude_outlier,
-                                           "is_normalization": is_normalization,
-                                           "is_testing": is_testing,
-                                           "n_top": n_top,
-                                           "n_jobs": n_jobs})
-            thread.setDaemon(True)
-            thread.start()
-        queue.join()
+        talk.close()
 
-        log("Start to save results in cache", INFO)
-        save_cache(results, filepath_pkl, is_hdb=True)
-        log("Finish saving cache", INFO)
+        return None
+    else:
+        for folder in [os.path.join(cache_workspace, "1.txt"), os.path.join(output_workspace, "1.txt")]:
+            create_folder(folder)
 
-    log("There are {} records in results".format(len(results)), INFO)
+        results = load_cache(filepath_pkl, is_hdb=True, simple_mode=True)
+        if not results:
+            queue = Queue.Queue()
+            for filepath_train in glob.iglob(workspace):
+                if filepath_train.find(".csv") != -1 and filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:
+                    # Avoid the empty file
+                    if os.stat(filepath_train).st_size > 34:
+                        queue.put(filepath_train)
+                        log("Push {} in queue".format(filepath_train), INFO)
+
+            if queue.qsize() == 0:
+                log("Not found any files in {}".format(workspace), WARN)
+                return None
+
+            log("For {}({}), there are {} files in queue".format(method, criteria, queue.qsize()), INFO)
+
+            for idx in range(0, n_jobs):
+                thread = ProcessThread(kwargs={"queue": queue,
+                                               "results": results,
+                                               "m": m,
+                                               "criteria": criteria,
+                                               "strategy": strategy,
+                                               "batch_size": batch_size,
+                                               "cache_workspace": cache_workspace,
+                                               "submission_workspace": output_workspace,
+                                               "is_accuracy": is_accuracy,
+                                               "is_exclude_outlier": is_exclude_outlier,
+                                               "is_normalization": is_normalization,
+                                               "is_testing": is_testing,
+                                               "n_top": n_top,
+                                               "n_jobs": n_jobs})
+                thread.setDaemon(True)
+                thread.start()
+            queue.join()
+
+            log("Start to save results in cache", INFO)
+            save_cache(results, filepath_pkl, is_hdb=True)
+            log("Finish saving cache", INFO)
+
+        log("There are {} records in results".format(len(results)), INFO)
 
     return transform_to_submission_format(results, n_top)
 
@@ -351,6 +390,8 @@ def transform_to_submission_format(results, n_top):
     timestamp_start = time.time()
     csv_format = {}
     for test_id, rankings in results.items():
+        test_id = str(test_id)
+
         csv_format.setdefault(test_id, [])
 
         for place_id, most_popular in nlargest(n_top, sorted(rankings.items()), key=lambda (k, v): v):

@@ -19,23 +19,23 @@ working_queue = Queue.Queue()
 @click.option("--conf", required=True, help="Filepath of Configuration")
 @click.option("--method-jobs", default=1, help="Number of thread for sections")
 @click.option("--n-jobs", default=4, help="Number of thread of methods")
+@click.option("--is-beanstalk", is_flag=True, help="beanstalk mode")
 @click.option("--is-testing", is_flag=True, help="Testing Mode")
-def facebook(conf, method_jobs, n_jobs, is_testing):
-    global working_queue
-
+def facebook(conf, method_jobs, n_jobs, is_beanstalk, is_testing):
     configuration = FacebookConfiguration(conf)
 
+    global working_queue
     for section in configuration.get_methods():
         working_queue.put(section)
 
     for idx in range(0, method_jobs):
-        thread = threading.Thread(target=run, kwargs={"n_jobs": n_jobs, "is_testing": is_testing, "configuration": configuration})
+        thread = threading.Thread(target=run, kwargs={"n_jobs": n_jobs, "is_testing": is_testing, "is_beanstalk": is_beanstalk, "configuration": configuration})
         thread.setDaemon(True)
         thread.start()
 
     working_queue.join()
 
-def run(n_jobs, is_testing, configuration):
+def run(n_jobs, is_testing, is_beanstalk, configuration):
     global working_queue
 
     while True:
@@ -60,25 +60,28 @@ def run(n_jobs, is_testing, configuration):
         if method == "native":
             cache_workspace = "{}/{}criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}.{}.{}/{}".format(\
                 cache_workspace, normalization, grid_size, window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, stamp, n_top, setting_stamp)
-            submission_workspace = "{}/{}criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}.{}.{}/{}".format(\
-                output_workspace, normalization, grid_size, window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, stamp, n_top, setting_stamp)
+            submission_workspace = "{}/{}criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/{}/method={}.{}.{}".format(\
+                output_workspace, normalization, grid_size, window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, setting_stamp, method, stamp, n_top)
         else:
             cache_workspace = "{}/{}criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}_strategy={}.{}.{}/{}".format(\
                 cache_workspace, normalization, grid_size, window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, strategy, stamp, n_top, setting_stamp)
-            submission_workspace = "{}/{}criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}_strategy={}.{}.{}/{}".format(\
-                output_workspace, normalization, grid_size, window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, strategy, stamp, n_top, setting_stamp)
+            submission_workspace = "{}/{}criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/{}/method={}_strategy={}.{}.{}".format(\
+                output_workspace, normalization, grid_size, window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, setting_stamp, method, strategy, stamp, n_top)
 
         log("The workspace is {}".format(workspace))
         log("The cache workspace is {}".format(cache_workspace), INFO)
         log("The submission workspace is {}".format(submission_workspace), INFO)
 
         filepath_pkl = os.path.join(cache_workspace, "final_results.pkl")
-        results = process((method, setting), (workspace, cache_workspace, submission_workspace), filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_normalization, is_testing, n_top=n_top, n_jobs=max(1, n_jobs))
+        results = process((method, setting), (workspace, cache_workspace, submission_workspace), filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_normalization, is_beanstalk, is_testing, n_top=n_top, n_jobs=max(1, n_jobs))
 
         if results:
             for size in [n_top, 3]:
                 filepath_output = submission_workspace + ".{}.csv".format(size)
                 save_submission(filepath_output, results, size, is_full=is_full)
+        else:
+            if not is_beanstalk:
+                log("Get empty results", ERROR)
 
         working_queue.task_done()
 

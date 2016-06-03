@@ -284,7 +284,7 @@ def save_cache(obj, filepath, is_json=False, is_hdb=False):
 
         log("Save {}'s cache in {}".format(obj.__class__, filepath), INFO)
 
-def load_cache(filepath, is_json=False, is_hdb=False, others=None, top=6):
+def load_cache(filepath, is_json=False, is_hdb=False, others=None, top=6, simple_mode=False):
     obj = {}
     weight = 1
 
@@ -303,13 +303,19 @@ def load_cache(filepath, is_json=False, is_hdb=False, others=None, top=6):
         while rec:
             test_id, value = rec[0], pickle.loads(rec[1])
 
-            obj.setdefault(test_id, {})
+            if simple_mode:
+                obj[test_id] = value
 
-            for place_id, score in sorted(value.items(), key=lambda (k, v): v)[:top]:
-                place_id = int(float(place_id))
+                if len(obj) % 10000 == 9999:
+                    log("the progress of loading cache is {}".format(len(obj)), INFO)
+            else:
+                obj.setdefault(test_id, {})
 
-                obj[test_id].setdefault(place_id, 0)
-                obj[test_id][place_id] += score*weight
+                for place_id, score in sorted(value.items(), key=lambda (k, v): v)[:top]:
+                    place_id = int(float(place_id))
+
+                    obj[test_id].setdefault(place_id, 0)
+                    obj[test_id][place_id] += score*weight
 
             rec = cursor.next()
 

@@ -142,12 +142,15 @@ class StrategyEngine(object):
     def get_training_dataset(self, filepath, filepath_pkl, n_top, is_normalization=False):
         ave_x, std_x, ave_y, std_y = None, None, None, None
 
-        info = load_cache(filepath_pkl)
+        info = None
+        if filepath_pkl:
+            info = load_cache(filepath_pkl, is_json=True)
+
         if not info or self.is_testing:
             results, (ave_x, std_x), (ave_y, std_y) = self.get_centroid(filepath, is_normalization)
             training_dataset, mapping = results[:,1:], results[:,0]
 
-            if not self.is_testing:
+            if not self.is_testing and filepath_pkl:
                 save_cache((training_dataset, mapping, (ave_x, std_x), (ave_y, std_y)), filepath_pkl)
         else:
             training_dataset, mapping, (ave_x, std_x), (ave_y, std_y) = info
@@ -159,7 +162,10 @@ class StrategyEngine(object):
     def get_kdtree(self, filepath, filepath_train_pkl, filepath_pkl, n_top, is_normalization=False):
         timestamp_start = time.time()
 
-        info = load_cache(filepath_pkl)
+        info = None
+        if filepath_pkl:
+            info = load_cache(filepath_pkl, is_json=True)
+
         if not info or self.is_testing:
             training_dataset, mapping, (ave_x, std_x), (ave_y, std_y) = self.get_training_dataset(filepath, filepath_train_pkl, n_top, is_normalization)
 
@@ -170,7 +176,7 @@ class StrategyEngine(object):
             else:
                 score = np.ones_like(mapping)
 
-            if not self.is_testing:
+            if not self.is_testing and filepath_pkl:
                 save_cache((tree, mapping, score, (ave_x, std_x), (ave_y, std_y)), filepath_pkl)
         else:
             tree, mapping, score, (ave_x, std_x), (ave_y, std_y) = info
@@ -204,7 +210,10 @@ class StrategyEngine(object):
 
         ave_x, std_x, ave_y, std_y = np.nan, np.nan, np.nan, np.nan
 
-        info = load_cache(filepath_pkl)
+        info = None
+        if filepath_pkl:
+            info = load_cache(filepath_pkl, is_json=True)
+
         if not info or self.is_testing:
             df, cols, target_col = self.preprocess_classifier(filepath)
 
@@ -246,7 +255,7 @@ class StrategyEngine(object):
 
                 model.fit(df[cols].values, df[target_col].values.astype(str))
 
-            if not self.is_testing:
+            if not self.is_testing and filepath_pkl:
                 save_cache((model, (ave_x, std_x), (ave_y, std_y)), filepath_pkl)
         else:
             if isinstance(info, tuple):
@@ -266,7 +275,10 @@ class StrategyEngine(object):
 
         ave_x, std_x, ave_y, std_y = np.nan, np.nan, np.nan, np.nan
 
-        info = load_cache(filepath_pkl)
+        info = None
+        if filepath_pkl:
+            info = load_cache(filepath_pkl, is_json=True)
+
         if not info or self.is_testing:
             df, cols, target_col = self.preprocess_classifier(filepath)
 
@@ -284,7 +296,7 @@ class StrategyEngine(object):
                                            seed=seed)
             model.fit(df[cols].values, df[target_col].values.astype(str))
 
-            if not self.is_testing:
+            if not self.is_testing and filepath_pkl:
                 save_cache((model, (ave_x, std_x), (ave_y, std_y)), filepath_pkl)
         else:
             model, (ave_x, std_x), (ave_y, std_y) = info
@@ -297,7 +309,10 @@ class StrategyEngine(object):
     def get_most_popular_metrics(self, filepath, filepath_train_pkl, filepath_pkl, n_top=6, range_x=1024, range_y=1024, is_normalization=False):
         timestamp_start = time.time()
 
-        info = load_cache(filepath_pkl, is_json=True)
+        info = None
+        if filepath_pkl:
+            info = load_cache(filepath_pkl, is_json=True)
+
         if not info or self.is_testing:
             training_dataset, mapping, (ave_x, std_x), (ave_y, std_y) = self.get_training_dataset(filepath, filepath_train_pkl, n_top, is_normalization)
 
@@ -331,7 +346,7 @@ class StrategyEngine(object):
 
                 log("The compression rate is {}/{}={:4f}".format(len(metrics), training_dataset.shape[0], 1-float(len(metrics))/training_dataset.shape[0]), INFO)
 
-                if not self.is_testing:
+                if not self.is_testing and filepath_pkl:
                     save_cache([metrics, [min_x, len_x], [min_y, len_y], [ave_x, std_x], [ave_y, std_y]], filepath_pkl, is_json=True)
             else:
                 log("Get {} records from {}".format(training_dataset.shape, filepath), ERROR)
