@@ -19,7 +19,7 @@ from facebook_strategy import StrategyEngine
 from facebook_learning import KDTreeEngine, MostPopularEngine, ClassifierEngine, ProcessThread
 
 # beanstalk client
-IP_BEANSTALK, PORT_BEANSTALK = "rongqis-iMac.local", 11300
+IP_BEANSTALK, PORT_BEANSTALK = "192.168.1.106", 11300
 TALK, TIMEOUT_BEANSTALK = None, 60
 
 # mongoDB
