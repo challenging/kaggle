@@ -20,11 +20,11 @@ from facebook_strategy import StrategyEngine
 from facebook_learning import KDTreeEngine, MostPopularEngine, ClassifierEngine
 
 # beanstalk client
-IP_BEANSTALK, PORT_BEANSTALK = "127.0.0.1", 11300
+IP_BEANSTALK, PORT_BEANSTALK = "rongqis-iMac.local", 11300
 TALK, TIMEOUT_BEANSTALK = None, 60
 
 # mongoDB
-MONGODB_URL = "mongodb://127.0.0.1:27017"
+MONGODB_URL = "mongodb://rongqis-iMac.local:27017"
 CLIENT = None
 
 def init(task="facebook_checkin_competition"):
