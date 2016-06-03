@@ -7,7 +7,8 @@ import time
 import glob
 
 import json
-import base64
+import zlib
+import pickle
 import beanstalkc
 
 import threading
@@ -207,6 +208,37 @@ class ProcessThread(BaseCalculatorThread):
             thread.setDaemon(True)
             thread.start()
 
+    @staticmethod
+    def get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y):
+        test_id, test_x = None, None
+
+        df = StrategyEngine.get_dataframe(filepath_test)
+        log("There are {} reocrds in {}".format(df.values.shape, filepath_test if isinstance(filepath_test, str) else ""), INFO)
+
+        test_id = df["row_id"].values
+        if method in [StrategyEngine.STRATEGY_XGBOOST, StrategyEngine.STRATEGY_RANDOMFOREST]:
+            d_times = StrategyEngine.get_d_time(df["time"].values)
+
+            df["hourofday"] = d_times.hour
+            df["dayofmonth"] = d_times.day
+            df["weekday"] = d_times.weekday
+            df["monthofyear"] = d_times.month
+            df["year"] = d_times.year
+
+            if is_normalization:
+                df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
+                df["y"] = (df["y"] - ave_y) / (std_y + 0.00000001)
+
+            test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday", "year"]].values
+        else:
+            if is_normalization:
+                df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
+                df["y"] = (df["y"] - ave_y) / (std_y + 0.00000001)
+
+            test_x = df[["x", "y"]].values
+
+        return test_id, test_x
+
     def run(self):
         while True:
             timestamp_start = time.time()
@@ -243,32 +275,7 @@ class ProcessThread(BaseCalculatorThread):
                 raise NotImplementedError
 
             if os.path.exists(filepath_test):
-                df = pd.read_csv(filepath_test, dtype={"row_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int})
-                if self.is_testing:
-                    df = df.head(100)
-                log("There are {} reocrds in {}".format(df.values.shape, filepath_test), INFO)
-
-                test_id = df["row_id"].values
-                if self.method in [self.strategy_engine.STRATEGY_XGBOOST, self.strategy_engine.STRATEGY_RANDOMFOREST]:
-                    d_times = StrategyEngine.get_d_time(df["time"].values)
-
-                    df["hourofday"] = d_times.hour
-                    df["dayofmonth"] = d_times.day
-                    df["weekday"] = d_times.weekday
-                    df["monthofyear"] = d_times.month
-                    df["year"] = d_times.year
-
-                    if self.is_normalization:
-                        df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
-                        df["y"] = (df["y"] - ave_y) / (std_y + 0.00000001)
-
-                    test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday", "year"]].values
-                else:
-                    if self.is_normalization:
-                        df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
-                        df["y"] = (df["y"] - ave_y) / (std_y + 0.00000001)
-
-                    test_x = df[["x", "y"]].values
+                test_id, test_x = get_testing_dataset(filepath_test, self.method, self.is_normalization, ave_x, std_x, ave_y, std_y)
 
                 top = []
                 if self.method == self.strategy_engine.STRATEGY_KDTREE:
@@ -315,8 +322,18 @@ def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accu
 
         for filepath_train in glob.iglob(workspace):
             if filepath_train.find(".csv") != -1 and filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:
+                filepath_test = filepath_train.replace("train", "test")
+
                 # Avoid the empty file
-                if os.stat(filepath_train).st_size > 34:
+                if os.stat(filepath_train).st_size > 34 and os.path.exists(filepath_test):
+                    df_train = None
+                    if strategy == "native":
+                        df_train = StrategyEngine.get_dataframe(filepath_train, 2)
+                    else:
+                        df_train = StrategyEngine.get_dataframe(filepath_train, 1)
+
+                    df_test = StrategyEngine.get_dataframe(filepath_test)
+
                     string = {"method": method,
                               "strategy": strategy,
                               "setting": setting,
@@ -327,14 +344,12 @@ def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accu
                               "is_exclude_outlier": is_exclude_outlier,
                               "is_testing": is_testing,
                               "cache_workspace": cache_workspace,
-                              "filepath_training": filepath_train,
-                              "filepath_testing": filepath_train.replace("train", "test")}
+                              "filepath_training": pickle.dumps(df_train),
+                              "filepath_testing": pickle.dumps(df_test)}
 
-                    e_string = json.dumps(string)
-                    request = base64.b64encode(e_string)
+                    request = zlib.compress(json.dumps(string))
 
                     talk.put(request)
-                    log("Request {} to the beanstalk server".format(e_string), INFO)
 
         talk.close()
 

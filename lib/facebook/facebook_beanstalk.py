@@ -2,13 +2,12 @@
 
 import os
 import sys
-import pprint
 
 import pandas as pd
 import numpy as np
 
+import zlib
 import json
-import base64
 import pickle
 
 import pymongo
@@ -17,14 +16,16 @@ import beanstalkc
 from utils import log, make_a_stamp
 from utils import DEBUG, INFO, WARN
 from facebook_strategy import StrategyEngine
-from facebook_learning import KDTreeEngine, MostPopularEngine, ClassifierEngine
+from facebook_learning import KDTreeEngine, MostPopularEngine, ClassifierEngine, ProcessThread
 
 # beanstalk client
-IP_BEANSTALK, PORT_BEANSTALK = "rongqis-iMac.local", 11300
+IP_BEANSTALK, PORT_BEANSTALK = "127.0.0.1", 11300
 TALK, TIMEOUT_BEANSTALK = None, 60
 
 # mongoDB
-MONGODB_URL = "mongodb://rongqis-iMac.local:27017"
+MONGODB_URL = "mongodb://127.0.0.1:27017"
+MONGODB_INDEX = "row_id"
+
 CLIENT = None
 
 def init(task="facebook_checkin_competition"):
@@ -44,36 +45,6 @@ def get_mongo_location(cache_workspace):
 def get_legal_name(s):
     return make_a_stamp(s)
 
-def get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y):
-    test_id, test_x = None, None
-    if os.path.exists(filepath_test):
-        df = pd.read_csv(filepath_test, dtype={"row_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int})
-        log("There are {} reocrds in {}".format(df.values.shape, filepath_test), INFO)
-
-        test_id = df["row_id"].values
-        if method in [StrategyEngine.STRATEGY_XGBOOST, StrategyEngine.STRATEGY_RANDOMFOREST]:
-            d_times = StrategyEngine.get_d_time(df["time"].values)
-
-            df["hourofday"] = d_times.hour
-            df["dayofmonth"] = d_times.day
-            df["weekday"] = d_times.weekday
-            df["monthofyear"] = d_times.month
-            df["year"] = d_times.year
-
-            if is_normalization:
-                df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
-                df["y"] = (df["y"] - ave_y) / (std_y + 0.00000001)
-
-            test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday", "year"]].values
-        else:
-            if is_normalization:
-                df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
-                df["y"] = (df["y"] - ave_y) / (std_y + 0.00000001)
-
-            test_x = df[["x", "y"]].values
-
-    return test_id, test_x
-
 def worker():
     global CLIENT, CONNECTION, MONGODB_URL
     CLIENT = pymongo.MongoClient(MONGODB_URL)
@@ -87,7 +58,7 @@ def worker():
         job = TALK.reserve(timeout=TIMEOUT_BEANSTALK)
         if job != None:
             try:
-                o = json.loads(base64.b64decode(job.body))
+                o = json.loads(zlib.decompress(job.body))
 
                 method, strategy, setting = o["method"], o["strategy"], o["setting"]
                 n_top, criteria = o["n_top"], o["criteria"]
@@ -96,12 +67,10 @@ def worker():
                 cache_workspace = o["cache_workspace"]
                 database, collection = get_mongo_location(cache_workspace)
 
-                log(os.path.basename(os.path.dirname(os.path.dirname(cache_workspace))))
-                log("{}_{}".format(os.path.basename(os.path.dirname(cache_workspace)), os.path.basename(cache_workspace)))
-
                 mongo = CLIENT[database][collection]
+                mongo.create_index(MONGODB_INDEX)
 
-                filepath_train, filepath_test = o["filepath_training"], o["filepath_testing"]
+                filepath_train, filepath_test = pickle.loads(o["filepath_training"]), pickle.loads(o["filepath_testing"])
 
                 strategy_engine.strategy = strategy
                 strategy_engine.is_accuracy = is_accuracy
@@ -133,7 +102,7 @@ def worker():
 
                     metrics, mapping, score, (ave_x, std_x), (ave_y, std_y) = strategy_engine.get_kdtree(filepath_train, filepath_train_pkl, f, n_top, is_normalization)
 
-                    test_id, test_x = get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
+                    test_id, test_x = ProcessThread.get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
                     if test_id == None or test_x == None:
                         log("Empty file in {}".format(filepath_test), WARN)
                         is_pass = False
@@ -145,7 +114,7 @@ def worker():
 
                     metrics, (ave_x, std_x), (ave_y, std_y) = strategy_engine.get_xgboost_classifier(filepath_train, f, n_top, is_normalization, **setting)
 
-                    test_id, test_x = get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
+                    test_id, test_x = ProcessThread.get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
                     if test_id == None or test_x == None:
                         log("Empty file in {}".format(filepath_test), WARN)
                         is_pass = False
@@ -157,7 +126,7 @@ def worker():
 
                     metrics, (ave_x, std_x), (ave_y, std_y) = strategy_enging.get_randomforest_classifier(filepath_train, f, n_top, is_normalization, **setting)
 
-                    test_id, test_x = get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
+                    test_id, test_x = ProcessThread.get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
                     if test_id == None or test_x == None:
                         log("Empty file in {}".format(filepath_test), WARN)
                         is_pass = False
@@ -183,10 +152,15 @@ def worker():
                 job.delete()
             except Exception as e:
                 log("Error occurs, {}".format(e), WARN)
-                raise
 
-    CLIENT.close()
+                # ('delete', 'NOT_FOUND', [])
+                if str(e).find("delete") != -1 and str(e).find("NOT_FOUND") != -1:
+                    pass
+                else:
+                    raise
 
 if __name__ == "__main__":
     init()
+
     TALK.close()
+    CLIENT.close()

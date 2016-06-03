@@ -40,6 +40,23 @@ class StrategyEngine(object):
             thread.start()
 
     @staticmethod
+    def get_dataframe(filepath, kind=0):
+        df = None
+
+        if isinstance(filepath, str) and os.path.exists(filepath):
+            if kind == 1:
+                df = pd.read_csv(filepath, dtype={"row_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int}, index_col=["place_id"])
+            elif kind == 2:
+                df = pd.read_csv(filepath, dtype={"row_id": np.int, "place_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int})
+            else:
+                df = pd.read_csv(filepath)
+
+        elif isinstance(filepath, pd.DataFrame):
+            df = filepath
+
+        return df
+
+    @staticmethod
     def position_transformer(x, min_x, len_x, range_x="1024"):
         new_x = int(float(x)*int(range_x))
 
@@ -112,7 +129,8 @@ class StrategyEngine(object):
 
         if self.strategy != "native":
             timestamp_start = time.time()
-            df = pd.read_csv(filepath, dtype={"row_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int}, index_col=["place_id"])
+            #df = pd.read_csv(filepath, dtype={"row_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int}, index_col=["place_id"])
+            df = self.get_dataframe(filepath, 1)
 
             if is_normalization:
                 df, stats = self.normalization(df, ["x", "y"])
@@ -128,7 +146,8 @@ class StrategyEngine(object):
             timestamp_end = time.time()
             log("Cost {:8f} secends to filter out the outliner, {}".format(timestamp_end-timestamp_start, results.shape), INFO)
         else:
-            df = pd.read_csv(filepath, dtype={"row_id": np.int, "place_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int})
+            #df = pd.read_csv(filepath, dtype={"row_id": np.int, "place_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int})
+            df = self.get_dataframe(filepath, 2)
 
             if is_normalization:
                 df, stats = self.normalization(df, ["x", "y"])
@@ -192,7 +211,8 @@ class StrategyEngine(object):
         return pd.DatetimeIndex(initial_date + np.timedelta64(int(mn), 'm') for mn in values)
 
     def preprocess_classifier(self, filepath):
-        df = pd.read_csv(filepath)
+        #df = pd.read_csv(filepath)
+        df = self.get_dataframe(filepath)
 
         d_times = self.get_d_time(df["time"].values)
         df["hourofday"] = d_times.hour
@@ -222,7 +242,7 @@ class StrategyEngine(object):
                 ave_x, std_x = stats["ave_x"], stats["std_x"]
                 ave_y, std_y = stats["ave_y"], stats["std_y"]
 
-            log("Start to train the XGBOOST CLASSIFIER model({}) from {} with {}".format(df.shape, filepath, is_normalization), INFO)
+            log("Start to train the XGBOOST CLASSIFIER model({}) with {}".format(df.shape, is_normalization), INFO)
             model = xgb.XGBClassifier(learning_rate=learning_rate,
                                       n_estimators=n_estimators,
                                       max_depth=max_depth,
@@ -287,7 +307,7 @@ class StrategyEngine(object):
                 ave_x, std_x = stats["ave_x"], stats["std_x"]
                 ave_y, std_y = stats["ave_y"], stats["std_y"]
 
-            log("Start to train the RANDOM FOREST CLASSIFIER model({}) from {}".format(df.shape, filepath), INFO)
+            log("Start to train the RANDOM FOREST CLASSIFIER model({}) with {}".format(df.shape, is_normalization), INFO)
             model = RandomForestClassifier(n_estimators=n_estimators,
                                            max_depth=max_depth,
                                            max_fetures=max_fetures,
