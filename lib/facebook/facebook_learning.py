@@ -28,7 +28,7 @@ from utils import log, DEBUG, INFO, WARN, ERROR
 from utils import create_folder, make_a_stamp
 from load import save_cache, load_cache
 
-IP_BEANSTALK, PORT_BEANSTALK = "127.0.0.1", 11300
+IP_BEANSTALK, PORT_BEANSTALK = "rongqis-iMac.local", 11300
 TASK_BEANSTALK = "facebook_checkin_competition"
 
 class BaseEngine(object):
