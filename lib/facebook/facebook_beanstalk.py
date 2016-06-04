@@ -14,18 +14,14 @@ import pymongo
 import beanstalkc
 
 from utils import log, make_a_stamp
-from utils import DEBUG, INFO, WARN
+from utils import DEBUG, INFO, WARN, IP_BEANSTALK, PORT_BEANSTALK, TIMEOUT_BEANSTALK, MONGODB_URL, MONGODB_INDEX
 from facebook_strategy import StrategyEngine
 from facebook_learning import KDTreeEngine, MostPopularEngine, ClassifierEngine, ProcessThread
 
 # beanstalk client
-IP_BEANSTALK, PORT_BEANSTALK = "rongqis-iMac.local", 11300
-TALK, TIMEOUT_BEANSTALK = None, 60
+TALK = None
 
 # mongoDB
-MONGODB_URL = "mongodb://rongqis-iMac.local:27017"
-MONGODB_INDEX = "row_id"
-
 CLIENT = None
 
 def init(task="facebook_checkin_competition"):
@@ -37,13 +33,10 @@ def init(task="facebook_checkin_competition"):
     worker()
 
 def get_mongo_location(cache_workspace):
-    database = get_legal_name(os.path.basename(os.path.dirname(os.path.dirname(cache_workspace))))
-    collection = get_legal_name("{}_{}".format(os.path.basename(os.path.dirname(cache_workspace)), os.path.basename(cache_workspace)))
+    database = make_a_stamp(os.path.basename(os.path.dirname(os.path.dirname(cache_workspace))))
+    collection = make_a_stamp("{}_{}".format(os.path.basename(os.path.dirname(cache_workspace)), os.path.basename(cache_workspace)))
 
     return database, collection
-
-def get_legal_name(s):
-    return make_a_stamp(s)
 
 def worker():
     global CLIENT, CONNECTION, MONGODB_URL
