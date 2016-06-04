@@ -317,6 +317,9 @@ def load_cache(filepath, is_json=False, is_hdb=False, others=None, top=6, simple
                     obj[test_id].setdefault(place_id, 0)
                     obj[test_id][place_id] += score*weight
 
+                    if test_id == 5:
+                        log("{} {} {} {}".format(place_id, score, weight, obj[test_id][place_id]))
+
             rec = cursor.next()
 
         hdb.close()

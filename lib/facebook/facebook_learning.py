@@ -21,8 +21,9 @@ from scandir import scandir
 from operator import itemgetter
 from scipy import stats
 
+from facebook_utils import IP_BEANSTALK, PORT_BEANSTALK, TASK_BEANSTALK, TASK_BEANSTALK
 from facebook_strategy import StrategyEngine
-from utils import log, DEBUG, INFO, WARN, ERROR, IP_BEANSTALK, PORT_BEANSTALK, TASK_BEANSTALKTASK_BEANSTALK
+from utils import log, DEBUG, INFO, WARN, ERROR
 from utils import create_folder, make_a_stamp
 from load import save_cache, load_cache
 

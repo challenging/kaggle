@@ -12,15 +12,16 @@ import Queue
 import pandas as pd
 
 from load import load_cache
-from utils import log, INFO, MONGODB_URL, MONGODB_INDEX
+from utils import log, INFO
 from facebook.facebook_beanstalk import get_mongo_location
 from facebook.facebook_utils import transform_to_submission_format, save_submission
+from facebook.facebook_utils import MONGODB_URL, MONGODB_INDEX
 from configuration import FacebookConfiguration
 
 def run(queue, locations, filepath_prefix, batch_size=5000):
     mongo = pymongo.MongoClient(MONGODB_URL)
 
-    while True
+    while True:
         idx_min, idx_max = queue.get()
 
         results = {}
@@ -46,7 +47,7 @@ def run(queue, locations, filepath_prefix, batch_size=5000):
 @click.option("--n-jobs", default=4, help="number of thread")
 @click.option("--is-testing", is_flag=True, help="testing mode")
 @click.option("--is-beanstalk", is_flag=True, help="beanstalk mode")
-def facebook_ensemble(conf, mode, is_testing, is_beanstalk):
+def facebook_ensemble(conf, mode, n_jobs, is_testing, is_beanstalk):
     configuration = FacebookConfiguration(conf)
 
     results = {}

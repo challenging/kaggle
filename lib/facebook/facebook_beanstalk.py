@@ -14,7 +14,8 @@ import pymongo
 import beanstalkc
 
 from utils import log, make_a_stamp
-from utils import DEBUG, INFO, WARN, IP_BEANSTALK, PORT_BEANSTALK, TIMEOUT_BEANSTALK, MONGODB_URL, MONGODB_INDEX
+from utils import DEBUG, INFO, WARN
+from facebook_utils import IP_BEANSTALK, PORT_BEANSTALK, TIMEOUT_BEANSTALK, MONGODB_URL, MONGODB_INDEX
 from facebook_strategy import StrategyEngine
 from facebook_learning import KDTreeEngine, MostPopularEngine, ClassifierEngine, ProcessThread
 
