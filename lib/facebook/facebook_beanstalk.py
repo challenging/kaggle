@@ -83,25 +83,25 @@ def worker():
                         strategy_engine.get_most_popular_metrics(filepath_train, filepath_train_pkl, f, n_top, criteria[0], criteria[1], is_normalization)
 
                     test_id, test_x = get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
-                    if test_id == None or test_x == None:
-                        log("Empty file in {}".format(filepath_test), WARN)
-                        is_pass = False
-                    else:
+                    if np.any(test_id):
                         top = most_popular_engine.process(test_id, test_x, metrics, (strategy_engine.position_transformer,
                                                                                      (min_x, len_x, criteria[0]),
                                                                                      (min_y, len_y, criteria[1])),
                                                                                      is_cache=False)
+                    else:
+                        log("Empty file in {}".format(filepath_test), WARN)
+                        is_pass = False
                 elif method == StrategyEngine.STRATEGY_KDTREE:
                     kdtree_engine = KDTreeEngine(cache_workspace, n_top, is_testing)
 
                     metrics, mapping, score, (ave_x, std_x), (ave_y, std_y) = strategy_engine.get_kdtree(filepath_train, filepath_train_pkl, f, n_top, is_normalization)
 
                     test_id, test_x = ProcessThread.get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
-                    if test_id == None or test_x == None:
+                    if np.any(test_id):
+                        top = kdtree_engine.process(test_id, test_x, metrics, (mapping, score), is_cache=False)
+                    else:
                         log("Empty file in {}".format(filepath_test), WARN)
                         is_pass = False
-                    else:
-                        top = kdtree_engine.process(test_id, test_x, metrics, (mapping, score), is_cache=False)
                 elif method == StrategyEngine.STRATEGY_XGBOOST:
                     classifier_engine = ClassifierEngine(cache_workspace, n_top, is_testing)
                     log("The setting of XGC is {}".format(setting), INFO)
@@ -109,11 +109,11 @@ def worker():
                     metrics, (ave_x, std_x), (ave_y, std_y) = strategy_engine.get_xgboost_classifier(filepath_train, f, n_top, is_normalization, **setting)
 
                     test_id, test_x = ProcessThread.get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
-                    if not bool(test_id) or not bool(test_x):
+                    if np.any(test_id):
+                        top = classifier_engine.process(test_id, test_x, metrics, is_cache=False)
+                    else:
                         log("Empty file in {}".format(filepath_test), WARN)
                         is_pass = False
-                    else:
-                        top = classifier_engine.process(test_id, test_x, metrics, is_cache=False)
                 elif method == StrategyEngine.STRATEGY_RANDOMFOREST:
                     classifier_engine = ClassifierEngine(cache_workspace, n_top, is_testing)
                     log("The setting of RFC is {}".format(setting), INFO)
@@ -121,11 +121,11 @@ def worker():
                     metrics, (ave_x, std_x), (ave_y, std_y) = strategy_enging.get_randomforest_classifier(filepath_train, f, n_top, is_normalization, **setting)
 
                     test_id, test_x = ProcessThread.get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
-                    if test_id == None or test_x == None:
+                    if np.any(test_id):
+                        top = classifier_engine.process(test_id, test_x, metrics, is_cache=False)
+                    else:
                         log("Empty file in {}".format(filepath_test), WARN)
                         is_pass = False
-                    else:
-                        top = classifier_engine.process(test_id, test_x, metrics, is_cache=False)
                 else:
                     log("illegial method - {}".format(method), WARN)
                     is_pass = False
