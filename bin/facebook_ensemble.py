@@ -91,7 +91,7 @@ def facebook_ensemble(conf, mode, n_jobs, is_testing, is_beanstalk):
                 filepath_pkl = os.path.join(cache_workspace, "final_results.pkl")
                 log("The filepath_pkl is {}".format(filepath_pkl), INFO)
                 load_cache(filepath_pkl, is_hdb=True, others=(results, weight))
-                final_submission_filename.append("-".join([stamp[:len(stamp)/3], str(weight)]))
+                final_submission_filename.append("-".join([m, str(weight)]))
             elif mode == "vote":
                 filepath_submission = submission_workspace + ".10.csv"
                 log("start to read {}".format(filepath_submission), INFO)

@@ -109,7 +109,7 @@ def worker():
                     metrics, (ave_x, std_x), (ave_y, std_y) = strategy_engine.get_xgboost_classifier(filepath_train, f, n_top, is_normalization, **setting)
 
                     test_id, test_x = ProcessThread.get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
-                    if test_id == None or test_x == None:
+                    if not bool(test_id) or not bool(test_x):
                         log("Empty file in {}".format(filepath_test), WARN)
                         is_pass = False
                     else:
@@ -132,6 +132,7 @@ def worker():
 
                 if is_pass:
                     count = 0
+                    pool = []
                     for test_id, place_ids in top.items():
                         if place_ids:
                             r = {"row_id": test_id, "place_ids": []}
@@ -139,8 +140,11 @@ def worker():
                             for place_id, score in place_ids.items():
                                 r["place_ids"].append({"place_id": int(place_id), "score": score})
 
-                            count += mongo.update({"row_id": test_id}, {"$set": r}, upsert=True)["ok"]
-                    log("Insert {} records into the {}-{}".format(count, database, collection), INFO)
+                            pool.append(r)
+                            #count += mongo.update({"row_id": test_id}, {"$set": r}, upsert=True)["ok"]
+
+                    mongo.insert_many(pool)
+                    log("Insert {} records into the {}-{}".format(len(pool), database, collection), INFO)
 
 
                 job.delete()
