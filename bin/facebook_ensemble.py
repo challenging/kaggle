@@ -100,10 +100,10 @@ def run(queue, locations, filepath_prefix, batch_size=5000):
                     results[row_id].setdefault(place_id["place_id"], 0)
 
                     score = (place_id["score"]-avg)/std+min_std+eps
-                    results[row_id][place_id["place_id"]] += score*weight
+                    results[row_id][place_id["place_id"]] += score*(10**weight)
 
             timestamp_end = time.time()
-            log("Cost {:4f} secends to finish this job({} - {}) from {} of {}".format((timestamp_end-timestamp_start), idx_min, idx_max, collection, database), INFO)
+            log("Cost {:4f} secends to finish this job({} - {}) from {} of {} with {}({})".format((timestamp_end-timestamp_start), idx_min, idx_max, collection, database, weight, 10**weight), INFO)
 
         size = 3
         csv = transform_to_submission_format(results, size)
@@ -154,7 +154,6 @@ def facebook_ensemble(conf, mode, n_jobs, is_testing, is_beanstalk):
         batch_num = 100000
         batch_idx = max_num/batch_num
 
-        '''
         queue = Queue.Queue()
         for idx in xrange(0, batch_idx+1):
             queue.put((idx*batch_num, min(max_num, (idx+1)*batch_num)))
@@ -167,9 +166,6 @@ def facebook_ensemble(conf, mode, n_jobs, is_testing, is_beanstalk):
             thread.start()
 
         queue.join()
-        '''
-
-        filepath_prefix = "weight/2016-06-06-16-01"
 
         # merge file
         filepath_final = "{}/final.csv.gz".format(filepath_prefix)

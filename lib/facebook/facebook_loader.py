@@ -200,7 +200,7 @@ if __name__ == "__main__":
     #complex_split_data(filepath_train, time_column, time_func, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "2_way", "train"))
     #complex_split_data(filepath_test, time_column, time_func, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "2_way", "test"))
 
-    pos_split_data(filepath_train, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "train", "pos", "unit=0.05,0.05"))
+    #pos_split_data(filepath_train, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "train", "pos", "unit=0.05,0.05"))
     pos_split_data(filepath_test, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "test", "pos", "unit=0.05,0.05"))
 
     #time_split_data(filepath_train, "time", time_func, time_column, os.path.join(parent_folder, "train", time_column))

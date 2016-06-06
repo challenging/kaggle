@@ -350,23 +350,25 @@ def load_hdb(filepath, mongo):
     hdb = db.DB()
     hdb.open(filepath, None, db.DB_HASH, db.DB_CREATE)
 
-    pool, count = [], 0
+    pool, count = [], 1
 
     cursor = hdb.cursor()
     rec = cursor.first()
     while rec:
         test_id, value = rec[0], pickle.loads(rec[1])
 
-        if simple_mode:
-            row = {"row_id": int(test_id),
-                   "place_ids": [{"place_id": int(float(place_id)), "score": score} for place_id, score in value.items()]}
-            pool.append(row)
+        row = {"row_id": int(test_id),
+               "place_ids": [{"place_id": int(float(place_id)), "score": score} for place_id, score in value.items()]}
+        pool.append(row)
 
-            if len(pool) > 4999:
-                mongo.insert_many(pool)
-                count += len(pool)
+        if count % 10000 == 0:
+            mongo.insert_many(pool)
+            print count
 
-                pool = []
+            pool = []
+
+        rec = cursor.next()
+        count += 1
 
     if pool:
         mongo.insert_many(pool)
@@ -374,7 +376,17 @@ def load_hdb(filepath, mongo):
     hdb.close()
 
 if __name__ == "__main__":
-    for test_id, info in load_cache("/Users/rongqichen/Documents/programs/kaggle/cases/Facebook V - Predicting Check Ins/input/cache/64x64_windowsize=1_batchsize=500000_isaccuracy=False_excludeoutlier=False_istesting=False/method=most_popular_54cc3480ffb5b30f7744eba8dd2f663c.6/a32d479f49d2a30e4e3b57bb494dcac6.pkl").items():
-        print test_id, info
-        print type(test_id).__name__
-        break
+    import pymongo
+
+    MONGODB_URL = "mongodb://rongqis-iMac.local:27017"
+    mongo = pymongo.MongoClient(MONGODB_URL)
+    print 1111
+
+
+    filepath_pkl = "../../cases/Facebook V - Predicting Check Ins/input/cache/criteria=4096x4096_windowsize=0.1,0.1_batchsize=500000_isaccuracy=False_excludeoutlier=False_istesting=False/method=xgc_strategy=native.4bb98fa49cdbcc939b6322f54cceaa7f.10/1261f1e4f6e3ca29b8c014592683d1bc/final_results.pkl"
+    collection = mongo["0b77275cdceedece0191b48801b785f0"]["9143aa3f632905dda87851b5b82d682c"]
+    print 2222
+    load_hdb(filepath_pkl, collection)
+    print 3333
+
+    mongo.close()
