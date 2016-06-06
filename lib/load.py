@@ -18,10 +18,6 @@ from memory_profiler import profile
 from utils import log, DEBUG, INFO, WARN, create_folder
 from sklearn.preprocessing import PolynomialFeatures
 
-MONGODB_URL = "mongodb://127.0.0.1:27017"
-MONGODB_DATABASE = "kaggle_cache"
-MONGODB_BATCHSIZE = 10000
-
 def data_load(filepath_train="../input/train.csv", filepath_test="../input/test.csv", drop_fields=[], filepath_cache=None):
     log("Load data...", INFO)
 
@@ -298,6 +294,8 @@ def load_cache(filepath, is_json=False, is_hdb=False, others=None, top=6, simple
         hdb = db.DB()
         hdb.open(filepath, None, db.DB_HASH, db.DB_CREATE)
 
+        pool, count = [], 0
+
         cursor = hdb.cursor()
         rec = cursor.first()
         while rec:
@@ -305,8 +303,7 @@ def load_cache(filepath, is_json=False, is_hdb=False, others=None, top=6, simple
 
             if simple_mode:
                 obj[test_id] = value
-
-                if len(obj) % 10000 == 9999:
+                if len(obj) % 100000 == 99999:
                     log("the progress of loading cache is {}".format(len(obj)), INFO)
             else:
                 obj.setdefault(test_id, {})
@@ -317,7 +314,7 @@ def load_cache(filepath, is_json=False, is_hdb=False, others=None, top=6, simple
                     obj[test_id].setdefault(place_id, 0)
                     obj[test_id][place_id] += score*weight
 
-                    if test_id == 5:
+                    if str(test_id) == "5":
                         log("{} {} {} {}".format(place_id, score, weight, obj[test_id][place_id]))
 
             rec = cursor.next()
@@ -343,6 +340,38 @@ def load_cache(filepath, is_json=False, is_hdb=False, others=None, top=6, simple
         log("Spend {:8f} seconds to load cache from {}".format(timestamp_end-timestamp_start, filepath), INFO)
 
     return obj
+
+def load_hdb(filepath, mongo):
+    obj = {}
+
+    timestamp_start = time.time()
+    filepath += ".hdb"
+
+    hdb = db.DB()
+    hdb.open(filepath, None, db.DB_HASH, db.DB_CREATE)
+
+    pool, count = [], 0
+
+    cursor = hdb.cursor()
+    rec = cursor.first()
+    while rec:
+        test_id, value = rec[0], pickle.loads(rec[1])
+
+        if simple_mode:
+            row = {"row_id": int(test_id),
+                   "place_ids": [{"place_id": int(float(place_id)), "score": score} for place_id, score in value.items()]}
+            pool.append(row)
+
+            if len(pool) > 4999:
+                mongo.insert_many(pool)
+                count += len(pool)
+
+                pool = []
+
+    if pool:
+        mongo.insert_many(pool)
+
+    hdb.close()
 
 if __name__ == "__main__":
     for test_id, info in load_cache("/Users/rongqichen/Documents/programs/kaggle/cases/Facebook V - Predicting Check Ins/input/cache/64x64_windowsize=1_batchsize=500000_isaccuracy=False_excludeoutlier=False_istesting=False/method=most_popular_54cc3480ffb5b30f7744eba8dd2f663c.6/a32d479f49d2a30e4e3b57bb494dcac6.pkl").items():
