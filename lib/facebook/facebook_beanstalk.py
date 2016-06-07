@@ -137,7 +137,7 @@ def worker():
                     pool = []
                     for test_id, place_ids in top.items():
                         if place_ids:
-                            r = {"row_id": test_id, "place_ids": []}
+                            r = {"job_id": job_id, "setting": setting,"row_id": test_id, "place_ids": []}
 
                             for place_id, score in place_ids.items():
                                 r["place_ids"].append({"place_id": int(place_id), "score": score})
