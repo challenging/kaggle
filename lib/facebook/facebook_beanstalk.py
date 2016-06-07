@@ -146,8 +146,6 @@ def worker():
                     mongo.insert_many(pool)
                     log("Insert {} records into the {}-{}".format(len(pool), database, collection), INFO)
 
-
-                job.delete()
             except Exception as e:
                 log("Error occurs, {}".format(e), WARN)
 
@@ -156,6 +154,8 @@ def worker():
                     pass
                 else:
                     raise
+
+        job.delete()
 
 if __name__ == "__main__":
     init()
