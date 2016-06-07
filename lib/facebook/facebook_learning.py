@@ -345,7 +345,7 @@ def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accu
 
                     request = zlib.compress(json.dumps(string))
 
-                    talk.put(request)
+                    talk.put(request, ttr=600)
 
         talk.close()
 

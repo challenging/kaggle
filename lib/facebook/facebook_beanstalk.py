@@ -40,17 +40,19 @@ def get_mongo_location(cache_workspace):
     return database, collection
 
 def worker():
-    global CLIENT, CONNECTION, MONGODB_URL
+    global CLIENT
     CLIENT = pymongo.MongoClient(MONGODB_URL)
 
-    global TALK, TIMEOUT_BEANSTALK
+    global TALK
 
     strategy, is_accuracy, is_exclude_outlier, is_testing = None, False, False, False
     strategy_engine = StrategyEngine(strategy, is_accuracy, is_exclude_outlier, is_testing)
 
     while True:
+        TIMEOUT_BEANSTALK = 0
+
         job = TALK.reserve(timeout=TIMEOUT_BEANSTALK)
-        if job != None:
+        if job:
             try:
                 o = json.loads(zlib.decompress(job.body))
 
@@ -146,6 +148,7 @@ def worker():
                     mongo.insert_many(pool)
                     log("Insert {} records into the {}-{}".format(len(pool), database, collection), INFO)
 
+                job.delete()
             except Exception as e:
                 log("Error occurs, {}".format(e), WARN)
 
@@ -153,9 +156,7 @@ def worker():
                 if str(e).find("delete") != -1 and str(e).find("NOT_FOUND") != -1:
                     pass
                 else:
-                    raise
-
-        job.delete()
+                    job.delete()
 
 if __name__ == "__main__":
     init()
