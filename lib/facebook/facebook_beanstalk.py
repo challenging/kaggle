@@ -144,9 +144,6 @@ def worker():
 
                             pool.append(r)
 
-                            if test_id == 0:
-                                log(place_ids)
-
                     mongo.insert_many(pool)
                     log("{}. Insert {} records into the {}-{}".format(job_id, len(pool), database, collection), INFO)
 
