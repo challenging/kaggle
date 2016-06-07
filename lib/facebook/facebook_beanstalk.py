@@ -56,6 +56,7 @@ def worker():
             try:
                 o = json.loads(zlib.decompress(job.body))
 
+                job_id = o["id"]
                 method, strategy, setting = o["method"], o["strategy"], o["setting"]
                 n_top, criteria = o["n_top"], o["criteria"]
                 is_normalization, is_accuracy, is_exclude_outlier, is_testing = o["is_normalization"], o["is_accuracy"], o["is_exclude_outlier"], o["is_testing"]
@@ -133,7 +134,6 @@ def worker():
                     is_pass = False
 
                 if is_pass:
-                    count = 0
                     pool = []
                     for test_id, place_ids in top.items():
                         if place_ids:
@@ -143,10 +143,12 @@ def worker():
                                 r["place_ids"].append({"place_id": int(place_id), "score": score})
 
                             pool.append(r)
-                            #count += mongo.update({"row_id": test_id}, {"$set": r}, upsert=True)["ok"]
+
+                            if test_id == 0:
+                                log(place_ids)
 
                     mongo.insert_many(pool)
-                    log("Insert {} records into the {}-{}".format(len(pool), database, collection), INFO)
+                    log("{}. Insert {} records into the {}-{}".format(job_id, len(pool), database, collection), INFO)
 
                 job.delete()
             except Exception as e:

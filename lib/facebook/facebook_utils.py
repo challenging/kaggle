@@ -12,7 +12,7 @@ IP_BEANSTALK, PORT_BEANSTALK = "rongqis-iMac.local", 11300
 TIMEOUT_BEANSTALK=60
 TASK_BEANSTALK = "facebook_checkin_competition"
 
-MONGODB_URL = "mongodb://rongqis-iMac.local:27017"
+MONGODB_URL = "mongodb://{}:27017".format(IP_BEANSTALK)
 MONGODB_INDEX = "row_id"
 
 def transform_to_submission_format(results, n_top):

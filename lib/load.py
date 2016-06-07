@@ -378,25 +378,29 @@ def load_hdb(filepath, mongo):
 if __name__ == "__main__":
     import pymongo
 
-    MONGODB_URL = "mongodb://127.0.0.1:27017"
-    source_mongo = pymongo.MongoClient(MONGODB_URL)
-    source_collection = source_mongo["0b77275cdceedece0191b48801b785f0"]["9143aa3f632905dda87851b5b82d682c"]
+    databases = ["62286a324a0387544836fe5697f3c03b", "dbb7520319ec9d0be2fc3fa3ee1b6650", "9cde73cc5dc40dfb6f68c8062cd2e58c", "e55bc5b8b14368e14f16ce267a97d3d8", "eb5c956f7796566ef6f6ce2f0ac288ea"]
+    collections = ["d5107147445fc0e766563738e361f5fd", "9cde73cc5dc40dfb6f68c8062cd2e58c", "e15de427662ecbf1f732d273d96d3bb9", "a8429a94037198b497b601627a9dda85", "e15de427662ecbf1f732d273d96d3bb9"]
 
-    MONGODB_URL = "mongodb://rongqis-iMac.local:27017"
-    target_mongo = pymongo.MongoClient(MONGODB_URL)
-    target_collection = target_mongo["0b77275cdceedece0191b48801b785f0"]["9143aa3f632905dda87851b5b82d682c"]
-    target_collection.create_index("row_id")
+    for database, collection in zip(databases, collections):
+        MONGODB_URL = "mongodb://127.0.0.1:27017"
+        source_mongo = pymongo.MongoClient(MONGODB_URL)
+        source_collection = source_mongo[database][collection]
 
-    pool = []
-    for record in source_collection.find({}).batch_size(5000):
-        pool.append(record)
+        MONGODB_URL = "mongodb://rongqis-iMac.local:27017"
+        target_mongo = pymongo.MongoClient(MONGODB_URL)
+        target_collection = target_mongo[database][collection]
+        target_collection.create_index("row_id")
 
-        if len(pool) > 4999:
+        pool = []
+        for record in source_collection.find({}).batch_size(5000):
+            pool.append(record)
+
+            if len(pool) > 4999:
+                target_collection.insert_many(pool)
+                pool = []
+
+        if pool:
             target_collection.insert_many(pool)
-            pool = []
 
-    if pool:
-        target_collection.insert_many(pool)
-
-    source_mongo.close()
-    target_mongo.close()
+        source_mongo.close()
+        target_mongo.close()

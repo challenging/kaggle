@@ -330,7 +330,8 @@ def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accu
 
                     df_test = StrategyEngine.get_dataframe(filepath_test)
 
-                    string = {"method": method,
+                    string = {"id": os.path.basename(filepath_test),
+                              "method": method,
                               "strategy": strategy,
                               "setting": setting,
                               "n_top": n_top,
@@ -346,6 +347,7 @@ def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accu
                     request = zlib.compress(json.dumps(string))
 
                     talk.put(request, ttr=600)
+                    log("Put {} into the queue".format(filepath_test), INFO)
 
         talk.close()
 
