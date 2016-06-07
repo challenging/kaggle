@@ -23,7 +23,8 @@ from configuration import ModelConfParser
 @click.option("--is-testing", is_flag=True, help="Testing mode")
 @click.option("--methodology", required=True, help="Tune parameters of which methodology")
 @click.option("--nfold", default=3, help="the number of nfold")
-def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf):
+@click.option("--n-estimator", default=200, help="the number of estimator")
+def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf, n_estimator):
     drop_fields = []
 
     parser = ModelConfParser(conf)
@@ -125,7 +126,7 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf):
 
     params = tuning(train_x, train_y, test_id, test_x, cost, objective,
                     filepath_feature_importance, filepath_tuning, filepath_submission, methodology, nfold, top_feature,
-                    thread=n_jobs)
+                    n_estimator=n_estimator, thread=n_jobs)
 
     log("The final parameters are {}".format(params))
 

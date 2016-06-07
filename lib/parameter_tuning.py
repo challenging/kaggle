@@ -11,12 +11,15 @@ import xgboost as xgb
 
 from sklearn import cross_validation, metrics   #Additional scklearn functions
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, ExtraTreesClassifier, ExtraTreesRegressor
+from sklearn.naive_bayes import MultinomialNB, BernoulliNB, GaussianNB
+from sklearn.svm import SVC
+from sklearn.linear_model import SGDClassifier
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.grid_search import GridSearchCV   #Perforing grid search
 from sklearn.metrics import roc_auc_score, log_loss, make_scorer
 from sklearn.feature_selection import SelectFromModel
 
-from utils import create_folder, log, INFO, WARN
+from utils import create_folder, log, INFO, WARN, ERROR
 from load import load_data, data_transform_2, load_cache, save_cache, load_interaction_information, load_feature_importance, save_kaggle_submission
 
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
@@ -475,34 +478,143 @@ class XGBoostingTuning(ParameterTuning):
 
         return self.get_model_instance().get_params()
 
+class GaussianTuning(ParameterTuning):
+    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1):
+        ParameterTuning.__init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
+
+    def get_model_instance(self):
+        return GaussianNB()
+
+    def process(self):
+        self.phase("phase1", {})
+
+        return self.get_model_instance().get_params()
+
+class SVCTuning(ParameterTuning):
+    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1):
+        ParameterTuning.__init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
+
+        self.default_C, self.C = 1.0, None
+        self.default_degree, self.degree = 3, None
+        self.default_coef0, self.coef0 = 0.5, None
+
+    def get_model_instance(self):
+        C = self.get_value("C")
+        degree = self.get_value("degree")
+        coef0 = self.get_value("coef0")
+
+        return SVC(C=C, degree=degree, coef0=coef0, probability=True, random_state=self.random_state)
+
+    def process(self):
+        self.phase("phase1", {})
+
+        param2 = {"C": [1.5, 1.0, 0.5]}
+        self.phase("phase2", param2 , True)
+
+        param3 = {"degree": [2, 3, 4]}
+        self.phase("phase3", param3, True)
+
+        param4 = {"coef0": [1.0, 0.75, 0.25]}
+        self.phase("phase4", param4, True)
+
+        return self.get_model_instance().get_params()
+
+class MultinomialTuning(ParameterTuning):
+    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1):
+        ParameterTuning.__init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
+
+        self.default_alpha, self.alpha = 50.0, None
+
+    def get_model_instance(self):
+        alpha = self.get_value("alpha")
+
+        return MultinomialNB(alpha=alpha, class_prior=None, fit_prior=True)
+
+    def process(self):
+        self.phase("phase1", {})
+
+        param2 = {"alpha": [75.0, 50.0, 25.0]}
+        self.phase("phase2", param2, True)
+
+        return self.get_model_instance().get_params()
+
+class BernoulliTuning(ParameterTuning):
+    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1):
+        ParameterTuning.__init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
+
+        self.default_alpha, self.alpha = 1.0, None
+        self.default_binarize, self.binarize = None, None
+
+    def get_model_instance(self):
+        alpha = self.get_value("alpha")
+
+        if self.method == "classifier":
+            log("Current parameters - alpha: {}".format(alpha))
+
+            return BernoulliNB(alpha=alpha, class_prior=None, fit_prior=True)
+
+        elif self.method == "regressor":
+            raise NotImplementError
+
+    def process(self):
+        self.phase("phase1", {})
+
+        param2 = {"alpha": [0.75, 0.5, 0.25]}
+        self.phase("phase2", param2, True)
+
+        param3 = {"binarize": [0.0, 1.0, 10.0]}
+        self.phase("phase3", param3, True)
+
+        return self.get_model_instance().get_params()
+
 def tuning(train_x, train_y, test_id, test_x, cost, objective,
            filepath_feature_importance, filepath_tuning, filepath_submission, methodology, nfold, top_feature,
-           thread=-1):
+           n_estimator=200, thread=-1):
 
     algorithm, is_xgboosting, is_classifier = None, False, False
-    if methodology.find("xg") > -1 or methodology.find("xgboosting") > -1:
-        if methodology[-1] == "c" or methodology == "classifier":
-            algorithm = XGBoostingTuning(methodology, "Target", "ID", "classifier", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+    if methodology.find("xg") > -1:
+        if methodology[-1] == "c":
+            algorithm = XGBoostingTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
 
             is_classifier = True
-        elif methodology[-1] == "r" or methodology == "regressor":
-            algorithm = XGBoostingTuning(methodology, "Target", "ID", "regressor", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+        elif methodology[-1] == "r":
+            algorithm = XGBoostingTuning(methodology, "Target", "ID", "regressor", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
 
         is_xgboosting = True
-    elif methodology.find("rf") > -1 or methodology.find("randomforest") > -1:
-        if methodology[-1] == "c" or methodology == "classifier":
-            algorithm = RandomForestTuning(methodology, "Target", "ID", "classifier", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+    elif methodology.find("rf") > -1:
+        if methodology[-1] == "c":
+            algorithm = RandomForestTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
 
             is_classifier = True
-        elif methodology[-1] == "r" or methodology == "regressor":
-            algorithm = RandomForestTuning(methodology, "Target", "ID", "regressor", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
-    elif methodology.find("et") > -1 or methodology.find("extratree"):
-        if methodology[-1] == "c" or methodology == "classifier":
-            algorithm = ExtraTreeTuning(methodology, "Target", "ID", "classifier", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+        elif methodology[-1] == "r":
+            algorithm = RandomForestTuning(methodology, "Target", "ID", "regressor", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+    elif methodology.find("et") > -1:
+        if methodology[-1] == "c":
+            algorithm = ExtraTreeTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
 
             is_classifier = True
-        elif methodology[-1] == "r" or methodology == "regressor":
-            algorithm = ExtraTreeTuning(methodology, "Target", "ID", "regressor", cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+        elif methodology[-1] == "r":
+            algorithm = ExtraTreeTuning(methodology, "Target", "ID", "regressor", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+    elif methodology.find("mb") > -1:
+        if methodology[-1] == "c":
+            algorithm = MultinomialTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+
+            is_classifier = True
+    elif methodology.find("bb") > -1:
+        if methodology[-1] == "c":
+            algorithm = BernoulliTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+
+            is_classifier = True
+    elif methodology.find("gb") > -1:
+        if methodology[-1] == "c":
+            algorithm = GaussianTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+
+            is_classifier = True
+    elif methodology.find("sv") > -1:
+        if methodology[-1] == "c":
+            algorithm = SVCTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+
+            is_classifier = True
 
     if algorithm == None:
         log("Not support this algorithm - {}".format(methodology), ERROR)

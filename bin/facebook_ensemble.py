@@ -78,6 +78,15 @@ def run(queue, locations, filepath_prefix, batch_size=5000):
     MONGODB_URL = "mongodb://127.0.0.1:27017"
     mongo = pymongo.MongoClient(MONGODB_URL)
 
+    def scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, weight, eps):
+        for place_ids in pre_place_ids:
+            for place_id in place_ids:
+                results[pre_row_id].setdefault(place_id["place_id"], 0)
+
+                score = (place_id["score"]-avg)/std+min_std+eps
+                results[pre_row_id][place_id["place_id"]] += score*(10**weight)/size
+
+
     eps = 0.0001
     mm_database, mm_collection = "facebook_checkin_competition", "min_max"
     while True:
@@ -91,16 +100,23 @@ def run(queue, locations, filepath_prefix, batch_size=5000):
                 std = r["std"]
                 min_std = (r["min"] - r["avg"])/r["std"]*-1+0.0001
 
+            pre_row_id = None
+            pre_place_ids = []
+
             timestamp_start = time.time()
-            for record in mongo[database][collection].find({MONGODB_INDEX: {"$gte": idx_min, "$lt": idx_max}}).batch_size(batch_size):
+            for record in mongo[database][collection].find({MONGODB_INDEX: {"$gte": idx_min, "$lt": idx_max}}).sort({MONDOB_INDEX: pymongo.ASCENDING}).batch_size(batch_size):
                 row_id = record[MONGODB_INDEX]
-                results.setdefault(row_id, {})
 
-                for place_id in record["place_ids"]:
-                    results[row_id].setdefault(place_id["place_id"], 0)
+                if pre_row_id != None and pre_row_id != row_id:
+                    results.setdefault(pre_row_id, {})
 
-                    score = (place_id["score"]-avg)/std+min_std+eps
-                    results[row_id][place_id["place_id"]] += score*(10**weight)
+                    scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, weight, eps)
+                    pre_place_ids = []
+
+                pre_row_id = row_id
+                pre_place_ids.append(record["place_ids"])
+
+            scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, weight, eps)
 
             timestamp_end = time.time()
             log("Cost {:4f} secends to finish this job({} - {}) from {} of {} with {}({})".format((timestamp_end-timestamp_start), idx_min, idx_max, collection, database, weight, 10**weight), INFO)

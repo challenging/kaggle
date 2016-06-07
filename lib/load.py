@@ -378,15 +378,25 @@ def load_hdb(filepath, mongo):
 if __name__ == "__main__":
     import pymongo
 
+    MONGODB_URL = "mongodb://127.0.0.1:27017"
+    source_mongo = pymongo.MongoClient(MONGODB_URL)
+    source_collection = source_mongo["0b77275cdceedece0191b48801b785f0"]["9143aa3f632905dda87851b5b82d682c"]
+
     MONGODB_URL = "mongodb://rongqis-iMac.local:27017"
-    mongo = pymongo.MongoClient(MONGODB_URL)
-    print 1111
+    target_mongo = pymongo.MongoClient(MONGODB_URL)
+    target_collection = target_mongo["0b77275cdceedece0191b48801b785f0"]["9143aa3f632905dda87851b5b82d682c"]
+    target_collection.create_index("row_id")
 
+    pool = []
+    for record in source_collection.find({}).batch_size(5000):
+        pool.append(record)
 
-    filepath_pkl = "../../cases/Facebook V - Predicting Check Ins/input/cache/criteria=4096x4096_windowsize=0.1,0.1_batchsize=500000_isaccuracy=False_excludeoutlier=False_istesting=False/method=xgc_strategy=native.4bb98fa49cdbcc939b6322f54cceaa7f.10/1261f1e4f6e3ca29b8c014592683d1bc/final_results.pkl"
-    collection = mongo["0b77275cdceedece0191b48801b785f0"]["9143aa3f632905dda87851b5b82d682c"]
-    print 2222
-    load_hdb(filepath_pkl, collection)
-    print 3333
+        if len(pool) > 4999:
+            target_collection.insert_many(pool)
+            pool = []
 
-    mongo.close()
+    if pool:
+        target_collection.insert_many(pool)
+
+    source_mongo.close()
+    target_mongo.close()

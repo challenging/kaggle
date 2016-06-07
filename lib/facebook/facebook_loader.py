@@ -188,13 +188,13 @@ if __name__ == "__main__":
     range_y, size_y = [float(x)/20 for x in range(0, 220, 1)], [0.05]
     '''
 
-    range_x, size_x = [float(x)/20 for x in range(0, 220, 1)], [0.1, 0.1]
-    range_y, size_y = [float(x)/20 for x in range(0, 220, 1)], [0.1, 0.2]
+    range_x, size_x = [float(x)/20 for x in range(0, 220, 1)], [0.1]
+    range_y, size_y = [float(x)/20 for x in range(0, 220, 1)], [0.1]
 
     time_column = "hourofday"
     time_func = lambda t: (t/60)%24
 
-    #place_info_index(filepath_train, time_column, time_func, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "place_index", "train", "unit=0.05"))
+    place_info_index(filepath_test, time_column, time_func, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "place_index", "test", "unit=0.05,0.05"))
     #place_info(filepath_train, time_column, time_func, output_folder=os.path.join(parent_folder, "place", "train"))
 
     #complex_split_data(filepath_train, time_column, time_func, range_x, range_y, size_x, size_y, output_folder=os.path.join(parent_folder, "2_way", "train"))
