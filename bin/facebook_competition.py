@@ -62,9 +62,9 @@ def run(n_jobs, is_testing, is_beanstalk, configuration):
                             filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_normalization, is_beanstalk, is_testing,\
                             n_top=n_top, n_jobs=max(1, n_jobs))
 
-        results = transform_to_submission_format(results, n_top)
-
         if results:
+            results = transform_to_submission_format(results, n_top)
+
             for size in [n_top, 3]:
                 filepath_output = submission_workspace + ".{}.csv".format(size)
                 save_submission(filepath_output, results, size, is_full=is_full)
