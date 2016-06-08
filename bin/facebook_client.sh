@@ -1,6 +1,6 @@
 #!/bin/sh
 
-BASEPATH=.
+BASEPATH=$(dirname $0)
 BASEPATH_LIB=${BASEPATH}/../lib/facebook
 
 BEANSTALK_CLIENT=${BASEPATH_LIB}/facebook_beanstalk.py
