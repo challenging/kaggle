@@ -303,7 +303,7 @@ class ProcessThread(BaseCalculatorThread):
             timestamp_end = time.time()
             log("Cost {:8f} seconds to finish the prediction of {} by {}, {}".format(timestamp_end-timestamp_start, filepath_train, self.method, self.queue.qsize()), INFO)
 
-def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_normalization, is_beanstalk, is_testing,
+def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accuracy, is_exclude_outlier, is_normalization, is_beanstalk, is_testing, dropout,
             n_top=3, n_jobs=8):
 
     results = {}
@@ -324,9 +324,9 @@ def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accu
                 if os.stat(filepath_train).st_size > 34 and os.path.exists(filepath_test):
                     df_train = None
                     if strategy == "native":
-                        df_train = StrategyEngine.get_dataframe(filepath_train, 2)
+                        df_train = StrategyEngine.get_dataframe(filepath_train, 2, dropout)
                     else:
-                        df_train = StrategyEngine.get_dataframe(filepath_train, 1)
+                        df_train = StrategyEngine.get_dataframe(filepath_train, 1, dropout)
 
                     df_test = StrategyEngine.get_dataframe(filepath_test)
 

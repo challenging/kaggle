@@ -40,19 +40,35 @@ class StrategyEngine(object):
             thread.start()
 
     @staticmethod
-    def get_dataframe(filepath, kind=0):
+    def get_dataframe(filepath, kind=0, dropout=None):
         df = None
 
+        if dropout:
+            dropout = int(dropout)
+
         if isinstance(filepath, str) and os.path.exists(filepath):
-            if kind == 1:
-                df = pd.read_csv(filepath, dtype={"row_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int}, index_col=["place_id"])
-            elif kind == 2:
+            if kind in [1, 2]:
                 df = pd.read_csv(filepath, dtype={"row_id": np.int, "place_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int})
+
+                if dropout:
+                    original_size = df.shape[0]
+                    df = df.groupby("place_id").filter(lambda x: len(x) >= dropout)
+                    log("{} Before: {} rows || After: {} rows".format(dropout, filepath, original_size, df.shape[0]), INFO)
+
+                if kind == 1:
+                    df.index = df["place_id"].values
+
+                    df = df.drop(["place_id"], axis=1)
             else:
                 df = pd.read_csv(filepath)
 
         elif isinstance(filepath, pd.DataFrame):
             df = filepath
+
+            if dropout and "place_id" in df.columns:
+                original_size = df.shape[0]
+                df = df.groupby("place_id").filter(lambda x: len(x) >= dropout)
+                log("Before: %d rows || After: %d rows" % (original_size, df.shape[0]), INFO)
 
         return df
 
@@ -129,7 +145,6 @@ class StrategyEngine(object):
 
         if self.strategy != "native":
             timestamp_start = time.time()
-            #df = pd.read_csv(filepath, dtype={"row_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int}, index_col=["place_id"])
             df = self.get_dataframe(filepath, 1)
 
             if is_normalization:
@@ -146,7 +161,6 @@ class StrategyEngine(object):
             timestamp_end = time.time()
             log("Cost {:8f} secends to filter out the outliner, {}".format(timestamp_end-timestamp_start, results.shape), INFO)
         else:
-            #df = pd.read_csv(filepath, dtype={"row_id": np.int, "place_id": np.int, "x":np.float, "y":np.float, "accuracy": np.int, "time": np.int})
             df = self.get_dataframe(filepath, 2)
 
             if is_normalization:
@@ -211,7 +225,6 @@ class StrategyEngine(object):
         return pd.DatetimeIndex(initial_date + np.timedelta64(int(mn), 'm') for mn in values)
 
     def preprocess_classifier(self, filepath):
-        #df = pd.read_csv(filepath)
         df = self.get_dataframe(filepath)
 
         d_times = self.get_d_time(df["time"].values)

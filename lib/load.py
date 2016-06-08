@@ -341,7 +341,7 @@ def load_cache(filepath, is_json=False, is_hdb=False, others=None, top=6, simple
 
     return obj
 
-def load_hdb(filepath, mongo):
+def import_hdb(filepath, mongo):
     obj = {}
 
     timestamp_start = time.time()
@@ -361,9 +361,9 @@ def load_hdb(filepath, mongo):
                "place_ids": [{"place_id": int(float(place_id)), "score": score} for place_id, score in value.items()]}
         pool.append(row)
 
-        if count % 10000 == 0:
+        if count % 20000 == 0:
             mongo.insert_many(pool)
-            print count
+            log("{} -> {}".format(filepath, count))
 
             pool = []
 

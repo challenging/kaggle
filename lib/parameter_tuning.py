@@ -19,13 +19,15 @@ from sklearn.grid_search import GridSearchCV   #Perforing grid search
 from sklearn.metrics import roc_auc_score, log_loss, make_scorer
 from sklearn.feature_selection import SelectFromModel
 
+from ml_metrics import mapk
+
 from utils import create_folder, log, INFO, WARN, ERROR
 from load import load_data, data_transform_2, load_cache, save_cache, load_interaction_information, load_feature_importance, save_kaggle_submission
 
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
 
 class ParameterTuning(object):
-    def __init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs):
+    def __init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs, is_saving=True):
         self.method = methodology
 
         self.target = target
@@ -33,7 +35,18 @@ class ParameterTuning(object):
         self.method = method
 
         self.n_estimator = n_estimator
-        self.cost = cost
+        self.cost = None
+
+        print cost
+        if cost == "log_loss":
+            self.cost = cost
+        elif cost == "roc_auc":
+            self.cost = cost
+        else:
+            if cost == "mapk":
+                self.cost = make_scorer(mapk)
+
+        log("The cost function is {}".format(self.cost), INFO)
 
         self.objective = objective
         self.cv = cv
@@ -47,6 +60,8 @@ class ParameterTuning(object):
         self.train_selector = None
 
         self.done = {}
+
+        self.is_saving = is_saving
 
     def set_filepath(self, filepath, filepath_testing):
         self.filepath = filepath
@@ -65,7 +80,8 @@ class ParameterTuning(object):
         self.predictors = predictors
 
     def save(self):
-        save_cache(self.done, self.filepath)
+        if self.is_saving:
+            save_cache(self.done, self.filepath)
 
     def load(self):
         self.done = load_cache(self.filepath)
@@ -108,7 +124,7 @@ class ParameterTuning(object):
             filepath_training = self.filepath_testing.replace("submission", "{}/training_{}".format(self.method, phase))
             self.submit(model, filepath_training, "training")
 
-            log("Improve the {} from {} to {}".format(self.cost, old_cost, self.best_cost))
+            log("Improve {} from {} to {}".format(self.cost, old_cost, self.best_cost))
         else:
             if not micro_tuning:
                 for key, value in params.items():
@@ -310,7 +326,7 @@ class ParameterTuning(object):
             log("Not support calibrated prediction model for {}".format(self.method), WARN)
 
 class RandomForestTuning(ParameterTuning):
-    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="logloss", objective="entropy", cv=10, n_jobs=-1):
+    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="logloss", objective="entropy", cv=10, n_jobs=-1, is_saving=True):
         ParameterTuning.__init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
 
         self.default_criterion, self.criterion = "entropy", None
@@ -406,7 +422,7 @@ class ExtraTreeTuning(RandomForestTuning):
                                        n_jobs=-1)
 
 class XGBoostingTuning(ParameterTuning):
-    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1):
+    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1, is_saving=True):
         ParameterTuning.__init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
 
         self.default_learning_rate, self.learning_rate = 0.1, None
@@ -479,7 +495,7 @@ class XGBoostingTuning(ParameterTuning):
         return self.get_model_instance().get_params()
 
 class GaussianTuning(ParameterTuning):
-    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1):
+    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1, is_saving=True):
         ParameterTuning.__init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
 
     def get_model_instance(self):
@@ -491,7 +507,7 @@ class GaussianTuning(ParameterTuning):
         return self.get_model_instance().get_params()
 
 class SVCTuning(ParameterTuning):
-    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1):
+    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1, is_saving=True):
         ParameterTuning.__init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
 
         self.default_C, self.C = 1.0, None
@@ -520,7 +536,7 @@ class SVCTuning(ParameterTuning):
         return self.get_model_instance().get_params()
 
 class MultinomialTuning(ParameterTuning):
-    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1):
+    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1, is_saving=True):
         ParameterTuning.__init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
 
         self.default_alpha, self.alpha = 50.0, None
@@ -539,7 +555,7 @@ class MultinomialTuning(ParameterTuning):
         return self.get_model_instance().get_params()
 
 class BernoulliTuning(ParameterTuning):
-    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1):
+    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1, is_saving=True):
         ParameterTuning.__init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
 
         self.default_alpha, self.alpha = 1.0, None
@@ -569,50 +585,50 @@ class BernoulliTuning(ParameterTuning):
 
 def tuning(train_x, train_y, test_id, test_x, cost, objective,
            filepath_feature_importance, filepath_tuning, filepath_submission, methodology, nfold, top_feature,
-           n_estimator=200, thread=-1):
+           n_estimator=200, thread=-1, is_saving=True):
 
     algorithm, is_xgboosting, is_classifier = None, False, False
     if methodology.find("xg") > -1:
         if methodology[-1] == "c":
-            algorithm = XGBoostingTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+            algorithm = XGBoostingTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold, is_saving=is_saving)
 
             is_classifier = True
         elif methodology[-1] == "r":
-            algorithm = XGBoostingTuning(methodology, "Target", "ID", "regressor", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+            algorithm = XGBoostingTuning(methodology, "Target", "ID", "regressor", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold, is_saving=is_saving)
 
         is_xgboosting = True
     elif methodology.find("rf") > -1:
         if methodology[-1] == "c":
-            algorithm = RandomForestTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+            algorithm = RandomForestTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold, is_saving=is_saving)
 
             is_classifier = True
         elif methodology[-1] == "r":
-            algorithm = RandomForestTuning(methodology, "Target", "ID", "regressor", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+            algorithm = RandomForestTuning(methodology, "Target", "ID", "regressor", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold, is_saving=is_saving)
     elif methodology.find("et") > -1:
         if methodology[-1] == "c":
-            algorithm = ExtraTreeTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+            algorithm = ExtraTreeTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold, is_saving=is_saving)
 
             is_classifier = True
         elif methodology[-1] == "r":
-            algorithm = ExtraTreeTuning(methodology, "Target", "ID", "regressor", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+            algorithm = ExtraTreeTuning(methodology, "Target", "ID", "regressor", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold, is_saving=is_saving)
     elif methodology.find("mb") > -1:
         if methodology[-1] == "c":
-            algorithm = MultinomialTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+            algorithm = MultinomialTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold, is_saving=is_saving)
 
             is_classifier = True
     elif methodology.find("bb") > -1:
         if methodology[-1] == "c":
-            algorithm = BernoulliTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+            algorithm = BernoulliTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold, is_saving=is_saving)
 
             is_classifier = True
     elif methodology.find("gb") > -1:
         if methodology[-1] == "c":
-            algorithm = GaussianTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+            algorithm = GaussianTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold, is_saving=is_saving)
 
             is_classifier = True
     elif methodology.find("sv") > -1:
         if methodology[-1] == "c":
-            algorithm = SVCTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold)
+            algorithm = SVCTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold, is_saving=is_saving)
 
             is_classifier = True
 
@@ -626,7 +642,7 @@ def tuning(train_x, train_y, test_id, test_x, cost, objective,
 
     algorithm.set_filepath(filepath_tuning, filepath_submission)
 
-    if os.path.exists(filepath_tuning):
+    if is_saving and os.path.exists(filepath_tuning):
         log("Load the cache file from {}".format(filepath_tuning), INFO)
         algorithm.load()
 

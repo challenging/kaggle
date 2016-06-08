@@ -34,8 +34,14 @@ def init(task="facebook_checkin_competition"):
     worker()
 
 def get_mongo_location(cache_workspace):
-    database = make_a_stamp(os.path.basename(os.path.dirname(os.path.dirname(cache_workspace))))
-    collection = make_a_stamp("{}_{}".format(os.path.basename(os.path.dirname(cache_workspace)), os.path.basename(cache_workspace)))
+    folder_setting = os.path.basename(cache_workspace)
+    folder_method = os.path.dirname(cache_workspace)
+    folder_grid = os.path.dirname(folder_method)
+
+    database = make_a_stamp("{}_{}".format(folder_grid, folder_method))
+    collection = folder_setting
+
+    log("{} {} --> {} {}".format(folder_grid, folder_method, database, collection), INFO)
 
     return database, collection
 
@@ -137,7 +143,7 @@ def worker():
                     pool = []
                     for test_id, place_ids in top.items():
                         if place_ids:
-                            r = {"job_id": job_id, "setting": setting,"row_id": test_id, "place_ids": []}
+                            r = {"grid": job_id, "row_id": test_id, "place_ids": []}
 
                             for place_id, score in place_ids.items():
                                 r["place_ids"].append({"place_id": int(place_id), "score": score})

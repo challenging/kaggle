@@ -36,7 +36,7 @@ class FacebookConfiguration(KaggleConfiguration):
             for folder in [workspace, cache_workspace, output_workspace]:
                 folder = folder.replace("RungChiChen", "rongqichen")
 
-        method, criteria, strategy, stamp, (window_size, batch_size, n_top), is_accuracy, is_exclude_outlier, is_normalization = self.get_method_detail(section)
+        method, criteria, strategy, stamp, (window_size, batch_size, n_top), is_accuracy, is_exclude_outlier, is_normalization, dropout = self.get_method_detail(section)
 
         setting = self.get_setting("{}-SETTING".format(section))
         setting_stamp = make_a_stamp(setting)
@@ -44,16 +44,17 @@ class FacebookConfiguration(KaggleConfiguration):
         normalization = "normalization_" if is_normalization else ""
         grid_size = criteria if isinstance(criteria, str) else "x".join(criteria)
 
+        dropout_mark = "_dropout={}".format(dropout) if dropout else ""
         if method == "native":
-            cache_workspace = "{}/{}criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}.{}.{}/{}".format(\
-                cache_workspace, normalization, grid_size, window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, stamp, n_top, setting_stamp)
-            submission_workspace = "{}/{}criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/{}/method={}.{}.{}".format(\
-                output_workspace, normalization, grid_size, window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, setting_stamp, method, stamp, n_top)
+            cache_workspace = "{}/{}criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}{}/method={}.{}.{}/{}".format(\
+                cache_workspace, normalization, grid_size, window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, dropout_mark, method, stamp, n_top, setting_stamp)
+            submission_workspace = "{}/{}criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}{}/{}/method={}.{}.{}".format(\
+                output_workspace, normalization, grid_size, window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, dropout_mark, setting_stamp, method, stamp, n_top)
         else:
-            cache_workspace = "{}/{}criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/method={}_strategy={}.{}.{}/{}".format(\
-                cache_workspace, normalization, grid_size, window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, method, strategy, stamp, n_top, setting_stamp)
-            submission_workspace = "{}/{}criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}/{}/method={}_strategy={}.{}.{}".format(\
-                output_workspace, normalization, grid_size, window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, setting_stamp, method, strategy, stamp, n_top)
+            cache_workspace = "{}/{}criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}{}/method={}_strategy={}.{}.{}/{}".format(\
+                cache_workspace, normalization, grid_size, window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, dropout_mark, method, strategy, stamp, n_top, setting_stamp)
+            submission_workspace = "{}/{}criteria={}_windowsize={}_batchsize={}_isaccuracy={}_excludeoutlier={}_istesting={}{}/{}/method={}_strategy={}.{}.{}".format(\
+                output_workspace, normalization, grid_size, window_size, batch_size, is_accuracy, is_exclude_outlier, is_testing, dropout_mark, setting_stamp, method, strategy, stamp, n_top)
 
         return workspace, cache_workspace, submission_workspace
 
@@ -83,6 +84,7 @@ class FacebookConfiguration(KaggleConfiguration):
 
     def get_method_detail(self, section):
         method, criteria, strategy = "most_popular", ("4096", "4096"), "native"
+        dropout = None
 
         if self.config.has_option(section, "name"):
             method = self.config.get(section, "name")
@@ -97,7 +99,7 @@ class FacebookConfiguration(KaggleConfiguration):
             if strategy == None:
                 strategy = "native"
 
-        return method, criteria, strategy, self.get_stamp(section), self.get_size(section), self.is_accuracy(section), self.is_exclude_outlier(section), self.is_normalization(section)
+        return method, criteria, strategy, self.get_stamp(section), self.get_size(section), self.is_accuracy(section), self.is_exclude_outlier(section), self.is_normalization(section), self.get_value(section, "dropout")
 
     def get_stamp(self, section):
         names = self.config.get(section, "workspace").split("/")

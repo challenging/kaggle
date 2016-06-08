@@ -15,7 +15,9 @@ import Queue
 import numpy as np
 import pandas as pd
 
-from load import load_cache
+from joblib import Parallel, delayed
+
+from load import load_cache, import_hdb
 from utils import create_folder, log, INFO
 from facebook.facebook_beanstalk import get_mongo_location
 from facebook.facebook_utils import transform_to_submission_format, save_submission
@@ -23,7 +25,6 @@ from facebook.facebook_utils import MONGODB_URL, MONGODB_INDEX
 from configuration import FacebookConfiguration
 
 def normalize(queue):
-    MONGODB_URL = "mongodb://127.0.0.1:27017"
     mongo = pymongo.MongoClient(MONGODB_URL)
     mm_database, mm_collection = "facebook_checkin_competition", "min_max"
 
@@ -75,7 +76,6 @@ def normalize(queue):
     mongo.close()
 
 def run(queue, locations, filepath_prefix, batch_size=5000):
-    MONGODB_URL = "mongodb://127.0.0.1:27017"
     mongo = pymongo.MongoClient(MONGODB_URL)
 
     def scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, weight, eps):
@@ -104,7 +104,7 @@ def run(queue, locations, filepath_prefix, batch_size=5000):
             pre_place_ids = []
 
             timestamp_start = time.time()
-            for record in mongo[database][collection].find({MONGODB_INDEX: {"$gte": idx_min, "$lt": idx_max}}).sort({MONDOB_INDEX: pymongo.ASCENDING}).batch_size(batch_size):
+            for record in mongo[database][collection].find({MONGODB_INDEX: {"$gte": idx_min, "$lt": idx_max}}).sort({MONGODB_INDEX: pymongo.ASCENDING}).batch_size(batch_size):
                 row_id = record[MONGODB_INDEX]
 
                 if pre_row_id != None and pre_row_id != row_id:
@@ -130,13 +130,28 @@ def run(queue, locations, filepath_prefix, batch_size=5000):
 
     mongo.close()
 
+def _import_hdb(configuration, m):
+    mongo = pymongo.MongoClient(MONGODB_URL)
+
+    workspace, cache_workspace, submission_workspace = configuration.get_workspace(m, False)
+    log("The workspace is {}".format(workspace), INFO)
+
+    filepath_pkl = os.path.join(cache_workspace, "final_results.pkl")
+    log("The filepath_pkl is {}".format(filepath_pkl), INFO)
+
+    database, collection = get_mongo_location(cache_workspace)
+    import_hdb(filepath_pkl, mongo[database][collection])
+
+    mongo.close()
+
 @click.command()
 @click.option("--conf", required=True, help="filepath of Configuration")
 @click.option("--mode", default="vote", help="ensemble mode")
 @click.option("--n-jobs", default=4, help="number of thread")
+@click.option("--is-import", is_flag=True, help="import HDB file into the MongoDB")
 @click.option("--is-testing", is_flag=True, help="testing mode")
 @click.option("--is-beanstalk", is_flag=True, help="beanstalk mode")
-def facebook_ensemble(conf, mode, n_jobs, is_testing, is_beanstalk):
+def facebook_ensemble(conf, mode, n_jobs, is_import, is_testing, is_beanstalk):
     configuration = FacebookConfiguration(conf)
 
     results = {}
@@ -190,7 +205,8 @@ def facebook_ensemble(conf, mode, n_jobs, is_testing, is_beanstalk):
         for f in glob.iglob("{}/*.csv".format(filepath_prefix)):
             rc = subprocess.call("tail -n +2 {} | gzip -9 >> {}".format(f, filepath_final), shell=True)
             log("Append {} to the end of {}".format(f, filepath_final), INFO)
-
+    elif is_import:
+        Parallel(n_jobs=6)(delayed(_import_hdb)(configuration, m) for m in configuration.get_methods())
     else:
         for m in configuration.get_methods():
             workspace, cache_workspace, submission_workspace = configuration.get_workspace(m, False)
