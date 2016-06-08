@@ -55,8 +55,6 @@ def worker():
     strategy_engine = StrategyEngine(strategy, is_accuracy, is_exclude_outlier, is_testing)
 
     while True:
-        TIMEOUT_BEANSTALK = 0
-
         job = TALK.reserve(timeout=TIMEOUT_BEANSTALK)
         if job:
             try:
