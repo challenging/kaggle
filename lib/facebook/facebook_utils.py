@@ -8,7 +8,7 @@ from heapq import nlargest
 
 from utils import log, INFO
 
-IP_BEANSTALK, PORT_BEANSTALK = "rongqis-iMac.local", 11300
+IP_BEANSTALK, PORT_BEANSTALK = "rongqide-Mac-mini.local", 11300
 TIMEOUT_BEANSTALK=60
 TASK_BEANSTALK = "facebook_checkin_competition"
 
