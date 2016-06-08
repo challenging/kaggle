@@ -330,6 +330,10 @@ def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accu
 
                     df_test = StrategyEngine.get_dataframe(filepath_test)
 
+                    if df_train.shape[0] < 1:
+                        log("Skip the filepath_train due to the empty file({})".format(filepath_train), INFO)
+                        continue
+
                     string = {"id": os.path.basename(filepath_test),
                               "method": method,
                               "strategy": strategy,
