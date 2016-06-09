@@ -21,7 +21,7 @@ from load import load_cache, import_hdb
 from utils import create_folder, log, INFO
 from facebook.facebook_beanstalk import get_mongo_location
 from facebook.facebook_utils import transform_to_submission_format, save_submission
-from facebook.facebook_utils import MONGODB_URL, MONGODB_INDEX
+from facebook.facebook_utils import MONGODB_URL, MONGODB_INDEX, MONGODB_VALUE, MONGODB_SCORE, MONGODB_BATCH_SIZE
 from configuration import FacebookConfiguration
 
 def normalize(queue):
@@ -42,9 +42,9 @@ def normalize(queue):
         if rmin == np.inf:
             row_n = 0
             xx, x, n = 0.0, 0.0, 0
-            for record in mongo[database][collection].find({}, {"place_ids": 1}):
-                for info in record["place_ids"]:
-                    score = info["score"]
+            for record in mongo[database][collection].find({}, {MONGODB_VALUE: 1}):
+                for info in record[MONGODB_VALUE]:
+                    score = info[MONGODB_SCORE]
 
                     xx += score**2
                     x += score
@@ -149,13 +149,12 @@ def _import_hdb(configuration, m):
 @click.option("--mode", default="vote", help="ensemble mode")
 @click.option("--n-jobs", default=4, help="number of thread")
 @click.option("--is-import", is_flag=True, help="import HDB file into the MongoDB")
-@click.option("--is-testing", is_flag=True, help="testing mode")
 @click.option("--is-beanstalk", is_flag=True, help="beanstalk mode")
-def facebook_ensemble(conf, mode, n_jobs, is_import, is_testing, is_beanstalk):
+def facebook_ensemble(conf, mode, n_jobs, is_import, is_beanstalk):
     configuration = FacebookConfiguration(conf)
 
     results = {}
-    final_submission_filename = ["weight"]
+    final_submission_filename = [mode]
 
     if is_beanstalk:
         locations = []
@@ -177,7 +176,6 @@ def facebook_ensemble(conf, mode, n_jobs, is_import, is_testing, is_beanstalk):
             thread = threading.Thread(target=normalize, kwargs={"queue": queue})
             thread.setDaemon(True)
             thread.start()
-
         queue.join()
         log("Finish getting the min and max values", INFO)
 
@@ -225,7 +223,6 @@ def facebook_ensemble(conf, mode, n_jobs, is_import, is_testing, is_beanstalk):
 
                 df = pd.read_csv(filepath_submission, dtype={"row_id": str, "place_id": str})
 
-                count = 0
                 for value in df.values:
                     [row_id, place_ids] = value
 
@@ -238,14 +235,41 @@ def facebook_ensemble(conf, mode, n_jobs, is_import, is_testing, is_beanstalk):
                     for place_id, vote in zip(place_ids.split(" "), [(n_end-idx) for idx in range(0, n_end)]):
                         results[row_id].setdefault(place_id, 0)
                         results[row_id][place_id] += vote
+            elif mode == "simple":
+                pool = {}
 
-                    count += 1
-                    if is_testing and count > 10000:
-                        break
+                filepath_submission = submission_workspace + ".3.csv"
+                create_folder(filepath_submission)
+                log("The submission filepath is {}".format(filepath_submission), INFO)
 
-        csv = transform_to_submission_format(results, 3)
-        filepath_output = "{}.{}.3.csv".format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"), "_".join(final_submission_filename))
-        save_submission(filepath_output, csv, size, is_full=True)
+                mongo = pymongo.MongoClient(MONGODB_URL)
+
+                database, collection = get_mongo_location(cache_workspace)
+                for count, record in enumerate(mongo[database][collection].find({}).batch_size(MONGODB_BATCH_SIZE)):
+                    row_id = str(record[MONGODB_INDEX])
+
+                    pool.setdefault(row_id, {})
+                    for info in record[MONGODB_VALUE]:
+                        place_id, score = info[MONGODB_VALUE[:-1]], info[MONGODB_SCORE]
+
+                        pool[row_id].setdefault(place_id, 0)
+                        pool[row_id][place_id] += score
+
+                    if count % 100000 == 0:
+                        log("The progress is {}".format(count), INFO)
+
+                size = 3
+                csv = transform_to_submission_format(pool, size)
+                filepath_output = "{}.{}.{}.{}.{}.csv".format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"), os.path.basename(conf).replace(".cfg", ""), m.lower(), "_".join(final_submission_filename), size)
+                save_submission(filepath_output, csv, size, is_full=True)
+
+                mongo.close()
+
+        if results:
+            size = 3
+            csv = transform_to_submission_format(results, size)
+            filepath_output = "{}.{}.{}.csv".format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"), "_".join(final_submission_filename), size)
+            save_submission(filepath_output, csv, size, is_full=True)
 
 if __name__ == "__main__":
     facebook_ensemble()

@@ -321,7 +321,7 @@ def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accu
                 filepath_test = filepath_train.replace("train", "test")
 
                 # Avoid the empty file
-                if os.stat(filepath_train).st_size > 34 and os.path.exists(filepath_test):
+                if os.path.exists(filepath_test):
                     df_train = None
                     if strategy == "native":
                         df_train = StrategyEngine.get_dataframe(filepath_train, 2, dropout)
@@ -350,7 +350,7 @@ def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accu
 
                     request = zlib.compress(json.dumps(string))
 
-                    talk.put(request, ttr=600)
+                    talk.put(request, priority=42, ttr=600)
                     log("Put {} into the queue".format(filepath_test), INFO)
 
         talk.close()

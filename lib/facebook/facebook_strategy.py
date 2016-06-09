@@ -53,7 +53,7 @@ class StrategyEngine(object):
                 if dropout:
                     original_size = df.shape[0]
                     df = df.groupby("place_id").filter(lambda x: len(x) >= dropout)
-                    log("{} Before: {} rows || After: {} rows".format(dropout, filepath, original_size, df.shape[0]), INFO)
+                    log("{} Before: {} rows || After: {} rows".format(dropout, original_size, df.shape[0]), INFO)
 
                 if kind == 1:
                     df.index = df["place_id"].values

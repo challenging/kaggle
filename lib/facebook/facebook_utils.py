@@ -13,7 +13,11 @@ TIMEOUT_BEANSTALK=60
 TASK_BEANSTALK = "facebook_checkin_competition"
 
 MONGODB_URL = "mongodb://{}:27017".format(IP_BEANSTALK)
+MONGODB_BATCH_SIZE = 5000
+
 MONGODB_INDEX = "row_id"
+MONGODB_VALUE = "place_ids"
+MONGODB_SCORE = "score"
 
 def transform_to_submission_format(results, n_top):
     timestamp_start = time.time()
