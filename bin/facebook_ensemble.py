@@ -79,6 +79,9 @@ def run(queue, locations, filepath_prefix, batch_size=5000):
     mongo = pymongo.MongoClient(MONGODB_URL)
 
     def scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, weight, eps):
+        results.setdefault(pre_row_id, {})
+        size = len(pre_place_ids)
+
         for place_ids in pre_place_ids:
             for place_id in place_ids:
                 results[pre_row_id].setdefault(place_id["place_id"], 0)
@@ -104,12 +107,10 @@ def run(queue, locations, filepath_prefix, batch_size=5000):
             pre_place_ids = []
 
             timestamp_start = time.time()
-            for record in mongo[database][collection].find({MONGODB_INDEX: {"$gte": idx_min, "$lt": idx_max}}).sort({MONGODB_INDEX: pymongo.ASCENDING}).batch_size(batch_size):
+            for record in mongo[database][collection].find({MONGODB_INDEX: {"$gte": idx_min, "$lt": idx_max}}).sort([(MONGODB_INDEX, pymongo.ASCENDING)]).batch_size(batch_size):
                 row_id = record[MONGODB_INDEX]
 
                 if pre_row_id != None and pre_row_id != row_id:
-                    results.setdefault(pre_row_id, {})
-
                     scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, weight, eps)
                     pre_place_ids = []
 
