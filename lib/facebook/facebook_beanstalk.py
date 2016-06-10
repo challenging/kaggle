@@ -160,3 +160,9 @@ def worker():
                     pass
                 else:
                     job.delete()
+
+if __name__ == "__main__":
+    init()
+
+    CLIENT.close()
+    TALK.close()
