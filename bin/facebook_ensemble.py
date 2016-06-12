@@ -237,32 +237,49 @@ def facebook_ensemble(conf, mode, n_jobs, is_import, is_beanstalk):
                         results[row_id].setdefault(place_id, 0)
                         results[row_id][place_id] += vote
             elif mode == "simple":
-                pool = {}
+                size = 3
 
-                filepath_submission = submission_workspace + ".3.csv"
+                filepath_submission = submission_workspace + ".{}.csv".format(size)
                 create_folder(filepath_submission)
                 log("The submission filepath is {}".format(filepath_submission), INFO)
 
+                filepath_output = "{}.{}.{}.{}.{}.csv".format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"), os.path.basename(conf).replace(".cfg", ""), m.lower(), "_".join(final_submission_filename), size)
+
                 mongo = pymongo.MongoClient(MONGODB_URL)
 
+                pre_row_id = None
                 database, collection = get_mongo_location(cache_workspace)
-                for count, record in enumerate(mongo[database][collection].find({}).batch_size(MONGODB_BATCH_SIZE)):
-                    row_id = str(record[MONGODB_INDEX])
 
-                    pool.setdefault(row_id, {})
-                    for info in record[MONGODB_VALUE]:
-                        place_id, score = info[MONGODB_VALUE[:-1]], info[MONGODB_SCORE]
+                def score(n_top, ranking):
+                    line = []
 
-                        pool[row_id].setdefault(place_id, 0)
-                        pool[row_id][place_id] += score
+                    for place_id, most_popular in nlargest(n_top, sorted(ranking.items()), key=lambda (k, v): v):
+                        line.append(str(place_id))
 
-                    if count % 100000 == 0:
-                        log("The progress is {}".format(count), INFO)
+                    return " ".join(line)
 
-                size = 3
-                csv = transform_to_submission_format(pool, size)
-                filepath_output = "{}.{}.{}.{}.{}.csv".format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"), os.path.basename(conf).replace(".cfg", ""), m.lower(), "_".join(final_submission_filename), size)
-                save_submission(filepath_output, csv, size, is_full=True)
+                with open(filepath_output, "wb") as OUTPUT:
+                    pool = {}
+                    OUTPUT.write("row_id,place_id\n")
+
+                    for count, record in enumerate(mongo[database][collection].find({}).sort([(MONGODB_INDEX, pymongo.ASCENDING)]).batch_size(MONGODB_BATCH_SIZE)):
+                        row_id = str(record[MONGODB_INDEX])
+
+                        if pre_row_id != None and pre_row_id != row_id:
+                            OUTPUT.write("{},{}\n".format(row_id, score(size, pool)))
+
+                            pool = {}
+
+                        for info in record[MONGODB_VALUE]:
+                            place_id, score = info[MONGODB_VALUE[:-1]], info[MONGODB_SCORE]
+
+                            pool[row_id].setdefault(place_id, 0)
+                            pool[row_id][place_id] += score
+
+                        if count % 500000 == 0 and count > 0:
+                            log("The progress is {}".format(count), INFO)
+
+                    OUTPUT.write("{},{}\n".format(pre_row_id, score(size, pool)))
 
                 mongo.close()
 

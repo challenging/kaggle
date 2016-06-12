@@ -6,6 +6,7 @@ BeautifulSoup==3.2.1
 beautifulsoup4==4.4.1
 bingads==10.4.1
 bs4==0.0.1
+bsddb3==6.2.1
 cffi==1.4.2
 characteristic==14.3.0
 chardet==2.3.0
