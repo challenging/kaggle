@@ -9,6 +9,7 @@ from heapq import nlargest
 from utils import log, INFO
 
 IP_BEANSTALK, PORT_BEANSTALK = "rongqide-Mac-mini.local", 11300
+#IP_BEANSTALK = "sakaes-MacBook-Pro.local"
 TIMEOUT_BEANSTALK=60
 TASK_BEANSTALK = "facebook_checkin_competition"
 
@@ -18,6 +19,8 @@ MONGODB_BATCH_SIZE = 5000
 MONGODB_INDEX = "row_id"
 MONGODB_VALUE = "place_ids"
 MONGODB_SCORE = "score"
+
+FULL_SET = [0, 8607231]
 
 def transform_to_submission_format(results, n_top):
     timestamp_start = time.time()
@@ -37,13 +40,18 @@ def transform_to_submission_format(results, n_top):
 
     return csv_format
 
-def save_submission(filepath, results, n_top=3, is_full=False):
-    if is_full and len(results) < 8607230:
-        for test_id in range(0, 8607230):
+def save_submission(filepath, results, n_top=3, is_full=[]):
+    ori_count = len(results)
+    if is_full and len(results) < (is_full[1]-is_full[0]):
+        for test_id in range(is_full[0], is_full[1]):
             results.setdefault(str(test_id), "")
-    else:
-        for test_id, info in results.items():
-            results[test_id] = " ".join(info.split(" ")[:n_top])
+
+    new_count = len(results)
+    if ori_count != new_count:
+        log("Add {} row into the results".format(new_count-ori_count), INFO)
+
+    for test_id, info in results.items():
+        results[test_id] = " ".join(info.split(" ")[:n_top])
 
     pd.DataFrame(results.items(), columns=["row_id", "place_id"]).to_csv(filepath, index=False)
 

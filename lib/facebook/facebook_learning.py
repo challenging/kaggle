@@ -130,8 +130,9 @@ class ClassifierEngine(BaseEngine):
                 top.setdefault(test_id, {})
 
                 for place_id, proba in sorted(pair.items(), key=(lambda (k, v): v), reverse=True)[:self.n_top]:
-                    top[test_id].setdefault(place_id, 0)
-                    top[test_id][place_id] += 10**proba
+                    if proba > 0:
+                        top[test_id].setdefault(place_id, 0)
+                        top[test_id][place_id] += 10**proba
 
             if not self.is_testing and is_cache:
                 save_cache(top, filepath)
@@ -204,37 +205,6 @@ class ProcessThread(BaseCalculatorThread):
             thread.setDaemon(True)
             thread.start()
 
-    @staticmethod
-    def get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y):
-        test_id, test_x = None, None
-
-        df = StrategyEngine.get_dataframe(filepath_test)
-        log("There are {} reocrds in {}".format(df.values.shape, filepath_test if isinstance(filepath_test, str) else ""), INFO)
-
-        test_id = df["row_id"].values
-        if method in [StrategyEngine.STRATEGY_XGBOOST, StrategyEngine.STRATEGY_RANDOMFOREST]:
-            d_times = StrategyEngine.get_d_time(df["time"].values)
-
-            df["hourofday"] = d_times.hour
-            df["dayofmonth"] = d_times.day
-            df["weekday"] = d_times.weekday
-            df["monthofyear"] = d_times.month
-            df["year"] = d_times.year
-
-            if is_normalization:
-                df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
-                df["y"] = (df["y"] - ave_y) / (std_y + 0.00000001)
-
-            test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday", "year"]].values
-        else:
-            if is_normalization:
-                df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
-                df["y"] = (df["y"] - ave_y) / (std_y + 0.00000001)
-
-            test_x = df[["x", "y"]].values
-
-        return test_id, test_x
-
     def run(self):
         while True:
             timestamp_start = time.time()
@@ -262,16 +232,20 @@ class ProcessThread(BaseCalculatorThread):
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_xgboost_classifier.__name__.lower(), filename))
                 log("The setting of XGC is {}".format(self.setting), INFO)
                 metrics, (ave_x, std_x), (ave_y, std_y) = self.strategy_engine.get_xgboost_classifier(filepath_train, f, self.n_top, self.is_normalization, **self.setting)
-            elif self.method == self.strategy_engine.STRATEGY_RANDOM_FOREST:
+            elif self.method == self.strategy_engine.STRATEGY_RANDOMFOREST:
                 f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_randomforest_classifier.__name__.lower(), filename))
                 log("The setting of RFC is {}".format(self.setting), INFO)
-                metrics, (ave_x, std_x), (ave_y, std_y) = self.strategy_enging.get_randomforest_classifier(filepath_train, f, self.n_top, self.is_normalization, **self.setting)
+                metrics, (ave_x, std_x), (ave_y, std_y) = self.strategy_engine.get_randomforest_classifier(filepath_train, f, self.n_top, self.is_normalization, **self.setting)
+            elif self.method == self.strategy_engine.STRATEGY_KNN:
+                f = os.path.join(self.cache_workspace, "{}.{}.pkl".format(self.strategy_engine.get_knn_classifier.__name__.lower(), filename))
+                log("The setting of KNN is {}".format(self.setting), INFO)
+                metrics, (ave_x, std_x), (ave_y, std_y) = self.strategy_engine.get_knn_classifier(filepath_train, f, self.n_top, self.is_normalization, **self.setting)
             else:
                 log("Not implement this method, {}".format(self.method), ERROR)
                 raise NotImplementedError
 
             if os.path.exists(filepath_test):
-                test_id, test_x = get_testing_dataset(filepath_test, self.method, self.is_normalization, ave_x, std_x, ave_y, std_y)
+                test_id, test_x = StrategyEngine.get_testing_dataset(filepath_test, self.method, self.is_normalization, ave_x, std_x, ave_y, std_y)
 
                 top = []
                 if self.method == self.strategy_engine.STRATEGY_KDTREE:
@@ -290,7 +264,7 @@ class ProcessThread(BaseCalculatorThread):
                                                                                       (min_x, len_x, self.criteria[0]),
                                                                                       (min_y, len_y, self.criteria[1])))
                     self.update_results(top)
-                elif self.method in [self.strategy_engine.STRATEGY_XGBOOST, self.strategy_engine.STRATEGY_RANDOMFOREST]:
+                elif self.method in [self.strategy_engine.STRATEGY_XGBOOST, self.strategy_engine.STRATEGY_RANDOMFOREST, self.strategy_engine.STRATEGY_KNN]:
                     top = self.classifier_engine.process(test_id, test_x, metrics)
                     self.update_results(top)
                 else:
@@ -322,6 +296,14 @@ def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accu
 
                 # Avoid the empty file
                 if os.path.exists(filepath_test):
+                    # workaround
+                    filename = os.path.basename(filepath_test).replace(".csv", "")
+                    x, y  = filename.split("_")
+                    x = float(x)
+                    y = float(y)
+                    if x < 2.8 or (x == 2.8 and y <= 8.3):
+                        continue
+
                     df_train = None
                     if strategy == "native":
                         df_train = StrategyEngine.get_dataframe(filepath_train, 2, dropout)
@@ -350,7 +332,7 @@ def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accu
 
                     request = zlib.compress(json.dumps(string))
 
-                    talk.put(request, priority=42, ttr=600)
+                    talk.put(request, ttr=600)
                     log("Put {} into the queue".format(filepath_test), INFO)
 
         talk.close()

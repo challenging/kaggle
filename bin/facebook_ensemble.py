@@ -75,19 +75,40 @@ def normalize(queue):
 
     mongo.close()
 
-def run(queue, locations, filepath_prefix, batch_size=5000):
+def weighted(score, weight):
+    return score*1000**weight
+
+def run(mode, queue, locations, filepath_prefix, batch_size=5000):
     mongo = pymongo.MongoClient(MONGODB_URL)
 
-    def scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, weight, eps):
+    def scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, weight, eps, mode):
         results.setdefault(pre_row_id, {})
         size = len(pre_place_ids)
 
-        for place_ids in pre_place_ids:
-            for place_id in place_ids:
-                results[pre_row_id].setdefault(place_id["place_id"], 0)
+        if mode == "weight":
+            for place_ids in pre_place_ids:
+                for place_id in place_ids:
+                    results[pre_row_id].setdefault(place_id["place_id"], 0)
 
-                score = (place_id["score"]-avg)/std+min_std+eps
-                results[pre_row_id][place_id["place_id"]] += score*(10**weight)/size
+                    score = (place_id["score"]-avg)/std+min_std+eps
+                    results[pre_row_id][place_id["place_id"]] += weighted(score, weight)/size
+        elif mode == "vote":
+            score = {0: 10,
+                     1: 9,
+                     2: 9,
+                     3: 8,
+                     4: 8,
+                     5: 7,
+                     6: 7,
+                     7: 6,
+                     8: 6,
+                     9: 5}
+
+            for place_ids in pre_place_ids:
+                for c, place_id in enumerate(sorted(place_ids, key=lambda x: x.values()[1], reverse=True)):
+                    results[pre_row_id].setdefault(place_id["place_id"], 0)
+
+                    results[pre_row_id][place_id["place_id"]] += score[c]/size
 
 
     eps = 0.0001
@@ -111,21 +132,21 @@ def run(queue, locations, filepath_prefix, batch_size=5000):
                 row_id = record[MONGODB_INDEX]
 
                 if pre_row_id != None and pre_row_id != row_id:
-                    scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, weight, eps)
+                    scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, weight, eps, mode)
                     pre_place_ids = []
 
                 pre_row_id = row_id
                 pre_place_ids.append(record["place_ids"])
 
-            scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, weight, eps)
+            scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, weight, eps, mode)
 
             timestamp_end = time.time()
-            log("Cost {:4f} secends to finish this job({} - {}) from {} of {} with {}({})".format((timestamp_end-timestamp_start), idx_min, idx_max, collection, database, weight, 10**weight), INFO)
+            log("Cost {:4f} secends to finish this job({} - {}) from {} of {} with {}".format((timestamp_end-timestamp_start), idx_min, idx_max, collection, database, weight), INFO)
 
         size = 3
         csv = transform_to_submission_format(results, size)
         filepath_output = "{}/{}.{}.{}.csv".format(filepath_prefix, threading.current_thread().ident, size, idx_min)
-        save_submission(filepath_output, csv, size)
+        save_submission(filepath_output, csv, size, is_full=[idx_min, idx_max])
 
         queue.task_done()
 
@@ -167,7 +188,7 @@ def facebook_ensemble(conf, mode, n_jobs, is_import, is_beanstalk):
             database, collection = get_mongo_location(cache_workspace)
             weight = configuration.get_weight(m)
 
-            locations.append((database, collection ,weight))
+            locations.append((database, collection, weight))
 
         queue = Queue.Queue()
         for database, collection, _ in locations:
@@ -191,7 +212,7 @@ def facebook_ensemble(conf, mode, n_jobs, is_import, is_beanstalk):
         filepath_prefix = "{}/{}".format(mode, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"))
         create_folder(filepath_prefix + "/1.txt")
         for idx in range(0, n_jobs):
-            thread = threading.Thread(target=run, kwargs={"queue": queue, "locations": locations, "filepath_prefix": filepath_prefix})
+            thread = threading.Thread(target=run, kwargs={"mode": mode, "queue": queue, "locations": locations, "filepath_prefix": filepath_prefix})
             thread.setDaemon(True)
             thread.start()
 
@@ -199,6 +220,7 @@ def facebook_ensemble(conf, mode, n_jobs, is_import, is_beanstalk):
 
         # merge file
         filepath_final = "{}/final.csv.gz".format(filepath_prefix)
+        filepath_final = "{}/{}.{}.{}.3.csv.gz".format(filepath_prefix, os.path.basename(conf).replace(".cfg", ""), m.lower(), "_".join(final_submission_filename))
         rc = subprocess.call("echo 'row_id,place_id' | gzip -9 > {}".format(filepath_final), shell=True)
 
         for f in glob.iglob("{}/*.csv".format(filepath_prefix)):
@@ -270,6 +292,7 @@ def facebook_ensemble(conf, mode, n_jobs, is_import, is_beanstalk):
 
                             pool = {}
 
+                        pool.setdefault(row_id, {})
                         for info in record[MONGODB_VALUE]:
                             place_id, score = info[MONGODB_VALUE[:-1]], info[MONGODB_SCORE]
 
@@ -287,7 +310,7 @@ def facebook_ensemble(conf, mode, n_jobs, is_import, is_beanstalk):
             size = 3
             csv = transform_to_submission_format(results, size)
             filepath_output = "{}.{}.{}.csv".format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"), "_".join(final_submission_filename), size)
-            save_submission(filepath_output, csv, size, is_full=True)
+            save_submission(filepath_output, csv, size, is_full=FULL_SET)
 
 if __name__ == "__main__":
     facebook_ensemble()

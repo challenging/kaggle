@@ -8,12 +8,11 @@ import click
 import numpy as np
 import pandas as pd
 
-import feature_engineering
+from sklearn.decomposition import PCA
 
 from utils import create_folder, log, INFO, WARN, ERROR
-from load import load_data, data_transform_2, load_interaction_information, save_cache, load_cache
-from parameter_tuning import XGBoostingTuning, RandomForestTuning, ExtraTreeTuning, tuning
-from feature_engineering import pca
+from load import load_data, save_cache, load_cache
+from parameter_tuning import tuning
 from configuration import ModelConfParser
 
 @click.command()
@@ -52,13 +51,25 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf, n_est
     d_times = pd.DatetimeIndex(initial_date + np.timedelta64(int(mn), 'm') for mn in df_training["time"].values)
 
     train_x = df_training[["x", "y", "accuracy", "time"]]
-    train_x["hourofday"] = d_times.hour
-    train_x["dayofmonth"] = d_times.day
-    train_x["weekday"] = d_times.weekday
-    train_x["monthofyear"] = d_times.month
-    train_x["year"] = d_times.year
+    train_x["x"] *= 500
+    train_x["y"] *= 1000
+    train_x["hourofday"] = d_times.hour*4
+    train_x["dayofmonth"] = d_times.day*1.0/24
+    train_x["weekday"] = d_times.weekday*3
+    train_x["monthofyear"] = d_times.month*2
+    train_x["year"] = (d_times.year-2013)*10
 
+    train_x = train_x.drop(["accuracy"], axis=1)
     train_x = train_x.drop(["time"], axis=1)
+
+    pca_weight = None
+    if is_pca:
+        pca = PCA(n_components=len(train_x.columns))
+        pca.fit(train_x.values)
+        pca_weight = pca.explained_variance_ratio_
+
+        train_x = train_x*pca_weight
+
     train_y = df_training["place_id"].astype(str)
 
     values, counts = np.unique(train_y, return_counts=True)
@@ -66,12 +77,19 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf, n_est
     d_times = pd.DatetimeIndex(initial_date + np.timedelta64(int(mn), 'm') for mn in df_testing["time"].values)
 
     test_x = df_testing[["x", "y", "accuracy", "time"]]
-    test_x["hourofday"] = d_times.hour
-    test_x["dayofmonth"] = d_times.day
-    test_x["weekday"] = d_times.weekday
-    test_x["monthofyear"] = d_times.month
-    test_x["year"] = d_times.year
+    test_x["x"] *= 500
+    test_x["y"] *= 1000
+    test_x["hourofday"] = d_times.hour*4
+    test_x["dayofmonth"] = d_times.day*1.0/24
+    test_x["weekday"] = d_times.weekday*3
+    test_x["monthofyear"] = d_times.month*2
+    test_x["year"] = (d_times.year-2013)*10
+
+    test_x = test_x.drop(["accuracy"], axis=1)
     test_x = test_x.drop(["time"], axis=1)
+
+    if is_pca:
+        test_x = test_x*pca_weight
 
     pool = []
     for value, count in zip(values, counts):

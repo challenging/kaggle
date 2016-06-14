@@ -18,6 +18,7 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.grid_search import GridSearchCV   #Perforing grid search
 from sklearn.metrics import roc_auc_score, log_loss, make_scorer
 from sklearn.feature_selection import SelectFromModel
+from sklearn.neighbors import KNeighborsClassifier
 
 from ml_metrics import mapk
 
@@ -232,7 +233,7 @@ class ParameterTuning(object):
 
         model = None
         a, b, c = None, None, None
-        if micro_cost > best_cost:
+        if micro_cost >= best_cost:
             model = gsearch2
             a, b, c = micro_cost, micro_params, micro_scores
         else:
@@ -583,6 +584,27 @@ class BernoulliTuning(ParameterTuning):
 
         return self.get_model_instance().get_params()
 
+class KNNTuning(ParameterTuning):
+    def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1, is_saving=True):
+        ParameterTuning.__init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
+
+        self.default_n_neighbors, self.n_neighbors = 5, None
+        self.default_leaf_size, self.leaf_size = 30, None
+
+    def get_model_instance(self):
+        return KNeighborsClassifier(n_neighbors=self.get_value("n_neighbors"), weights="distance", metric='manhattan', leaf_size=self.get_value("leaf_size"))
+
+    def process(self):
+        self.phase("phase1", {})
+
+        param2 = {"n_neighbors": [5, 15, 25, 35, 45]}
+        self.phase("phase2", param2, True)
+
+        param3 = {"leaf_size": [25, 35, 40]}
+        self.phase("phase3", param3, True)
+
+        return self.get_model_instance().get_params()
+
 def tuning(train_x, train_y, test_id, test_x, cost, objective,
            filepath_feature_importance, filepath_tuning, filepath_submission, methodology, nfold, top_feature,
            n_estimator=200, thread=-1, is_saving=True):
@@ -631,6 +653,10 @@ def tuning(train_x, train_y, test_id, test_x, cost, objective,
             algorithm = SVCTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold, is_saving=is_saving)
 
             is_classifier = True
+    elif methodology.find("knn") > -1:
+        algorithm = KNNTuning(methodology, "Target", "ID", "classifier", n_estimator=n_estimator, cost=cost, objective=objective, n_jobs=thread, cv=nfold, is_saving=is_saving)
+
+        is_classifier = True
 
     if algorithm == None:
         log("Not support this algorithm - {}".format(methodology), ERROR)

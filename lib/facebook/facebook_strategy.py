@@ -15,6 +15,7 @@ import xgboost as xgb
 
 from heapq import nlargest
 from scipy import stats
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neighbors import NearestCentroid, DistanceMetric, KDTree
 from sklearn.ensemble import RandomForestClassifier
 
@@ -23,6 +24,7 @@ from load import save_cache, load_cache
 
 class StrategyEngine(object):
     STRATEGY_MOST_POPULAR = "most_popular"
+    STRATEGY_KNN = "knn"
     STRATEGY_KDTREE = "kdtree"
     STRATEGY_XGBOOST = "xgc"
     STRATEGY_RANDOMFOREST = "rfc"
@@ -123,6 +125,53 @@ class StrategyEngine(object):
                 log("Cost {:8f} seconds to get the centroid({}, {}, {}) from [{} ---> {}]. Then, the remaining size of queue is {}".format(timestamp_end-timestamp_start, x, y, accuracy, ori_shape, new_shape, queue.qsize()), INFO)
 
             queue.task_done()
+
+    @staticmethod
+    def get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y):
+        test_id, test_x = None, None
+
+        df = StrategyEngine.get_dataframe(filepath_test)
+        log("There are {} reocrds in {}".format(df.values.shape, filepath_test if isinstance(filepath_test, str) else ""), INFO)
+
+        test_id = df["row_id"].values
+        if method in [StrategyEngine.STRATEGY_XGBOOST, StrategyEngine.STRATEGY_RANDOMFOREST]:
+            d_times = StrategyEngine.get_d_time(df["time"].values)
+
+            df["hourofday"] = d_times.hour
+            df["dayofmonth"] = d_times.day
+            df["weekday"] = d_times.weekday
+            df["monthofyear"] = d_times.month
+            df["year"] = d_times.year
+
+            if is_normalization:
+                df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
+                df["y"] = (df["y"] - ave_y) / (std_y + 0.00000001)
+
+            test_x = df[["x", "y", "accuracy", "hourofday", "dayofmonth", "monthofyear", "weekday", "year"]].values
+        elif method == StrategyEngine.STRATEGY_KNN:
+            d_times = StrategyEngine.get_d_time(df["time"].values)
+
+            df["x"] *= 500
+            df["y"] *= 1000
+            df["hourofday"] = d_times.hour*4
+            df["dayofmonth"] = d_times.day*1.0/24
+            df["weekday"] = d_times.weekday*3
+            df["monthofyear"] = d_times.month*2
+            df["year"] = (d_times.year-2013)*10
+
+            if is_normalization:
+                df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
+                df["y"] = (df["y"] - ave_y) / (std_y + 0.00000001)
+
+            test_x = df[["x", "y", "hourofday", "dayofmonth", "monthofyear", "weekday", "year"]].values
+        else:
+            if is_normalization:
+                df["x"] = (df["x"] - ave_x) / (std_x + 0.00000001)
+                df["y"] = (df["y"] - ave_y) / (std_y + 0.00000001)
+
+            test_x = df[["x", "y"]].values
+
+        return test_id, test_x
 
     def normalization(self, df, normalization):
         results = {}
@@ -336,6 +385,57 @@ class StrategyEngine(object):
 
         timestamp_end = time.time()
         log("Cost {:8f} secends to build up the RANDOM FOREST CLASSIFIER solution".format(timestamp_end-timestamp_start), INFO)
+
+        return model, (ave_x, std_x), (ave_y, std_y)
+
+    def knn_preprocess_classifier(self, filepath):
+        df = self.get_dataframe(filepath)
+
+        d_times = self.get_d_time(df["time"].values)
+        df["x"] *= 500
+        df["y"] *= 1000
+        df["hourofday"] = d_times.hour*4
+        df["dayofmonth"] = d_times.day*1.0/24
+        df["weekday"] = d_times.weekday*3
+        df["monthofyear"] = d_times.month*2
+        df["year"] = (d_times.year-2013)*10
+
+        return df, ["x", "y", "hourofday", "dayofmonth", "monthofyear", "weekday", "year"], "place_id"
+
+    def get_knn_classifier(self, filepath, filepath_pkl, n_top, is_normalization,
+                           n_jobs=8,
+                           n_neighbors=15, leaf_size=25, weights="distance", metric='manhattan'):
+        timestamp_start = time.time()
+
+        ave_x, std_x, ave_y, std_y = np.nan, np.nan, np.nan, np.nan
+
+        info = None
+        if filepath_pkl:
+            info = load_cache(filepath_pkl, is_json=True)
+
+        if not info or self.is_testing:
+            df, cols, target_col = self.knn_preprocess_classifier(filepath)
+
+            if is_normalization:
+                df, stats = self.normalization(df, ["x", "y"])
+                ave_x, std_x = stats["ave_x"], stats["std_x"]
+                ave_y, std_y = stats["ave_y"], stats["std_y"]
+
+            log("Start to train the KNN CLASSIFIER model({}) with {}".format(df.shape, is_normalization), INFO)
+            model = KNeighborsClassifier(n_neighbors=n_neighbors,
+                                         leaf_size=leaf_size,
+                                         weights=weights,
+                                         metric=metric)
+
+            model.fit(df[cols].values, df[target_col].values.astype(str))
+
+            if not self.is_testing and filepath_pkl:
+                save_cache((model, (ave_x, std_x), (ave_y, std_y)), filepath_pkl)
+        else:
+            model, (ave_x, std_x), (ave_y, std_y) = info
+
+        timestamp_end = time.time()
+        log("Cost {:8f} secends to build up the KNN CLASSIFIER solution".format(timestamp_end-timestamp_start), INFO)
 
         return model, (ave_x, std_x), (ave_y, std_y)
 

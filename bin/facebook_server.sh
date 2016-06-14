@@ -26,7 +26,7 @@ if [ "${action}" == "start" ]; then
 
     # startup the server of beanstalk
     IP=$(ifconfig | grep inet | grep 192 | awk '{print $2}')
-    beanstalkd -b ${PATH_BEANSTALK} -l ${IP} -z 262144 &
+    beanstalkd -b ${PATH_BEANSTALK} -l ${IP} -z 655360 &
 elif [ "${action}" == "stop" ]; then
     pid_mongo=$(ps -ef | grep mongo | grep -v grep | awk '{print $2}')
     kill ${pid_mongo}

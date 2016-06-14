@@ -89,7 +89,7 @@ def worker():
                     metrics, (min_x, len_x), (min_y, len_y), (ave_x, std_x), (ave_y, std_y) =\
                         strategy_engine.get_most_popular_metrics(filepath_train, filepath_train_pkl, f, n_top, criteria[0], criteria[1], is_normalization)
 
-                    test_id, test_x = get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
+                    test_id, test_x =  StrategyEngine.get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
                     if np.any(test_id):
                         top = most_popular_engine.process(test_id, test_x, metrics, (strategy_engine.position_transformer,
                                                                                      (min_x, len_x, criteria[0]),
@@ -103,31 +103,26 @@ def worker():
 
                     metrics, mapping, score, (ave_x, std_x), (ave_y, std_y) = strategy_engine.get_kdtree(filepath_train, filepath_train_pkl, f, n_top, is_normalization)
 
-                    test_id, test_x = ProcessThread.get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
+                    test_id, test_x = StrategyEngine.get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
                     if np.any(test_id):
                         top = kdtree_engine.process(test_id, test_x, metrics, (mapping, score), is_cache=False)
                     else:
                         log("Empty file in {}".format(filepath_test), WARN)
                         is_pass = False
-                elif method == StrategyEngine.STRATEGY_XGBOOST:
+                elif method in [StrategyEngine.STRATEGY_XGBOOST, StrategyEngine.STRATEGY_RANDOMFOREST, StrategyEngine.STRATEGY_KNN]:
                     classifier_engine = ClassifierEngine(cache_workspace, n_top, is_testing)
-                    log("The setting of XGC is {}".format(setting), INFO)
 
-                    metrics, (ave_x, std_x), (ave_y, std_y) = strategy_engine.get_xgboost_classifier(filepath_train, f, n_top, is_normalization, **setting)
+                    if method == StrategyEngine.STRATEGY_XGBOOST:
+                        metrics, (ave_x, std_x), (ave_y, std_y) = strategy_engine.get_xgboost_classifier(filepath_train, f, n_top, is_normalization, **setting)
+                        log("The setting of XGC is {}".format(setting), INFO)
+                    elif method == StrategyEngine.STRATEGY_RANDOMFOREST:
+                        metrics, (ave_x, std_x), (ave_y, std_y) = strategy_engine.get_randomforest_classifier(filepath_train, f, n_top, is_normalization, **setting)
+                        log("The setting of RFC is {}".format(setting), INFO)
+                    elif method == StrategyEngine.STRATEGY_KNN:
+                        metrics, (ave_x, std_x), (ave_y, std_y) = strategy_engine.get_knn_classifier(filepath_train, f, n_top, is_normalization, **setting)
+                        log("The setting of KNN is {}".format(setting), INFO)
 
-                    test_id, test_x = ProcessThread.get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
-                    if np.any(test_id):
-                        top = classifier_engine.process(test_id, test_x, metrics, is_cache=False)
-                    else:
-                        log("Empty file in {}".format(filepath_test), WARN)
-                        is_pass = False
-                elif method == StrategyEngine.STRATEGY_RANDOMFOREST:
-                    classifier_engine = ClassifierEngine(cache_workspace, n_top, is_testing)
-                    log("The setting of RFC is {}".format(setting), INFO)
-
-                    metrics, (ave_x, std_x), (ave_y, std_y) = strategy_enging.get_randomforest_classifier(filepath_train, f, n_top, is_normalization, **setting)
-
-                    test_id, test_x = ProcessThread.get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
+                    test_id, test_x = StrategyEngine.get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
                     if np.any(test_id):
                         top = classifier_engine.process(test_id, test_x, metrics, is_cache=False)
                     else:
