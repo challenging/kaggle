@@ -15,6 +15,7 @@ import beanstalkc
 
 from utils import log, make_a_stamp
 from utils import DEBUG, INFO, WARN
+from facebook_utils import get_mongo_location
 from facebook_utils import IP_BEANSTALK, PORT_BEANSTALK, TIMEOUT_BEANSTALK, MONGODB_URL, MONGODB_INDEX
 from facebook_strategy import StrategyEngine
 from facebook_learning import KDTreeEngine, MostPopularEngine, ClassifierEngine, ProcessThread
@@ -32,18 +33,6 @@ def init(task="facebook_checkin_competition"):
     TALK.watch(task)
 
     worker()
-
-def get_mongo_location(cache_workspace):
-    folder_setting = os.path.basename(cache_workspace)
-    folder_method = os.path.dirname(cache_workspace)
-    folder_grid = os.path.dirname(folder_method)
-
-    database = make_a_stamp("{}_{}".format(folder_grid, folder_method))
-    collection = folder_setting
-
-    log("{} {} --> {} {}".format(folder_grid, folder_method, database, collection), INFO)
-
-    return database, collection
 
 def worker():
     global CLIENT

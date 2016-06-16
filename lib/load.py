@@ -14,7 +14,6 @@ import pandas as pd
 
 from bz2 import BZ2File
 from bsddb3 import db
-from memory_profiler import profile
 from utils import log, DEBUG, INFO, WARN, create_folder
 from sklearn.preprocessing import PolynomialFeatures
 

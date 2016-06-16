@@ -297,12 +297,14 @@ def process(m, workspaces, filepath_pkl, batch_size, criteria, strategy, is_accu
                 # Avoid the empty file
                 if os.path.exists(filepath_test):
                     # workaround
+                    '''
                     filename = os.path.basename(filepath_test).replace(".csv", "")
                     x, y  = filename.split("_")
                     x = float(x)
                     y = float(y)
-                    if x < 2.8 or (x == 2.8 and y <= 8.3):
+                    if x < 3.75 or (x == 3.75 and y <= 4.65):
                         continue
+                    '''
 
                     df_train = None
                     if strategy == "native":

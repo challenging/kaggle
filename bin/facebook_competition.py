@@ -9,7 +9,7 @@ import threading
 import Queue
 
 from utils import log, INFO
-from facebook.facebook_utils import transform_to_submission_format
+from facebook.facebook_utils import transform_to_submission_format, get_mongo_location
 from facebook.facebook_learning import process
 from configuration import FacebookConfiguration
 
@@ -42,6 +42,9 @@ def run(n_jobs, is_testing, is_beanstalk, configuration):
         m = working_queue.get()
 
         workspace, cache_workspace, submission_workspace = configuration.get_workspace(m, is_testing)
+        database, collection = get_mongo_location(cache_workspace)
+        log("The locations of mongo are {} - {}".format(database, collection), INFO)
+
         is_full = configuration.is_full()
 
         method, criteria, strategy, stamp, (window_size, batch_size, n_top), is_accuracy, is_exclude_outlier, is_normalization, dropout = configuration.get_method_detail(m)
