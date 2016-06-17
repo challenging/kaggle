@@ -119,7 +119,8 @@ class WeightedThread(threading.Thread):
             if self.mode == "simple":
                 for place_ids in pre_place_ids:
                     for place_id in place_ids:
-                        results[pre_row_id][place_id["place_id"]] = place_id["score"]
+                        results[pre_row_id].setdefault(place_id["place_id"], 0)
+                        results[pre_row_id][place_id["place_id"]] += place_id["score"]
             elif self.mode == "weight":
                 for place_ids in pre_place_ids:
                     for place_id in place_ids:

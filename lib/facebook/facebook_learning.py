@@ -166,12 +166,14 @@ def process(method, workspaces, criteria, strategy, is_accuracy, is_exclude_outl
             # Avoid the empty file
             if os.path.exists(filepath_test):
                 # workaround
+                '''
                 filename = os.path.basename(filepath_test).replace(".csv", "")
                 x, y  = filename.split("_")
                 x = float(x)
                 y = float(y)
                 if x < 9.25 or (x == 9.25 and y <= 5.15):
                     continue
+                '''
 
                 df_train, df_test = None, StrategyEngine.get_dataframe(filepath_test)
                 if strategy == "native":
