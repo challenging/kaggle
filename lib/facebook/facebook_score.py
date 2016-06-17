@@ -64,6 +64,8 @@ class NormalizeThread(threading.Thread):
                 for record in mongo[database][collection].find({}, {MONGODB_VALUE: 1}):
                     for info in record[MONGODB_VALUE]:
                         score = info[MONGODB_SCORE]
+                        if score <= 1:
+                            continue
 
                         xx += score**2
                         x += score

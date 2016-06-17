@@ -51,13 +51,14 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf, n_est
     d_times = pd.DatetimeIndex(initial_date + np.timedelta64(int(mn), 'm') for mn in df_training["time"].values)
 
     train_x = df_training[["x", "y", "accuracy", "time"]]
-    #train_x["x"] *= 400
-    #train_x["y"] *= 1000
-    train_x["hourofday"] = (d_times.hour + d_times.minute/60.0)#*4
-    train_x["dayofmonth"] = d_times.day#*1.0/24
-    train_x["weekday"] = d_times.weekday#*3
-    train_x["monthofyear"] = d_times.month#*2
-    train_x["year"] = (d_times.year-2013)#*10
+    train_x["x"] *= 400
+    train_x["y"] *= 1000
+    train_x["accuracy"] = train_x["accuracy"].map(lambda x: np.log(x))
+    train_x["hourofday"] = (d_times.hour + d_times.minute/60.0)*4
+    train_x["dayofmonth"] = d_times.day*1.0/24
+    train_x["weekday"] = d_times.weekday*3
+    train_x["monthofyear"] = d_times.month*2
+    train_x["year"] = (d_times.year-2013)*10
 
     #train_x = train_x.drop(["accuracy"], axis=1)
     train_x = train_x.drop(["time"], axis=1)
@@ -77,13 +78,14 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf, n_est
     d_times = pd.DatetimeIndex(initial_date + np.timedelta64(int(mn), 'm') for mn in df_testing["time"].values)
 
     test_x = df_testing[["x", "y", "accuracy", "time"]]
-    #test_x["x"] *= 400
-    #test_x["y"] *= 1000
-    test_x["hourofday"] = (d_times.hour + d_times.minute/60.0)#*4
-    test_x["dayofmonth"] = d_times.day#*1.0/24
-    test_x["weekday"] = d_times.weekday#*3
-    test_x["monthofyear"] = d_times.month#*2
-    test_x["year"] = (d_times.year-2013)#*10
+    test_x["x"] *= 400
+    test_x["y"] *= 1000
+    test_x["accuracy"] = test_x["accuracy"].map(lambda x: np.log(x))
+    test_x["hourofday"] = (d_times.hour + d_times.minute/60.0)*4
+    test_x["dayofmonth"] = d_times.day*1.0/24
+    test_x["weekday"] = d_times.weekday*3
+    test_x["monthofyear"] = d_times.month*2
+    test_x["year"] = (d_times.year-2013)*10
 
     #test_x = test_x.drop(["accuracy"], axis=1)
     test_x = test_x.drop(["time"], axis=1)

@@ -137,7 +137,7 @@ class StrategyEngine(object):
         if method in [StrategyEngine.STRATEGY_XGBOOST, StrategyEngine.STRATEGY_RANDOMFOREST]:
             d_times = StrategyEngine.get_d_time(df["time"].values)
 
-            df["hourofday"] = d_times.hour
+            df["hourofday"] = (d_times.hour + d_times.minute/3600.0)
             df["dayofmonth"] = d_times.day
             df["weekday"] = d_times.weekday
             df["monthofyear"] = d_times.month
@@ -151,9 +151,10 @@ class StrategyEngine(object):
         elif method == StrategyEngine.STRATEGY_KNN:
             d_times = StrategyEngine.get_d_time(df["time"].values)
 
-            df["x"] *= 500
+            df["x"] *= 400
             df["y"] *= 1000
-            df["hourofday"] = d_times.hour*4
+            df["accuracy"] = df["accuracy"].map(lambda x: np.log(x))
+            df["hourofday"] = (d_times.hour + d_times.minute/60.0)*4
             df["dayofmonth"] = d_times.day*1.0/24
             df["weekday"] = d_times.weekday*3
             df["monthofyear"] = d_times.month*2
@@ -277,7 +278,7 @@ class StrategyEngine(object):
         df = self.get_dataframe(filepath)
 
         d_times = self.get_d_time(df["time"].values)
-        df["hourofday"] = d_times.hour
+        df["hourofday"] = (d_times.hour + d_times.minute/3600.0)
         df["dayofmonth"] = d_times.day
         df["weekday"] = d_times.weekday
         df["monthofyear"] = d_times.month
@@ -392,9 +393,10 @@ class StrategyEngine(object):
         df = self.get_dataframe(filepath)
 
         d_times = self.get_d_time(df["time"].values)
-        df["x"] *= 500
+        df["x"] *= 400
         df["y"] *= 1000
-        df["hourofday"] = d_times.hour*4
+        df["accuracy"] = df["accuracy"].map(lambda x: np.log(x))
+        df["hourofday"] = (d_times.hour + d_times.minute/60.0)*4
         df["dayofmonth"] = d_times.day*1.0/24
         df["weekday"] = d_times.weekday*3
         df["monthofyear"] = d_times.month*2

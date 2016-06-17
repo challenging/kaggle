@@ -18,7 +18,7 @@ from utils import DEBUG, INFO, WARN
 from facebook_utils import get_mongo_location
 from facebook_utils import IP_BEANSTALK, PORT_BEANSTALK, TIMEOUT_BEANSTALK, MONGODB_URL, MONGODB_INDEX
 from facebook_strategy import StrategyEngine
-from facebook_learning import KDTreeEngine, MostPopularEngine, ClassifierEngine, ProcessThread
+from facebook_learning import KDTreeEngine, MostPopularEngine, ClassifierEngine
 
 # beanstalk client
 TALK = None
@@ -54,8 +54,11 @@ def worker():
                 n_top, criteria = o["n_top"], o["criteria"]
                 is_normalization, is_accuracy, is_exclude_outlier, is_testing = o["is_normalization"], o["is_accuracy"], o["is_exclude_outlier"], o["is_testing"]
 
-                cache_workspace = o["cache_workspace"]
-                database, collection = get_mongo_location(cache_workspace)
+                database, collection = o.get("database", None), o.get("collection", None)
+
+                if database == None or collection == None:
+                    cache_workspace = o["cache_workspace"]
+                    database, collection = get_mongo_location(cache_workspace)
 
                 mongo = CLIENT[database][collection]
                 mongo.create_index(MONGODB_INDEX)
@@ -73,7 +76,7 @@ def worker():
                 top = None
                 is_pass = True
                 if method == StrategyEngine.STRATEGY_MOST_POPULAR:
-                    most_popular_engine = MostPopularEngine(cache_workspace, n_top, is_testing)
+                    most_popular_engine = MostPopularEngine(n_top, is_testing)
 
                     metrics, (min_x, len_x), (min_y, len_y), (ave_x, std_x), (ave_y, std_y) =\
                         strategy_engine.get_most_popular_metrics(filepath_train, filepath_train_pkl, f, n_top, criteria[0], criteria[1], is_normalization)
@@ -82,24 +85,23 @@ def worker():
                     if np.any(test_id):
                         top = most_popular_engine.process(test_id, test_x, metrics, (strategy_engine.position_transformer,
                                                                                      (min_x, len_x, criteria[0]),
-                                                                                     (min_y, len_y, criteria[1])),
-                                                                                     is_cache=False)
+                                                                                     (min_y, len_y, criteria[1])))
                     else:
                         log("Empty file in {}".format(filepath_test), WARN)
                         is_pass = False
                 elif method == StrategyEngine.STRATEGY_KDTREE:
-                    kdtree_engine = KDTreeEngine(cache_workspace, n_top, is_testing)
+                    kdtree_engine = KDTreeEngine(n_top, is_testing)
 
                     metrics, mapping, score, (ave_x, std_x), (ave_y, std_y) = strategy_engine.get_kdtree(filepath_train, filepath_train_pkl, f, n_top, is_normalization)
 
                     test_id, test_x = StrategyEngine.get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
                     if np.any(test_id):
-                        top = kdtree_engine.process(test_id, test_x, metrics, (mapping, score), is_cache=False)
+                        top = kdtree_engine.process(test_id, test_x, metrics, (mapping, score))
                     else:
                         log("Empty file in {}".format(filepath_test), WARN)
                         is_pass = False
                 elif method in [StrategyEngine.STRATEGY_XGBOOST, StrategyEngine.STRATEGY_RANDOMFOREST, StrategyEngine.STRATEGY_KNN]:
-                    classifier_engine = ClassifierEngine(cache_workspace, n_top, is_testing)
+                    classifier_engine = ClassifierEngine(n_top, is_testing)
 
                     if method == StrategyEngine.STRATEGY_XGBOOST:
                         metrics, (ave_x, std_x), (ave_y, std_y) = strategy_engine.get_xgboost_classifier(filepath_train, f, n_top, is_normalization, **setting)
@@ -113,7 +115,7 @@ def worker():
 
                     test_id, test_x = StrategyEngine.get_testing_dataset(filepath_test, method, is_normalization, ave_x, std_x, ave_y, std_y)
                     if np.any(test_id):
-                        top = classifier_engine.process(test_id, test_x, metrics, is_cache=False)
+                        top = classifier_engine.process(test_id, test_x, metrics)
                     else:
                         log("Empty file in {}".format(filepath_test), WARN)
                         is_pass = False
