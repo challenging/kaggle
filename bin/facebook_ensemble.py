@@ -70,16 +70,28 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_beanstalk):
 
                 merge_files(filepath_prefix, conf, m, final_submission_filename)
         else:
+            total_dropout, total_o_dropout = 0, 0
             for m in configuration.get_methods():
                 workspace, cache_workspace, submission_workspace = configuration.get_workspace(m, False)
                 log("The workspace is {}".format(workspace), INFO)
 
                 database, collection = get_mongo_location(cache_workspace)
                 weight = configuration.get_weight(m)
-                locations.append((database, collection, weight))
+
+                dropout = configuration.get_value(m, "dropout")
+                if dropout and dropout.isdigit():
+                    total_dropout += 1
+                else:
+                    total_o_dropout += 1
+
+                locations.append([database, collection, weight, True if dropout and dropout.isdigit() else False])
+
+            adjust = float(total_o_dropout)/total_dropout
+            for location in locations:
+                location[-1] = adjust if location[-1] else 1/adjust
 
             queue = Queue.Queue()
-            for database, collection, _ in locations:
+            for database, collection, _, _ in locations:
                 queue.put((database, collection))
 
             for idx in range(0, n_jobs):

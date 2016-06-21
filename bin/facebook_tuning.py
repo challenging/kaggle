@@ -26,6 +26,7 @@ from configuration import ModelConfParser
 @click.option("--dropout", default=0, help="dropout rate")
 def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf, n_estimator, dropout):
     drop_fields = []
+    is_saving = False
 
     parser = ModelConfParser(conf)
 
@@ -44,7 +45,7 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf, n_est
     eps = 0.00001
 
     original_size = df_training.shape[0]
-    df_training = df_training.groupby("place_id").filter(lambda x: len(x) >= dropout)
+    df_training = df_training.groupby("place_id").filter(lambda x: len(x) < dropout)
     print ("Before: %d rows || After: %d rows" % (original_size, df_training.shape[0]))
 
     initial_date = np.datetime64('2014-01-01T01:01', dtype='datetime64[m]')
@@ -60,7 +61,6 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf, n_est
     train_x["monthofyear"] = d_times.month*2
     train_x["year"] = (d_times.year-2013)*10
 
-    #train_x = train_x.drop(["accuracy"], axis=1)
     train_x = train_x.drop(["time"], axis=1)
 
     pca_weight = None
@@ -87,7 +87,6 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf, n_est
     test_x["monthofyear"] = d_times.month*2
     test_x["year"] = (d_times.year-2013)*10
 
-    #test_x = test_x.drop(["accuracy"], axis=1)
     test_x = test_x.drop(["time"], axis=1)
 
     if is_pca:
@@ -95,7 +94,7 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf, n_est
 
     pool = []
     for value, count in zip(values, counts):
-        if count > 2:
+        if count >= nfold:
             pool.append(value)
 
     idxs = train_y.isin(pool)
@@ -112,7 +111,7 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf, n_est
 
     params = tuning(train_x, train_y, test_id, test_x, cost, objective,
                     filepath_feature_importance, filepath_tuning, filepath_submission, methodology, nfold, top_feature,
-                    n_estimator=n_estimator, thread=n_jobs, is_saving=False)
+                    n_estimator=n_estimator, thread=n_jobs, is_saving=is_saving)
 
     log("The final parameters are {}".format(params))
 

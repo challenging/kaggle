@@ -597,10 +597,10 @@ class KNNTuning(ParameterTuning):
     def process(self):
         self.phase("phase1", {})
 
-        param2 = {"n_neighbors": [5, 15, 25, 35, 45]}
+        param2 = {"n_neighbors": [5, 15, 25, 35]}
         self.phase("phase2", param2, True)
 
-        param3 = {"leaf_size": [25, 35, 40]}
+        param3 = {"leaf_size": [25, 35]}
         self.phase("phase3", param3, True)
 
         return self.get_model_instance().get_params()

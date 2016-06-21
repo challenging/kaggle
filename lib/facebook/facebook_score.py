@@ -11,7 +11,7 @@ import Queue
 
 import numpy as np
 
-from utils import create_folder, log, INFO
+from utils import create_folder, log, INFO, WARN
 from facebook.facebook_utils import transform_to_submission_format, save_submission, get_mongo_location
 from facebook.facebook_utils import MONGODB_URL, MONGODB_INDEX, MONGODB_VALUE, MONGODB_SCORE, MONGODB_BATCH_SIZE, FULL_SET
 
@@ -106,13 +106,13 @@ class WeightedThread(threading.Thread):
             setattr(self, key, value)
 
     def weighted(self, score, weight):
-        return score*1000**weight
+        return score*10**weight
 
     def run(self):
         batch_size = 5000
         mongo = pymongo.MongoClient(MONGODB_URL)
 
-        def scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, weight, eps):
+        def scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, adjust, weight, eps):
             results.setdefault(pre_row_id, {})
             size = len(pre_place_ids)
 
@@ -127,7 +127,7 @@ class WeightedThread(threading.Thread):
                         results[pre_row_id].setdefault(place_id["place_id"], 0)
 
                         score = (place_id["score"]-avg)/std+min_std+eps
-                        results[pre_row_id][place_id["place_id"]] += self.weighted(score, weight)/size
+                        results[pre_row_id][place_id["place_id"]] += self.weighted(score, weight)/size*adjust
             elif self.mode == "vote":
                 score = {0: 10,
                          1: 9,
@@ -160,7 +160,7 @@ class WeightedThread(threading.Thread):
             else:
                 try:
                     results = {}
-                    for database, collection, weight in self.locations:
+                    for database, collection, weight, adjust in self.locations:
                         avg, std, min_std = 0, 0, 0
                         for r in mongo[mm_database][mm_collection].find({"database": database, "collection": collection}):
                             avg = r["avg"]
@@ -175,13 +175,13 @@ class WeightedThread(threading.Thread):
                             row_id = record[MONGODB_INDEX]
 
                             if pre_row_id != None and pre_row_id != row_id:
-                                scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, weight, eps)
+                                scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, adjust, weight, eps)
                                 pre_place_ids = []
 
                             pre_row_id = row_id
                             pre_place_ids.append(record["place_ids"])
 
-                        scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, weight, eps)
+                        scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, adjust, weight, eps)
 
                         timestamp_end = time.time()
                         log("Cost {:4f} secends to finish this job({} - {}) from {} of {} with {}".format((timestamp_end-timestamp_start), idx_min, idx_max, collection, database, weight), INFO)

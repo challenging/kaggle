@@ -45,8 +45,14 @@ class StrategyEngine(object):
     def get_dataframe(filepath, kind=0, dropout=None):
         df = None
 
+        c = None
         if dropout:
-            dropout = int(dropout)
+            if dropout.isdigit():
+                dropout = int(dropout)
+                c = lambda x: len(x) >= dropout
+            else:
+                dropout = int(dropout[1:])
+                c = lambda x: len(x) < dropout
 
         if isinstance(filepath, str) and os.path.exists(filepath):
             if kind in [1, 2]:
@@ -54,7 +60,7 @@ class StrategyEngine(object):
 
                 if dropout:
                     original_size = df.shape[0]
-                    df = df.groupby("place_id").filter(lambda x: len(x) >= dropout)
+                    df = df.groupby("place_id").filter(c)
                     log("{} Before: {} rows || After: {} rows".format(dropout, original_size, df.shape[0]), INFO)
 
                 if kind == 1:
@@ -69,7 +75,7 @@ class StrategyEngine(object):
 
             if dropout and "place_id" in df.columns:
                 original_size = df.shape[0]
-                df = df.groupby("place_id").filter(lambda x: len(x) >= dropout)
+                df = df.groupby("place_id").filter(c)
                 log("Before: %d rows || After: %d rows" % (original_size, df.shape[0]), INFO)
 
         return df

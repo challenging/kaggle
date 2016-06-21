@@ -6,7 +6,6 @@ BeautifulSoup==3.2.1
 beautifulsoup4==4.4.1
 bingads==10.4.1
 bs4==0.0.1
-bsddb3==6.2.1
 cffi==1.4.2
 characteristic==14.3.0
 chardet==2.3.0
@@ -15,7 +14,6 @@ colorama==0.3.6
 contextlib2==0.5.1
 cryptography==1.2.1
 cssselect==0.9.1
-cv2==1.0
 cycler==0.10.0
 Cython==0.23.4
 dask==0.8.2
@@ -44,7 +42,6 @@ matplotlib==1.4.3
 memory-profiler==0.41
 ml-metrics==0.1.4
 mock==1.2.0
-MySQL-python==1.2.5
 neo4jrestclient==2.1.1
 networkx==1.11
 nltk==3.0.4
@@ -62,7 +59,6 @@ Pillow==3.2.0
 piwikapi==0.3
 prettytable==0.7.2
 psutil==4.2.0
-psycopg2==2.6.1
 ptyprocess==0.5
 py2neo==2.0.8
 pyamg==3.0.2

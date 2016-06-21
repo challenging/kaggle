@@ -159,6 +159,7 @@ def process(method, workspaces, criteria, strategy, is_accuracy, is_exclude_outl
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
     talk.use(TASK_BEANSTALK)
 
+    priority = int(time.time())
     for filepath_train in glob.iglob(workspace):
         if filepath_train.find(".csv") != -1 and filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:
             filepath_test = filepath_train.replace("train", "test")
@@ -166,14 +167,13 @@ def process(method, workspaces, criteria, strategy, is_accuracy, is_exclude_outl
             # Avoid the empty file
             if os.path.exists(filepath_test):
                 # workaround
-                '''
+                threshold_x, threshold_y = 7.8, 8.9
                 filename = os.path.basename(filepath_test).replace(".csv", "")
                 x, y  = filename.split("_")
                 x = float(x)
                 y = float(y)
-                if x < 9.25 or (x == 9.25 and y <= 5.15):
+                if x < threshold_x or (x == threshold_x and y <= threshold_y):
                     continue
-                '''
 
                 df_train, df_test = None, StrategyEngine.get_dataframe(filepath_test)
                 if strategy == "native":
@@ -185,6 +185,8 @@ def process(method, workspaces, criteria, strategy, is_accuracy, is_exclude_outl
                     log("Skip the filepath_train due to the empty file({})".format(filepath_train), INFO)
                     continue
 
+                log("Ready to put {} into the queue".format(filepath_test), INFO)
+                i = 0
                 for collection, setting in collections.items():
                     string = {"id": os.path.basename(filepath_test),
                               "method": method,
@@ -201,9 +203,9 @@ def process(method, workspaces, criteria, strategy, is_accuracy, is_exclude_outl
                               "filepath_training": pickle.dumps(df_train),
                               "filepath_testing": pickle.dumps(df_test)}
 
-                    log("{} - {}".format(method, setting), INFO)
+                    log("{} - {} with {}".format(method, setting, priority+i), INFO)
+                    talk.put(zlib.compress(json.dumps(string)), priority=priority+i, ttr=600)
 
-                    talk.put(zlib.compress(json.dumps(string)), ttr=600)
-                    log("Put {} into the queue".format(filepath_test), INFO)
+                    i += 1
 
     talk.close()
