@@ -64,8 +64,6 @@ class NormalizeThread(threading.Thread):
                 for record in mongo[database][collection].find({}, {MONGODB_VALUE: 1}):
                     for info in record[MONGODB_VALUE]:
                         score = info[MONGODB_SCORE]
-                        if score <= 1:
-                            continue
 
                         xx += score**2
                         x += score
@@ -96,6 +94,93 @@ class NormalizeThread(threading.Thread):
 
         mongo.close()
 
+class AggregatedThread(threading.Thread):
+    def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
+        threading.Thread.__init__(self, group=group, target=target, name=name, verbose=verbose)
+
+        self.args = args
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    def run(self):
+        mongo = pymongo.MongoClient(MONGODB_URL)
+        new_collection = self.collection + "_aggregation"
+
+        def get_place_ids(pre_place_ids):
+            r = []
+            size = len(pre_place_ids)
+
+            place_ids = {}
+            info = {}
+            for ids in pre_place_ids:
+                for place_id in ids:
+                    if place_id[MONGODB_SCORE] > 1:
+                        place_ids.setdefault(place_id["place_id"], 0)
+                        place_ids[place_id["place_id"]] += place_id[MONGODB_SCORE]/size
+
+                        info.setdefault(place_id["place_id"], {"count": 0, "max_score": -np.inf, "min_score": np.inf})
+                        info[place_id["place_id"]]["count"] += 1
+                        info[place_id["place_id"]]["max_score"] = max(info[place_id["place_id"]]["max_score"], place_id[MONGODB_SCORE])
+                        info[place_id["place_id"]]["min_score"] = min(info[place_id["place_id"]]["min_score"], place_id[MONGODB_SCORE])
+
+            for place_id, score in place_ids.items():
+                r.append({"place_id": place_id, MONGODB_SCORE: score, "count": info[place_id]["count"], "max_score": info[place_id]["max_score"], "min_score": info[place_id]["min_score"]})
+
+            return r
+
+        idx_min, idx_max = None, None
+        while True:
+            if idx_min == None or idx_max == None:
+                idx_min, idx_max = self.queue.get()
+            log("Start to aggregate the values for {} of {}".format(idx_min, idx_max), INFO)
+
+            try:
+                pre_row_id = None
+                pre_place_ids, pre_grids = [], []
+                pool = []
+
+                timestamp_start = time.time()
+                for record in mongo[self.database][self.collection].find({MONGODB_INDEX: {"$gte": idx_min, "$lt": idx_max}}).sort([(MONGODB_INDEX, pymongo.ASCENDING)]).batch_size(MONGODB_BATCH_SIZE):
+                    row_id = record[MONGODB_INDEX]
+
+                    if pre_row_id != None and pre_row_id != row_id:
+                        r = {MONGODB_INDEX: pre_row_id,
+                             MONGODB_VALUE: get_place_ids(pre_place_ids),
+                            "grid": pre_grids}
+
+                        pool.append(r)
+
+                        pre_place_ids = []
+                        pre_grids = []
+
+                    pre_row_id = row_id
+                    pre_place_ids.append(record["place_ids"])
+                    pre_grids.append(record["grid"])
+
+                r = {MONGODB_INDEX: pre_row_id,
+                     MONGODB_VALUE: get_place_ids(pre_place_ids),
+                     "grid": pre_grids}
+                pool.append(r)
+                timestamp_end = time.time()
+                log("Cost {:4f} secends to query records".format(timestamp_end-timestamp_start), INFO)
+
+                timestamp_start = time.time()
+                mongo[self.database][new_collection].insert_many(pool)
+                timestamp_end = time.time()
+                log("Cost {:4f} secends to insert records".format(timestamp_end-timestamp_start), INFO)
+            except pymongo.errors.CursorNotFound as e:
+                log(e)
+                time.sleep(60)
+
+                continue
+            else:
+                idx_min, idx_max = None, None
+
+            self.queue.task_done()
+
+        mongo.close()
+
 class WeightedThread(threading.Thread):
     def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
         threading.Thread.__init__(self, group=group, target=target, name=name, verbose=verbose)
@@ -106,7 +191,7 @@ class WeightedThread(threading.Thread):
             setattr(self, key, value)
 
     def weighted(self, score, weight):
-        return score*10**weight
+        return score*weight
 
     def run(self):
         batch_size = 5000
@@ -123,11 +208,17 @@ class WeightedThread(threading.Thread):
                         results[pre_row_id][place_id["place_id"]] += place_id["score"]
             elif self.mode == "weight":
                 for place_ids in pre_place_ids:
-                    for place_id in place_ids:
-                        results[pre_row_id].setdefault(place_id["place_id"], 0)
+                    for p in place_ids:
+                        place_id, score = p["place_id"], p["score"]
 
-                        score = (place_id["score"]-avg)/std+min_std+eps
-                        results[pre_row_id][place_id["place_id"]] += self.weighted(score, weight)/size*adjust
+                        results[pre_row_id].setdefault(place_id, 0)
+
+                        s = (score-avg)/std+min_std+eps
+                        results[pre_row_id][place_id] += self.weighted(s, weight)/size*adjust
+
+                        #if pre_row_id == 50088:
+                        #    log("{} {} {} {} {} {} {} {} {}".format(place_id, size, adjust, score, avg, std, min_std, s, results[pre_row_id][place_id]))
+
             elif self.mode == "vote":
                 score = {0: 10,
                          1: 9,
@@ -171,7 +262,7 @@ class WeightedThread(threading.Thread):
                         pre_place_ids = []
 
                         timestamp_start = time.time()
-                        for record in mongo[database][collection].find({MONGODB_INDEX: {"$gte": idx_min, "$lt": idx_max}}).sort([(MONGODB_INDEX, pymongo.ASCENDING)]).batch_size(batch_size):
+                        for record in mongo[database][collection].find({MONGODB_INDEX: {"$gte": idx_min, "$lt": idx_max}}).sort([(MONGODB_INDEX, pymongo.ASCENDING)]).batch_size(MONGODB_BATCH_SIZE):
                             row_id = record[MONGODB_INDEX]
 
                             if pre_row_id != None and pre_row_id != row_id:
@@ -181,7 +272,8 @@ class WeightedThread(threading.Thread):
                             pre_row_id = row_id
                             pre_place_ids.append(record["place_ids"])
 
-                        scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, adjust, weight, eps)
+                        if pre_row_id:
+                            scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, adjust, weight, eps)
 
                         timestamp_end = time.time()
                         log("Cost {:4f} secends to finish this job({} - {}) from {} of {} with {}".format((timestamp_end-timestamp_start), idx_min, idx_max, collection, database, weight), INFO)

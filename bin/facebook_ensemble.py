@@ -4,9 +4,9 @@ import os
 import sys
 import click
 import datetime
+import Queue
 
 import pymongo
-import Queue
 
 import numpy as np
 import pandas as pd
@@ -16,7 +16,7 @@ from joblib import Parallel, delayed
 
 from load import load_cache, import_hdb
 from utils import create_folder, log, INFO
-from facebook.facebook_score import get_full_queue, merge_files, NormalizeThread, WeightedThread
+from facebook.facebook_score import get_full_queue, merge_files, NormalizeThread, WeightedThread, AggregatedThread
 from facebook.facebook_utils import transform_to_submission_format, save_submission, get_mongo_location, _import_hdb
 from facebook.facebook_utils import MONGODB_URL, MONGODB_INDEX, MONGODB_VALUE, MONGODB_SCORE, MONGODB_BATCH_SIZE, FULL_SET
 from configuration import FacebookConfiguration
@@ -27,8 +27,9 @@ from configuration import FacebookConfiguration
 @click.option("--n-jobs", default=4, help="number of thread")
 @click.option("--is-name", is_flag=True, help="just get mongo location")
 @click.option("--is-import", is_flag=True, help="import HDB file into the MongoDB")
+@click.option("--is-aggregate", is_flag=True, help="aggregation mode")
 @click.option("--is-beanstalk", is_flag=True, help="beanstalk mode")
-def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_beanstalk):
+def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_aggregate, is_beanstalk):
     configuration = FacebookConfiguration(conf)
 
     results = {}
@@ -43,9 +44,42 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_beanstalk):
     if is_name:
         for m in configuration.get_methods():
             workspace, cache_workspace, submission_workspace = configuration.get_workspace(m, False)
-            log("The workspace is {}".format(workspace), INFO)
+            log("{} --> The workspace is {}".format(m, workspace), INFO)
 
             get_mongo_location(cache_workspace)
+    elif is_aggregate:
+        mongo = pymongo.MongoClient(MONGODB_URL)
+
+        for m in configuration.get_methods():
+            workspace, cache_workspace, submission_workspace = configuration.get_workspace(m, False)
+            database, collection = get_mongo_location(cache_workspace)
+
+            count = mongo[database][collection].count()
+            if count < FULL_SET[1]+500000:
+                log("Skip the aggregation for {}-{}".format(database, collection), INFO)
+                continue
+
+            queue = get_full_queue(100000)
+            for i in range(0, n_jobs):
+                thread = AggregatedThread(kwargs={"queue": queue, "database": database, "collection": collection})
+                thread.setDaemon(True)
+                thread.start()
+            queue.join()
+
+            log("Finish aggregating the values for {}-{}".format(database, collection), INFO)
+
+            new_collection = "{}_aggregation".format(collection)
+
+            mongo[database][new_collection].create_index(MONGODB_INDEX)
+            log("Create index for new collection", INFO)
+
+            mongo[database][collection].drop()
+            log("Drop the {}".format(collection), INFO)
+
+            mongo[database][new_collection].rename(collection)
+            log("Rename {} to {}".format(new_collection ,collection), INFO)
+
+        mongo.close()
     elif is_beanstalk:
         locations = []
 
@@ -55,8 +89,11 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_beanstalk):
                 log("The workspace is {}".format(workspace), INFO)
 
                 database, collection = get_mongo_location(cache_workspace)
+
                 weight = 1
-                locations = [(database, collection, weight)]
+                dropout = configuration.get_value(m, "dropout")
+
+                locations = [(database, collection, weight, True if dropout and dropout.isdigit() else False)]
 
                 queue = get_full_queue()
 
@@ -69,7 +106,7 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_beanstalk):
                 queue.join()
 
                 merge_files(filepath_prefix, conf, m, final_submission_filename)
-        else:
+        elif mode == "weight":
             total_dropout, total_o_dropout = 0, 0
             for m in configuration.get_methods():
                 workspace, cache_workspace, submission_workspace = configuration.get_workspace(m, False)
@@ -87,8 +124,12 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_beanstalk):
                 locations.append([database, collection, weight, True if dropout and dropout.isdigit() else False])
 
             adjust = float(total_o_dropout)/total_dropout
+            if adjust == 0:
+                adjust = 1
+
             for location in locations:
                 location[-1] = adjust if location[-1] else 1/adjust
+                log(location)
 
             queue = Queue.Queue()
             for database, collection, _, _ in locations:

@@ -159,6 +159,7 @@ def process(method, workspaces, criteria, strategy, is_accuracy, is_exclude_outl
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
     talk.use(TASK_BEANSTALK)
 
+    count = 0
     priority = int(time.time())
     for filepath_train in glob.iglob(workspace):
         if filepath_train.find(".csv") != -1 and filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:
@@ -167,13 +168,15 @@ def process(method, workspaces, criteria, strategy, is_accuracy, is_exclude_outl
             # Avoid the empty file
             if os.path.exists(filepath_test):
                 # workaround
-                threshold_x, threshold_y = 7.8, 8.9
+                '''
+                threshold_x, threshold_y = 5.7, 1.35
                 filename = os.path.basename(filepath_test).replace(".csv", "")
                 x, y  = filename.split("_")
                 x = float(x)
                 y = float(y)
                 if x < threshold_x or (x == threshold_x and y <= threshold_y):
                     continue
+                '''
 
                 df_train, df_test = None, StrategyEngine.get_dataframe(filepath_test)
                 if strategy == "native":
@@ -207,5 +210,10 @@ def process(method, workspaces, criteria, strategy, is_accuracy, is_exclude_outl
                     talk.put(zlib.compress(json.dumps(string)), priority=priority+i, ttr=600)
 
                     i += 1
+                    count += 1
+
+                    if count % 10000 == 0:
+                        log("Sleeping 1800 secends...", INFO)
+                        time.sleep(1800)
 
     talk.close()
