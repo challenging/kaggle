@@ -432,7 +432,7 @@ class StrategyEngine(object):
             log("Start to train the KNN CLASSIFIER model({}) with {}".format(df.shape, is_normalization), INFO)
             model = KNeighborsClassifier(n_neighbors=n_neighbors,
                                          leaf_size=leaf_size,
-                                         weights=weights,
+                                         weights=lambda x: x**-2,
                                          metric=metric)
 
             model.fit(df[cols].values, df[target_col].values.astype(str))

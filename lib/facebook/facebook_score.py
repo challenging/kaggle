@@ -107,28 +107,6 @@ class AggregatedThread(threading.Thread):
         mongo = pymongo.MongoClient(MONGODB_URL)
         new_collection = self.collection + "_aggregation"
 
-        def get_place_ids(pre_place_ids):
-            r = []
-            size = len(pre_place_ids)
-
-            place_ids = {}
-            info = {}
-            for ids in pre_place_ids:
-                for place_id in ids:
-                    if place_id[MONGODB_SCORE] > 1:
-                        place_ids.setdefault(place_id["place_id"], 0)
-                        place_ids[place_id["place_id"]] += place_id[MONGODB_SCORE]/size
-
-                        info.setdefault(place_id["place_id"], {"count": 0, "max_score": -np.inf, "min_score": np.inf})
-                        info[place_id["place_id"]]["count"] += 1
-                        info[place_id["place_id"]]["max_score"] = max(info[place_id["place_id"]]["max_score"], place_id[MONGODB_SCORE])
-                        info[place_id["place_id"]]["min_score"] = min(info[place_id["place_id"]]["min_score"], place_id[MONGODB_SCORE])
-
-            for place_id, score in place_ids.items():
-                r.append({"place_id": place_id, MONGODB_SCORE: score, "count": info[place_id]["count"], "max_score": info[place_id]["max_score"], "min_score": info[place_id]["min_score"]})
-
-            return r
-
         idx_min, idx_max = None, None
         while True:
             if idx_min == None or idx_max == None:
@@ -146,7 +124,7 @@ class AggregatedThread(threading.Thread):
 
                     if pre_row_id != None and pre_row_id != row_id:
                         r = {MONGODB_INDEX: pre_row_id,
-                             MONGODB_VALUE: get_place_ids(pre_place_ids),
+                             MONGODB_VALUE: pre_place_ids,
                             "grid": pre_grids}
 
                         pool.append(r)
@@ -155,11 +133,11 @@ class AggregatedThread(threading.Thread):
                         pre_grids = []
 
                     pre_row_id = row_id
-                    pre_place_ids.append(record["place_ids"])
+                    pre_place_ids.extend(record["place_ids"])
                     pre_grids.append(record["grid"])
 
                 r = {MONGODB_INDEX: pre_row_id,
-                     MONGODB_VALUE: get_place_ids(pre_place_ids),
+                     MONGODB_VALUE: pre_place_ids,
                      "grid": pre_grids}
                 pool.append(r)
                 timestamp_end = time.time()
@@ -197,44 +175,39 @@ class WeightedThread(threading.Thread):
         batch_size = 5000
         mongo = pymongo.MongoClient(MONGODB_URL)
 
-        def scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, adjust, weight, eps):
-            results.setdefault(pre_row_id, {})
-            size = len(pre_place_ids)
+        def scoring(results, row_id, pre_place_ids, avg, std, min_std, adjust, weight, eps):
+            results.setdefault(row_id, {})
 
             if self.mode == "simple":
                 for place_ids in pre_place_ids:
                     for place_id in place_ids:
-                        results[pre_row_id].setdefault(place_id["place_id"], 0)
-                        results[pre_row_id][place_id["place_id"]] += place_id["score"]
+                        results[row_id].setdefault(place_id["place_id"], 0)
+                        results[row_id][place_id["place_id"]] += place_id["score"]
             elif self.mode == "weight":
                 for place_ids in pre_place_ids:
-                    for p in place_ids:
-                        place_id, score = p["place_id"], p["score"]
+                    pre_place_id, pre_count = None, 0
+                    for p in sorted(place_ids):     # sort by key
+                        place_id, s = p["place_id"], p["score"]
 
-                        results[pre_row_id].setdefault(place_id, 0)
+                        if pre_place_id and pre_place_id != place_id:
+                            results[pre_place_id] /= pre_count
+                            pre_count = 0
 
-                        s = (score-avg)/std+min_std+eps
-                        results[pre_row_id][place_id] += self.weighted(s, weight)/size*adjust
+                        results[row_id].setdefault(place_id, 0)
 
-                        #if pre_row_id == 50088:
-                        #    log("{} {} {} {} {} {} {} {} {}".format(place_id, size, adjust, score, avg, std, min_std, s, results[pre_row_id][place_id]))
+                        score = self.weighted((s-avg)/std+min_std+eps, weight)*adjust
+                        results[row_id][place_id] += score
 
-            elif self.mode == "vote":
-                score = {0: 10,
-                         1: 9,
-                         2: 9,
-                         3: 8,
-                         4: 8,
-                         5: 7,
-                         6: 7,
-                         7: 6,
-                         8: 6,
-                         9: 5}
 
-                for place_ids in pre_place_ids:
-                    for c, place_id in enumerate(sorted(place_ids, key=lambda x: x.values()[1], reverse=True)):
-                        results[pre_row_id].setdefault(place_id["place_id"], 0)
-                        results[pre_row_id][place_id["place_id"]] += score[c]/size
+                        pre_place_id = place_id
+                        pre_count += 1
+
+                        #if row_id in [50088, 89377, 440138]:
+                        #    log("{} {} {} {} {} {}".format(row_id, place_id, adjust, score, s, results[row_id][place_id]))
+
+                    results[row_id][pre_place_id] /= pre_count
+            else:
+                raise NotImplementError
 
         size = 3
         idx_min, idx_max = None, None
