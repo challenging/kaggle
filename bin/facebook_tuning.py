@@ -23,7 +23,7 @@ from configuration import ModelConfParser
 @click.option("--methodology", required=True, help="Tune parameters of which methodology")
 @click.option("--nfold", default=3, help="the number of nfold")
 @click.option("--n-estimator", default=200, help="the number of estimator")
-@click.option("--dropout", default=0, help="dropout rate")
+@click.option("--dropout", default="0", help="dropout rate")
 def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf, n_estimator, dropout):
     drop_fields = []
     is_saving = False
@@ -45,8 +45,13 @@ def parameter_tuning(methodology, nfold, is_pca, is_testing, n_jobs, conf, n_est
     eps = 0.00001
 
     original_size = df_training.shape[0]
-    df_training = df_training.groupby("place_id").filter(lambda x: len(x) >= dropout)
-    print ("Before: %d rows || After: %d rows" % (original_size, df_training.shape[0]))
+
+    if dropout.isdigit():
+        df_training = df_training.groupby("place_id").filter(lambda x: len(x) >= int(dropout))
+    else:
+        df_training = df_training.groupby("place_id").filter(lambda x: len(x) < int(dropout[1:]))
+
+    log("Before: %d rows || After: %d rows" % (original_size, df_training.shape[0]), INFO)
 
     initial_date = np.datetime64('2014-01-01T01:01', dtype='datetime64[m]')
     d_times = pd.DatetimeIndex(initial_date + np.timedelta64(int(mn), 'm') for mn in df_training["time"].values)

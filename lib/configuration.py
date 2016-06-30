@@ -143,11 +143,11 @@ class FacebookConfiguration(KaggleConfiguration):
         return self.get_value(section, option)
 
     def get_weight(self, section, option="weight"):
-        weight = self.get_value(section, option)
-        if weight == None:
-            weight = 1
+        weights = self.get_value(section, option)
+        if weights == None:
+            weights = "1"
 
-        return eval(weight)
+        return [eval(v) for v in weights.split(",")]
 
 class ModelConfParser(KaggleConfiguration):
     def get_filepaths(self, method):
