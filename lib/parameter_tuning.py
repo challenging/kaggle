@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
-from sklearn import cross_validation, metrics   #Additional scklearn functions
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, ExtraTreesClassifier, ExtraTreesRegressor
 from sklearn.naive_bayes import MultinomialNB, BernoulliNB, GaussianNB
 from sklearn.svm import SVC

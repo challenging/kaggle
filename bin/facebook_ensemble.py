@@ -119,12 +119,16 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_aggregate, is_b
 
                 locations.append([database, collection, weights, True if dropout and dropout.isdigit() else False])
 
-            adjust = float(total_o_dropout)/total_dropout
-            if adjust == 0:
+            adjust = None
+            if total_dropout == 0:
                 adjust = 1
+            else:
+                adjust = float(total_o_dropout)/total_dropout
+                if adjust == 0:
+                    adjust = 1
 
             for location in locations:
-                location[-1] = adjust if location[-1] else 1/adjust
+                location[-1] = adjust if location[-1] else 1
                 log(location)
 
             queue = Queue.Queue()
