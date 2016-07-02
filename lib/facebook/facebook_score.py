@@ -284,8 +284,6 @@ class WeightedThread(threading.Thread):
                     pre_place_ids = []
 
                     timestamp_start = time.time()
-                    log("Start to aggregate the data({} - {}) from {}-{}".format(idx_min, idx_max, database, collection))
-
                     for record in mongo[database][collection].find({MONGODB_INDEX: {"$gte": idx_min, "$lt": idx_max}}).sort([(MONGODB_INDEX, pymongo.ASCENDING)]).batch_size(MONGODB_BATCH_SIZE):
                         row_id = record[MONGODB_INDEX]
 
@@ -300,7 +298,7 @@ class WeightedThread(threading.Thread):
                         scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, adjust, weights)
 
                     timestamp_end = time.time()
-                    log("Cost {:4f} secends to finish this job({} - {}) from {} of {} with {}".format((timestamp_end-timestamp_start), idx_min, idx_max, collection, database, weights), INFO)
+                    log("Cost {:4f} secends to finish this job({} - {}) from {} - {} with {}".format((timestamp_end-timestamp_start), idx_min, idx_max, database, collection, weights), INFO)
 
                 for idx, result in enumerate(results):
                     filepath_output = "{}/{}.{}.csv".format(self.filepath_prefix, idx, idx_min)

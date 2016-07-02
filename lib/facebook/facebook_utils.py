@@ -12,7 +12,7 @@ from utils import make_a_stamp, log, INFO
 
 IP_BEANSTALK, PORT_BEANSTALK = "rongqide-Mac-mini.local", 11300
 #IP_BEANSTALK = "sakaes-MacBook-Pro.local"
-TIMEOUT_BEANSTALK=60
+TIMEOUT_BEANSTALK=1800
 TASK_BEANSTALK = "facebook_checkin_competition"
 
 MONGODB_URL = "mongodb://{}:27017".format(IP_BEANSTALK)

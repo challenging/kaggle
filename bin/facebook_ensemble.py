@@ -3,6 +3,7 @@
 import os
 import sys
 import click
+import time
 import datetime
 import Queue
 
@@ -90,7 +91,7 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_aggregate, is_b
 
                 queue = get_full_queue()
 
-                filepath_prefix = os.path.join(mode, os.path.basename(conf), m)
+                filepath_prefix = os.path.join(mode, os.path.basename(conf), m.lower())
                 create_folder("{}/1.txt".format(filepath_prefix))
 
                 for idx in range(0, n_jobs):
@@ -139,6 +140,10 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_aggregate, is_b
                 thread = NormalizeThread(kwargs={"queue": queue})
                 thread.setDaemon(True)
                 thread.start()
+
+                if n_jobs > 1:
+                    time.sleep(60)
+
             queue.join()
             log("Finish getting the min and max values", INFO)
 

@@ -21,7 +21,7 @@ from scandir import scandir
 from operator import itemgetter
 from scipy import stats
 
-from facebook_utils import IP_BEANSTALK, PORT_BEANSTALK, TASK_BEANSTALK, TASK_BEANSTALK
+from facebook_utils import IP_BEANSTALK, PORT_BEANSTALK, TASK_BEANSTALK, TASK_BEANSTALK, TIMEOUT_BEANSTALK
 from facebook_strategy import StrategyEngine
 from utils import log, DEBUG, INFO, WARN, ERROR
 from utils import create_folder, make_a_stamp
@@ -168,15 +168,13 @@ def process(method, workspaces, criteria, strategy, is_accuracy, is_exclude_outl
             # Avoid the empty file
             if os.path.exists(filepath_test):
                 # workaround
-                '''
-                threshold_x, threshold_y = 5.7, 1.35
+                threshold_x, threshold_y = 7.85, 8.4
                 filename = os.path.basename(filepath_test).replace(".csv", "")
                 x, y  = filename.split("_")
                 x = float(x)
                 y = float(y)
                 if x < threshold_x or (x == threshold_x and y <= threshold_y):
                     continue
-                '''
 
                 df_train, df_test = None, StrategyEngine.get_dataframe(filepath_test)
                 if strategy == "native":
@@ -207,13 +205,15 @@ def process(method, workspaces, criteria, strategy, is_accuracy, is_exclude_outl
                               "filepath_testing": pickle.dumps(df_test)}
 
                     log("{} - {} with {}".format(method, setting, priority+i), INFO)
-                    talk.put(zlib.compress(json.dumps(string)), priority=priority+i, ttr=600)
+                    talk.put(zlib.compress(json.dumps(string)), priority=priority+i, ttr=TIMEOUT_BEANSTALK)
 
                     i += 1
                     count += 1
 
+                    '''
                     if count % 10000 == 0:
                         log("Sleeping 1800 secends...", INFO)
                         time.sleep(1800)
+                    '''
 
     talk.close()
