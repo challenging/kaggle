@@ -203,8 +203,6 @@ class WeightedThread(threading.Thread):
             setattr(self, key, value)
 
     def run(self):
-        time.sleep(self.sleeping)
-
         eps = 0.00000001
         batch_size = 10000
         mongo = pymongo.MongoClient(MONGODB_URL)
@@ -266,7 +264,7 @@ class WeightedThread(threading.Thread):
 
                             weights[idx] = None
 
-                for idx, (database, collection, weights, adjust) in enumerate(locations):
+                for idx, (database, collection, weights, adjust) in enumerate(sorted(locations) if self.reverse else sorted(locations, reverse=True)):
                     all_done = True
                     for weight in weights:
                         all_done &= (weight == None)

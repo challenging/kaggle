@@ -94,7 +94,7 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_aggregate, is_b
                 create_folder("{}/1.txt".format(filepath_prefix))
 
                 for idx in range(0, n_jobs):
-                    thread = WeightedThread(kwargs={"mode": mode, "queue": queue, "locations": locations, "filepath_prefix": filepath_prefix})
+                    thread = WeightedThread(kwargs={"mode": mode, "queue": queue, "locations": locations, "filepath_prefix": filepath_prefix, "reverse": True if idx%2==0 else False})
                     thread.setDaemon(True)
                     thread.start()
 
@@ -143,13 +143,13 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_aggregate, is_b
             queue.join()
             log("Finish getting the min and max values", INFO)
 
-            queue = get_full_queue()
+            queue = get_full_queue(50000)
 
             filepath_prefix = os.path.join(mode, os.path.basename(conf))
 
             create_folder("{}/1.txt".format(filepath_prefix))
             for idx in range(0, n_jobs):
-                thread = WeightedThread(kwargs={"mode": mode, "queue": queue, "locations": locations, "filepath_prefix": filepath_prefix, "sleeping": idx*120})
+                thread = WeightedThread(kwargs={"mode": mode, "queue": queue, "locations": locations, "filepath_prefix": filepath_prefix, "reverse": True if idx%2==0 else False})
                 thread.setDaemon(True)
                 thread.start()
 
