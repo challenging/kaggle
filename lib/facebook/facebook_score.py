@@ -15,7 +15,7 @@ import numpy as np
 from utils import create_folder, log, INFO, WARN
 from facebook.facebook_utils import transform_to_submission_format, save_submission, get_mongo_location
 from facebook.facebook_utils import MONGODB_URL, MONGODB_INDEX, MONGODB_VALUE, MONGODB_SCORE, MONGODB_BATCH_SIZE, FULL_SET
-from facebook.facebook_utils import MODE_SIMPLE, MODE_WEIGHT
+from facebook.facebook_utils import MODE_SIMPLE, MODE_WEIGHT, MM_DATABASE, MM_COLLECTION
 
 def get_full_queue(batch_num=200000):
     max_num = FULL_SET[1]
@@ -47,7 +47,6 @@ class NormalizeThread(threading.Thread):
 
     def run(self):
         mongo = pymongo.MongoClient(MONGODB_URL)
-        mm_database, mm_collection = "facebook_checkin_competition", "min_max"
 
         while True:
             database, collection = self.queue.get()
@@ -56,7 +55,7 @@ class NormalizeThread(threading.Thread):
             rmin, rmax = np.inf, -np.inf
 
             # Check the existing of min, max values for collections
-            for r in mongo[mm_database][mm_collection].find({"database": database, "collection": collection}):
+            for r in mongo[MM_DATABASE][MM_COLLECTION].find({"database": database, "collection": collection}):
                 rmin, rmax = r["min"], r["max"]
 
             # Not found the min/max records
@@ -92,7 +91,7 @@ class NormalizeThread(threading.Thread):
                 avg = x/n
                 std = np.sqrt(xx/n - avg**2)
 
-                mongo[mm_database][mm_collection].insert({"database": database, "collection": collection, "std": std, "avg": avg, "n": n, "min": rmin, "max": rmax})
+                mongo[MM_DATABASE][MM_COLLECTION].insert({"database": database, "collection": collection, "std": std, "avg": avg, "n": n, "min": rmin, "max": rmax})
 
             log("Get {}/{} from {} of {}".format(rmin, rmax, collection, database), INFO)
 
@@ -204,6 +203,8 @@ class WeightedThread(threading.Thread):
             setattr(self, key, value)
 
     def run(self):
+        time.sleep(self.sleeping)
+
         eps = 0.00000001
         batch_size = 10000
         mongo = pymongo.MongoClient(MONGODB_URL)
@@ -248,7 +249,6 @@ class WeightedThread(threading.Thread):
 
         size = 3
         idx_min, idx_max = None, None
-        mm_database, mm_collection = "facebook_checkin_competition", "min_max"
         while True:
             if idx_min == None or idx_max == None:
                 idx_min, idx_max = self.queue.get()
@@ -275,7 +275,7 @@ class WeightedThread(threading.Thread):
                         continue
 
                     avg, std, min_std = 0, 0, 0
-                    for r in mongo[mm_database][mm_collection].find({"database": database, "collection": collection}):
+                    for r in mongo[MM_DATABASE][MM_COLLECTION].find({"database": database, "collection": collection}):
                         avg = r["avg"]
                         std = r["std"]
                         min_std = (r["min"] - r["avg"])/(r["std"]+eps)*-1

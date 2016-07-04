@@ -156,10 +156,10 @@ def process(method, workspaces, criteria, strategy, is_accuracy, is_exclude_outl
     results = {}
     workspace, database, collections = workspaces
 
+    IP_BEANSTALK, PORT_BEANSTALK = "rongqide-Mac-mini.local", 11300
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
     talk.use(TASK_BEANSTALK)
 
-    count = 0
     priority = int(time.time())
     for filepath_train in glob.iglob(workspace):
         if filepath_train.find(".csv") != -1 and filepath_train.find("test.csv") == -1 and filepath_train.find("submission") == -1:
@@ -208,12 +208,5 @@ def process(method, workspaces, criteria, strategy, is_accuracy, is_exclude_outl
                     talk.put(zlib.compress(json.dumps(string)), priority=priority+i, ttr=TIMEOUT_BEANSTALK)
 
                     i += 1
-                    count += 1
-
-                    '''
-                    if count % 10000 == 0:
-                        log("Sleeping 1800 secends...", INFO)
-                        time.sleep(1800)
-                    '''
 
     talk.close()

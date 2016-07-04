@@ -3,7 +3,6 @@
 import os
 import sys
 import click
-import time
 import datetime
 import Queue
 
@@ -141,9 +140,6 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_aggregate, is_b
                 thread.setDaemon(True)
                 thread.start()
 
-                if n_jobs > 1:
-                    time.sleep(60)
-
             queue.join()
             log("Finish getting the min and max values", INFO)
 
@@ -153,7 +149,7 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_aggregate, is_b
 
             create_folder("{}/1.txt".format(filepath_prefix))
             for idx in range(0, n_jobs):
-                thread = WeightedThread(kwargs={"mode": mode, "queue": queue, "locations": locations, "filepath_prefix": filepath_prefix})
+                thread = WeightedThread(kwargs={"mode": mode, "queue": queue, "locations": locations, "filepath_prefix": filepath_prefix, "sleeping": idx*120})
                 thread.setDaemon(True)
                 thread.start()
 
