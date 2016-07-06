@@ -12,7 +12,7 @@ from heapq import nlargest
 from utils import make_a_stamp, log, INFO
 
 IP_BEANSTALK, PORT_BEANSTALK = "rongqide-Mac-mini.local", 11300
-#IP_BEANSTALK = "sakaes-MacBook-Pro.local"
+IP_BEANSTALK = "sakaes-MacBook-Pro.local"
 TIMEOUT_BEANSTALK=1800
 TASK_BEANSTALK = "facebook_checkin_competition"
 
