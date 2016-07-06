@@ -33,7 +33,7 @@ ipaddress==1.0.16
 ipython==4.0.3
 ipython-genutils==0.1.0
 iterutils==0.1.6
-jdcal==1.0
+jdcal==1.2
 joblib==0.9.4
 Keras==1.0.1
 lazy-object-proxy==1.2.1
