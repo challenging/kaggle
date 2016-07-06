@@ -19,18 +19,20 @@ from utils import create_folder, log, INFO
 from facebook.facebook_score import get_full_queue, merge_files, NormalizeThread, WeightedThread, AggregatedThread
 from facebook.facebook_utils import transform_to_submission_format, save_submission, get_mongo_location, _import_hdb
 from facebook.facebook_utils import MONGODB_URL, MONGODB_INDEX, MONGODB_VALUE, MONGODB_SCORE, MONGODB_BATCH_SIZE, FULL_SET
-from facebook.facebook_utils import MODE_VOTE, MODE_SIMPLE, MODE_WEIGHT
+from facebook.facebook_utils import MODE_VOTE, MODE_SIMPLE, MODE_WEIGHT, TEMP_FOLDER
 from configuration import FacebookConfiguration
 
 @click.command()
 @click.option("--conf", required=True, help="filepath of Configuration")
 @click.option("--mode", default="simple", help="ensemble mode")
 @click.option("--n-jobs", default=1, help="number of thread")
+@click.option("--n-top", default=3, help="number of predictions")
 @click.option("--is-name", is_flag=True, help="just get mongo location")
+@click.option("--is-score", is_flag=True, help="output the score")
+@click.option("--is_local", is_flag=True, help="local mode")
 @click.option("--is-import", is_flag=True, help="import HDB file into the MongoDB")
 @click.option("--is-aggregate", is_flag=True, help="aggregation mode")
-@click.option("--is-beanstalk", is_flag=True, help="beanstalk mode")
-def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_aggregate, is_beanstalk):
+def facebook_ensemble(conf, mode, n_jobs, n_top, is_name, is_score, is_local, is_import, is_aggregate):
     configuration = FacebookConfiguration(conf)
 
     results = {}
@@ -42,6 +44,8 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_aggregate, is_b
             log("{} --> The workspace is {}".format(m, workspace), INFO)
 
             get_mongo_location(cache_workspace)
+    elif is_import:
+        Parallel(n_jobs=6)(delayed(_import_hdb)(configuration, m) for m in configuration.get_methods())
     elif is_aggregate:
         mongo = pymongo.MongoClient(MONGODB_URL)
 
@@ -75,7 +79,7 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_aggregate, is_b
             log("Rename {} to {}".format(new_collection ,collection), INFO)
 
         mongo.close()
-    elif is_beanstalk:
+    else:
         locations = []
 
         if mode == MODE_SIMPLE:
@@ -88,20 +92,24 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_aggregate, is_b
                 dropout = configuration.get_value(m, "dropout")
                 locations = [(database, collection, weights, True if dropout and dropout.isdigit() else False)]
 
-                queue = get_full_queue()
+                queue = get_full_queue(100000)
 
                 filepath_prefix = os.path.join(mode, os.path.basename(conf), m.lower())
+                if is_score:
+                    filepath_prefix = TEMP_FOLDER
+
                 create_folder("{}/1.txt".format(filepath_prefix))
 
                 for idx in range(0, n_jobs):
-                    thread = WeightedThread(kwargs={"mode": mode, "queue": queue, "locations": locations, "filepath_prefix": filepath_prefix, "reverse": True if idx%2==0 else False})
+                    thread = WeightedThread(kwargs={"mode": mode, "queue": queue, "locations": locations, "filepath_prefix": filepath_prefix, "is_score": is_score, "ntop": n_top})
                     thread.setDaemon(True)
                     thread.start()
 
                 queue.join()
 
-                for idx in range(0, len(weights)):
-                    merge_files(filepath_prefix, idx, final_submission_filename)
+                if not is_score:
+                    for idx in range(0, len(weights)):
+                        merge_files(filepath_prefix, idx, final_submission_filename)
         elif mode == MODE_WEIGHT:
             total_dropout, total_o_dropout = 0, 0
             for m in configuration.get_methods():
@@ -143,13 +151,13 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_aggregate, is_b
             queue.join()
             log("Finish getting the min and max values", INFO)
 
-            queue = get_full_queue(50000)
+            queue = get_full_queue(100000)
 
             filepath_prefix = os.path.join(mode, os.path.basename(conf))
 
             create_folder("{}/1.txt".format(filepath_prefix))
             for idx in range(0, n_jobs):
-                thread = WeightedThread(kwargs={"mode": mode, "queue": queue, "locations": locations, "filepath_prefix": filepath_prefix, "reverse": True if idx%2==0 else False})
+                thread = WeightedThread(kwargs={"mode": mode, "queue": queue, "locations": locations, "filepath_prefix": filepath_prefix, "is_score": is_score, "ntop": n_top})
                 thread.setDaemon(True)
                 thread.start()
 
@@ -158,46 +166,6 @@ def facebook_ensemble(conf, mode, n_jobs, is_name, is_import, is_aggregate, is_b
             # merge file
             for idx in range(0, len(weights)):
                 merge_files(filepath_prefix, idx, final_submission_filename)
-    elif is_import:
-        Parallel(n_jobs=6)(delayed(_import_hdb)(configuration, m) for m in configuration.get_methods())
-    else:
-        for m in configuration.get_methods():
-            workspace, cache_workspace, submission_workspace = configuration.get_workspace(m, False)
-            log("The workspace is {}".format(workspace), INFO)
-
-            weight = configuration.get_weight(m)
-
-            if mode == MODE_WEIGHT:
-                filepath_pkl = os.path.join(cache_workspace, "final_results.pkl")
-                log("The filepath_pkl is {}".format(filepath_pkl), INFO)
-                load_cache(filepath_pkl, is_hdb=True, others=(results, weight))
-                final_submission_filename.append("-".join([m, str(weight)]))
-            elif mode == MODE_VOTE:
-                filepath_submission = submission_workspace + ".10.csv"
-                log("start to read {}".format(filepath_submission), INFO)
-
-                df = pd.read_csv(filepath_submission, dtype={"row_id": str, "place_id": str})
-
-                for value in df.values:
-                    [row_id, place_ids] = value
-
-                    # No Place ID
-                    if isinstance(place_ids, float):
-                        continue
-
-                    results.setdefault(row_id, {})
-                    n_end = 6
-                    for place_id, vote in zip(place_ids.split(" "), [(n_end-idx) for idx in range(0, n_end)]):
-                        results[row_id].setdefault(place_id, 0)
-                        results[row_id][place_id] += vote
-            else:
-                raise NotImplementError
-
-        if results:
-            size = 3
-            csv = transform_to_submission_format(results, size)
-            filepath_output = "{}.{}.{}.csv".format(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M"), "_".join(final_submission_filename), size)
-            save_submission(filepath_output, csv, size, is_full=FULL_SET)
 
 if __name__ == "__main__":
     facebook_ensemble()

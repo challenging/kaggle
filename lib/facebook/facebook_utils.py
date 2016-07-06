@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import gzip
 import time
 import pymongo
 
@@ -11,7 +12,7 @@ from heapq import nlargest
 from utils import make_a_stamp, log, INFO
 
 IP_BEANSTALK, PORT_BEANSTALK = "rongqide-Mac-mini.local", 11300
-IP_BEANSTALK = "sakaes-MacBook-Pro.local"
+#IP_BEANSTALK = "sakaes-MacBook-Pro.local"
 TIMEOUT_BEANSTALK=1800
 TASK_BEANSTALK = "facebook_checkin_competition"
 
@@ -28,9 +29,11 @@ MODE_SIMPLE = "simple"
 MODE_WEIGHT = "weight"
 MODE_VOTE = "vote"
 
+TEMP_FOLDER = "{}/../../temp/facebook_checkin_competition".format(os.path.dirname(__file__))
+
 FULL_SET = [0, 8607230]
 
-def transform_to_submission_format(results, n_top):
+def transform_to_submission_format(results, n_top, has_score=False):
     timestamp_start = time.time()
     csv_format = {}
     for test_id, rankings in results.items():
@@ -38,8 +41,12 @@ def transform_to_submission_format(results, n_top):
 
         csv_format.setdefault(test_id, [])
 
-        for place_id, most_popular in nlargest(n_top, sorted(rankings.items()), key=lambda (k, v): v):
-            csv_format[test_id].append(str(int(place_id)))
+        if has_score:
+            for place_id, score in nlargest(n_top, sorted(rankings.items()), key=lambda (k, v): v):
+                csv_format[test_id].append("{};{:8f}".format(place_id, score))
+        else:
+            for place_id, score in nlargest(n_top, sorted(rankings.items()), key=lambda (k, v): v):
+                csv_format[test_id].append(str(int(place_id)))
 
         csv_format[test_id] = " ".join(csv_format[test_id])
 
@@ -48,7 +55,7 @@ def transform_to_submission_format(results, n_top):
 
     return csv_format
 
-def save_submission(filepath, results, n_top=3, is_full=[]):
+def save_submission(filepath, results, n_top=3, is_full=[], compression=None):
     ori_count = len(results)
     if is_full and len(results) < (is_full[1]-is_full[0]):
         for test_id in range(is_full[0], is_full[1]):
@@ -61,9 +68,13 @@ def save_submission(filepath, results, n_top=3, is_full=[]):
     for test_id, info in results.items():
         results[test_id] = " ".join(info.split(" ")[:n_top])
 
-    pd.DataFrame(results.items(), columns=["row_id", "place_id"]).to_csv(filepath, index=False)
+    if compression:
+        with gzip.open(filepath, "wb") as OUTPUT:
+            pd.DataFrame(results.items(), columns=["row_id", "place_id"]).to_csv(OUTPUT, index=False)
+    else:
+        pd.DataFrame(results.items(), columns=["row_id", "place_id"]).to_csv(filepath, index=False)
 
-    log("The submission file is stored in {}".format(filepath), INFO)
+    log("The submission file is stored in {} with {}".format(filepath, compression), INFO)
 
 def get_mongo_location(cache_workspace):
     folder_setting = os.path.basename(cache_workspace)
