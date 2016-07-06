@@ -10,12 +10,13 @@ import pymongo
 import threading
 import Queue
 
+import pandas as pd
 import numpy as np
 
 from utils import create_folder, log, INFO, WARN
 from facebook.facebook_utils import transform_to_submission_format, save_submission, get_mongo_location
 from facebook.facebook_utils import MONGODB_URL, MONGODB_INDEX, MONGODB_VALUE, MONGODB_SCORE, MONGODB_BATCH_SIZE, FULL_SET
-from facebook.facebook_utils import MODE_SIMPLE, MODE_WEIGHT
+from facebook.facebook_utils import MODE_SIMPLE, MODE_WEIGHT, MM_DATABASE, MM_COLLECTION, TEMP_FOLDER
 
 def get_full_queue(batch_num=200000):
     max_num = FULL_SET[1]
@@ -47,7 +48,6 @@ class NormalizeThread(threading.Thread):
 
     def run(self):
         mongo = pymongo.MongoClient(MONGODB_URL)
-        mm_database, mm_collection = "facebook_checkin_competition", "min_max"
 
         while True:
             database, collection = self.queue.get()
@@ -56,7 +56,7 @@ class NormalizeThread(threading.Thread):
             rmin, rmax = np.inf, -np.inf
 
             # Check the existing of min, max values for collections
-            for r in mongo[mm_database][mm_collection].find({"database": database, "collection": collection}):
+            for r in mongo[MM_DATABASE][MM_COLLECTION].find({"database": database, "collection": collection}):
                 rmin, rmax = r["min"], r["max"]
 
             # Not found the min/max records
@@ -92,7 +92,7 @@ class NormalizeThread(threading.Thread):
                 avg = x/n
                 std = np.sqrt(xx/n - avg**2)
 
-                mongo[mm_database][mm_collection].insert({"database": database, "collection": collection, "std": std, "avg": avg, "n": n, "min": rmin, "max": rmax})
+                mongo[MM_DATABASE][MM_COLLECTION].insert({"database": database, "collection": collection, "std": std, "avg": avg, "n": n, "min": rmin, "max": rmax})
 
             log("Get {}/{} from {} of {}".format(rmin, rmax, collection, database), INFO)
 
@@ -214,11 +214,24 @@ class WeightedThread(threading.Thread):
 
             if self.mode == MODE_SIMPLE:
                 for place_ids in pre_place_ids:
-                    for place_id in place_ids:
-                        results[0][row_id].setdefault(place_id["place_id"], 0)
+                    for place_ids in pre_place_ids:
+                        size = 1
+                        for p in place_ids:
+                            scores = p[MONGODB_SCORE]
+                            if isinstance(scores, list):
+                                size = max(size, len(scores))
 
-                        for score in place_id["score"]:
-                            results[0][row_id][place_id["place_id"]] += score
+                    for p in place_ids:
+                        place_id, scores = p["place_id"], p[MONGODB_SCORE]
+
+                        results[0][row_id].setdefault(place_id, 0)
+
+                        if isinstance(scores, float):
+                            scores = [scores]
+
+                        for score in scores:
+                            score = ((score-avg)/(std+eps)+min_std)/size
+                            results[0][row_id][place_id] += score
             elif self.mode == MODE_WEIGHT:
                 for idx, result in enumerate(results):
                     if weights[idx]:
@@ -240,15 +253,12 @@ class WeightedThread(threading.Thread):
                                 for score in scores:
                                     score = ((score-avg)/(std+eps)+min_std)*weights[idx]/size*adjust
                                     result[row_id][place_id] += score
-
-                                    #if row_id in [50088, 89377, 440138]:
-                                    #    log((idx, weights, row_id, place_id, size, score, result[row_id][place_id]), INFO)
+                    else:
+                        raise NotImplementError
             else:
                 raise NotImplementError
 
-        size = 3
         idx_min, idx_max = None, None
-        mm_database, mm_collection = "facebook_checkin_competition", "min_max"
         while True:
             if idx_min == None or idx_max == None:
                 idx_min, idx_max = self.queue.get()
@@ -261,6 +271,9 @@ class WeightedThread(threading.Thread):
                 for database, collection, weights, adjust in locations:
                     for idx in range(0, len(first_weights)):
                         filepath_output = "{}/{}.{}.csv".format(self.filepath_prefix, idx, idx_min)
+                        if self.is_score:
+                            filepath_output += ".gz"
+
                         if os.path.exists(filepath_output):
                             log("Skipping the {}({}) for {}-{}".format(idx, weights[idx], database, collection), INFO)
 
@@ -274,39 +287,55 @@ class WeightedThread(threading.Thread):
                     if all_done:
                         continue
 
-                    avg, std, min_std = 0, 0, 0
-                    for r in mongo[mm_database][mm_collection].find({"database": database, "collection": collection}):
-                        avg = r["avg"]
-                        std = r["std"]
-                        min_std = (r["min"] - r["avg"])/(r["std"]+eps)*-1
+                    filepath_output = "{}/{}.{}.{}.csv.gz".format(TEMP_FOLDER, database, collection, idx_min)
+                    if os.path.exists(filepath_output):
+                        timestamp_start = time.time()
+                        result = pd.read_csv(filepath_output)
+                        for values in result.values:
+                            row_id, place_ids = values[0], values[1]
 
-                    pre_row_id = None
-                    pre_place_ids = []
+                            results[idx].setdefault(row_id, {})
+                            for t in place_ids.split(" "):
+                                place_id, score = t.split(";")
+                                results[idx][row_id][int(place_id)] = float(score)
 
-                    timestamp_start = time.time()
-                    log("Start to aggregate the data({} - {}) from {}-{}".format(idx_min, idx_max, database, collection))
+                        timestamp_end = time.time()
+                        log("Cost {:4f} secends to finish this job({} - {}) from {} with {}".format((timestamp_end-timestamp_start), idx_min, idx_max, filepath_output, weights), INFO)
+                    else:
+                        avg, std, min_std = 0, 0, 0
+                        for r in mongo[MM_DATABASE][MM_COLLECTION].find({"database": database, "collection": collection}):
+                            avg = r["avg"]
+                            std = r["std"]
+                            min_std = (r["min"] - r["avg"])/(r["std"]+eps)*-1
 
-                    for record in mongo[database][collection].find({MONGODB_INDEX: {"$gte": idx_min, "$lt": idx_max}}).sort([(MONGODB_INDEX, pymongo.ASCENDING)]).batch_size(MONGODB_BATCH_SIZE):
-                        row_id = record[MONGODB_INDEX]
+                        pre_row_id = None
+                        pre_place_ids = []
 
-                        if pre_row_id != None and pre_row_id != row_id:
+                        timestamp_start = time.time()
+                        for record in mongo[database][collection].find({MONGODB_INDEX: {"$gte": idx_min, "$lt": idx_max}}).sort([(MONGODB_INDEX, pymongo.ASCENDING)]).batch_size(MONGODB_BATCH_SIZE):
+                            row_id = record[MONGODB_INDEX]
+
+                            if pre_row_id != None and pre_row_id != row_id:
+                                scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, adjust, weights)
+                                pre_place_ids = []
+
+                            pre_row_id = row_id
+                            pre_place_ids.append(record["place_ids"])
+
+                        if pre_row_id:
                             scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, adjust, weights)
-                            pre_place_ids = []
 
-                        pre_row_id = row_id
-                        pre_place_ids.append(record["place_ids"])
-
-                    if pre_row_id:
-                        scoring(results, pre_row_id, pre_place_ids, avg, std, min_std, adjust, weights)
-
-                    timestamp_end = time.time()
-                    log("Cost {:4f} secends to finish this job({} - {}) from {} of {} with {}".format((timestamp_end-timestamp_start), idx_min, idx_max, collection, database, weights), INFO)
+                        timestamp_end = time.time()
+                        log("Cost {:4f} secends to finish this job({} - {}) from {} - {} with {}".format((timestamp_end-timestamp_start), idx_min, idx_max, database, collection, weights), INFO)
 
                 for idx, result in enumerate(results):
                     filepath_output = "{}/{}.{}.csv".format(self.filepath_prefix, idx, idx_min)
+                    if self.is_score:
+                        filepath_output = "{}/{}.{}.{}.csv.gz".format(self.filepath_prefix, locations[idx][0], locations[idx][1], idx_min)
+
                     if not os.path.exists(filepath_output):
-                        csv = transform_to_submission_format(result, size)
-                        save_submission(filepath_output, csv, size, is_full=[idx_min, idx_max])
+                        csv = transform_to_submission_format(result, self.ntop, self.is_score)
+                        save_submission(filepath_output, csv, self.ntop, is_full=[idx_min, idx_max], compression="gzip" if self.is_score else None)
             except pymongo.errors.CursorNotFound as e:
                 log(e, WARN)
                 time.sleep(60)
