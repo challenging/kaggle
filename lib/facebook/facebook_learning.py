@@ -156,7 +156,6 @@ def process(method, workspaces, criteria, strategy, is_accuracy, is_exclude_outl
     results = {}
     workspace, database, collections = workspaces
 
-    IP_BEANSTALK, PORT_BEANSTALK = "rongqide-Mac-mini.local", 11300
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
     talk.use(TASK_BEANSTALK)
 
@@ -168,6 +167,7 @@ def process(method, workspaces, criteria, strategy, is_accuracy, is_exclude_outl
             # Avoid the empty file
             if os.path.exists(filepath_test):
                 # workaround
+                '''
                 threshold_x, threshold_y = 7.85, 8.4
                 filename = os.path.basename(filepath_test).replace(".csv", "")
                 x, y  = filename.split("_")
@@ -175,6 +175,7 @@ def process(method, workspaces, criteria, strategy, is_accuracy, is_exclude_outl
                 y = float(y)
                 if x < threshold_x or (x == threshold_x and y <= threshold_y):
                     continue
+                '''
 
                 df_train, df_test = None, StrategyEngine.get_dataframe(filepath_test)
                 if strategy == "native":

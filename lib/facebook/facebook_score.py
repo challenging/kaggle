@@ -253,6 +253,9 @@ class WeightedThread(threading.Thread):
                                 for score in scores:
                                     score = ((score-avg)/(std+eps)+min_std)*weights[idx]/size*adjust
                                     result[row_id][place_id] += score
+
+                                #if idx == 0 and row_id == 27611 and place_id in [6710189360, 7561150227]:
+                                #    log("{} - {}".format(place_id, result[row_id][place_id]))
                     else:
                         raise NotImplementError
             else:
@@ -289,18 +292,31 @@ class WeightedThread(threading.Thread):
 
                     filepath_output = "{}/{}.{}.{}.csv.gz".format(TEMP_FOLDER, database, collection, idx_min)
                     if os.path.exists(filepath_output):
-                        timestamp_start = time.time()
-                        result = pd.read_csv(filepath_output)
-                        for values in result.values:
-                            row_id, place_ids = values[0], values[1]
+                        if self.is_score:
+                            log("Found {} so skipping it for {} - {}".format(filepath_output, idx_min, idx_max), INFO)
+                            continue
+                        else:
+                            timestamp_start = time.time()
+                            result = pd.read_csv(filepath_output)
+                            for values in result.values:
+                                row_id, place_ids = values[0], values[1]
 
-                            results[idx].setdefault(row_id, {})
-                            for t in place_ids.split(" "):
-                                place_id, score = t.split(";")
-                                results[idx][row_id][int(place_id)] = float(score)
+                                for i, weight in enumerate(weights):
+                                    results[i].setdefault(row_id, {})
 
-                        timestamp_end = time.time()
-                        log("Cost {:4f} secends to finish this job({} - {}) from {} with {}".format((timestamp_end-timestamp_start), idx_min, idx_max, filepath_output, weights), INFO)
+                                    if isinstance(place_ids, str):
+                                        for t in place_ids.split(" "):
+                                            place_id, score = t.split(";")
+                                            place_id = int(place_id)
+
+                                            results[i][row_id].setdefault(place_id, 0)
+                                            results[i][row_id][int(place_id)] += float(score)*weight*adjust
+
+                                            #if i == 0 and row_id == 27611 and place_id in [6710189360, 7561150227]:
+                                            #    log("{} - {}".format(place_id, results[i][row_id][int(place_id)]))
+
+                            timestamp_end = time.time()
+                            log("Cost {:4f} secends to finish this job({} - {}) from {} with {}".format((timestamp_end-timestamp_start), idx_min, idx_max, filepath_output, weights), INFO)
                     else:
                         avg, std, min_std = 0, 0, 0
                         for r in mongo[MM_DATABASE][MM_COLLECTION].find({"database": database, "collection": collection}):
