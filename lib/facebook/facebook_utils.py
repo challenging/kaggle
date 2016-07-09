@@ -33,7 +33,7 @@ TEMP_FOLDER = "{}/../../temp/facebook_checkin_competition".format(os.path.dirnam
 
 FULL_SET = [0, 8607230]
 
-def transform_to_submission_format(results, n_top, has_score=False):
+def transform_to_submission_format(results, n_top=100, has_score=False):
     timestamp_start = time.time()
     csv_format = {}
     for test_id, rankings in results.items():
