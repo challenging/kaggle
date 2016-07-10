@@ -14,7 +14,7 @@ def stats(is_testing, column, mode):
     if mode == "producer":
         producer(column, is_testing)
     elif mode == "consumer":
-        consumer()
+        consumer(ttr=86400)
     else:
         log("Not implement this mode({})".format(mode), INFO)
 
