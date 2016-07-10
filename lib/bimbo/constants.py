@@ -22,7 +22,7 @@ COLUMNS = {"agency_id": COLUMN_AGENCY,
            "client_id": COLUMN_CLIENT}
 
 IP_BEANSTALK, PORT_BEANSTALK = "rongqide-Mac-mini.local", 11300
-IP_BEANSTALK = "sakaes-MacBook-Pro.local"
+#IP_BEANSTALK = "sakaes-MacBook-Pro.local"
 TIMEOUT_BEANSTALK=1800
 TASK_BEANSTALK = "bimbo_competition"
 
