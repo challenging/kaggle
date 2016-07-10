@@ -67,8 +67,9 @@ def stats(filepath_train, filepath_test, columns, fixed_column):
 
         yield record
 
-        timestamp_end = time.time()
-        log("Cost {:4f} secends to finish {}/{} records for {}".format(timestamp_end-timestamp_start, rid+1, df_test.shape[0], filepath_test), INFO)
+        if rid > 0 and (rid % 1000 == 0):
+            timestamp_end = time.time()
+            log("Cost {:4f} secends to finish {}/{} records for {}".format(timestamp_end-timestamp_start, rid+1, df_test.shape[0], filepath_test), INFO)
 
 def consumer(task=COMPETITION_NAME):
     CLIENT = pymongo.MongoClient(MONGODB_URL)
@@ -97,14 +98,22 @@ def consumer(task=COMPETITION_NAME):
                 for column in columns:
                     collection.create_index(MONGODB_COLUMNS[column])
 
+                timestamp_start, timestamp_end = None, None
+
                 records = []
                 for record in stats(filepath_train, filepath_test, columns, fixed_column):
+                    if timestamp_start == None:
+                        timestamp_start = time.time()
+
                     records.append(record)
 
                     if len(records) == 5000:
                         collection.insert_many(records)
-                        log("Insert {} records into {}-{}".format(len(records), MONGODB_DATABASE, get_stats_mongo_collection(fixed_column)), INFO)
 
+                        timestamp_end = time.time()
+                        log("Cost {:4f} secends to insert {} records into {}-{}".format(timestamp_end-timestamp_start, len(records), MONGODB_DATABASE, get_stats_mongo_collection(fixed_column)), INFO)
+
+                        timestamp_start = None
                         records = []
 
                 if records:
