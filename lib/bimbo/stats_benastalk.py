@@ -24,7 +24,6 @@ def stats(filepath_train, filepath_test, columns, fixed_column):
     df_train = pd.read_csv(filepath_train)
     df_test = pd.read_csv(filepath_test)
 
-    records = []
     for rid in range(0, df_test.shape[0]):
         timestamp_start = time.time()
 
@@ -66,12 +65,10 @@ def stats(filepath_train, filepath_test, columns, fixed_column):
             else:
                 del record[key]
 
-        records.append(record)
+        yield record
 
         timestamp_end = time.time()
         log("Cost {:4f} secends to finish {}/{} records for {}".format(timestamp_end-timestamp_start, rid+1, df_test.shape[0], filepath_test), INFO)
-
-    return records
 
 def consumer(task=COMPETITION_NAME):
     CLIENT = pymongo.MongoClient(MONGODB_URL)
@@ -100,10 +97,19 @@ def consumer(task=COMPETITION_NAME):
                 for column in columns:
                     collection.create_index(MONGODB_COLUMNS[column])
 
-                records = stats(filepath_train, filepath_test, columns, fixed_column)
+                records = []
+                for record in stats(filepath_train, filepath_test, columns, fixed_column):
+                    records.append(record)
 
-                collection.insert_many(records)
-                log("Insert {} records into {}-{}".format(len(records), MONGODB_DATABASE, get_stats_mongo_collection(fixed_column)), INFO)
+                    if len(records) == 5000:
+                        collection.insert_many(records)
+                        log("Insert {} records into {}-{}".format(len(records), MONGODB_DATABASE, get_stats_mongo_collection(fixed_column)), INFO)
+
+                        records = []
+
+                if records:
+                    collection.insert_many(records)
+                    log("Insert {} records into {}-{}".format(len(records), MONGODB_DATABASE, get_stats_mongo_collection(fixed_column)), INFO)
 
                 job.delete()
             except Exception as e:
@@ -114,7 +120,7 @@ def consumer(task=COMPETITION_NAME):
     CLIENT.close()
     TALK.close()
 
-def producer(column, is_testing, task=COMPETITION_NAME):
+def producer(column, is_testing, task=COMPETITION_NAME, ttr=TIMEOUT_BEANSTALK):
     TALK = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
     TALK.watch(task)
 
@@ -126,7 +132,7 @@ def producer(column, is_testing, task=COMPETITION_NAME):
                   "filepath_train": filepath_train,
                   "filepath_test": filepath_test}
 
-        TALK.put(json.dumps(string), ttr=TIMEOUT_BEANSTALK)
+        TALK.put(json.dumps(string), ttr=ttr)
         log("Put {} into the queue".format(filepath_test), INFO)
 
         if is_testing:
