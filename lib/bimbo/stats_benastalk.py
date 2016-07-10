@@ -104,25 +104,26 @@ def consumer(task=COMPETITION_NAME):
 
                 timestamp_start, timestamp_end = None, None
 
-                records = []
-                for record in stats(filepath_train, filepath_test, columns, fixed_column):
-                    if timestamp_start == None:
-                        timestamp_start = time.time()
+                if os.path.exists(filepath_train) and os.path.exists(filepath_test):
+                    records = []
+                    for record in stats(filepath_train, filepath_test, columns, fixed_column):
+                        if timestamp_start == None:
+                            timestamp_start = time.time()
 
-                    records.append(record)
+                        records.append(record)
 
-                    if len(records) == 5000:
+                        if len(records) == 5000:
+                            collection.insert_many(records)
+
+                            timestamp_end = time.time()
+                            log("Cost {:4f} secends to insert {} records into {}-{}".format(timestamp_end-timestamp_start, len(records), MONGODB_DATABASE, get_stats_mongo_collection(fixed_column)), INFO)
+
+                            timestamp_start = None
+                            records = []
+
+                    if records:
                         collection.insert_many(records)
-
-                        timestamp_end = time.time()
-                        log("Cost {:4f} secends to insert {} records into {}-{}".format(timestamp_end-timestamp_start, len(records), MONGODB_DATABASE, get_stats_mongo_collection(fixed_column)), INFO)
-
-                        timestamp_start = None
-                        records = []
-
-                if records:
-                    collection.insert_many(records)
-                    log("Insert {} records into {}-{}".format(len(records), MONGODB_DATABASE, get_stats_mongo_collection(fixed_column)), INFO)
+                        log("Insert {} records into {}-{}".format(len(records), MONGODB_DATABASE, get_stats_mongo_collection(fixed_column)), INFO)
 
                 job.delete()
             except Exception as e:
