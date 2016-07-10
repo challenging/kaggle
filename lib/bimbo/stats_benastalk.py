@@ -95,8 +95,12 @@ def consumer(task=COMPETITION_NAME):
                     columns.remove(COLUMNS[fixed_column])
 
                 # create index
-                for column in columns + ["product_id"] + ["row_id"]:
+                for column in columns:
                     collection.create_index(MONGODB_COLUMNS[column])
+
+                # create index for product ID and row ID
+                collection.create_index("product_id")
+                collection.create_index("row_id")
 
                 timestamp_start, timestamp_end = None, None
 
