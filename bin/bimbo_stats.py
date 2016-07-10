@@ -12,7 +12,7 @@ from bimbo.stats_benastalk import producer, consumer
 @click.option("--mode", required=True, help="producer mode | consumer mode")
 def stats(is_testing, column, mode):
     if mode == "producer":
-        producer(column, is_testing, ttr=86400)
+        producer(column, is_testing, ttr=86400*3)
     elif mode == "consumer":
         consumer()
     else:
