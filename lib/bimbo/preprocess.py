@@ -40,7 +40,7 @@ class SplitThread(threading.Thread):
         while True:
             timestamp_start = time.time()
 
-            output_filepath, filetype, column, value, job = self.queue.get()
+            output_filepath, filetype, column, value = self.queue.get()
 
             if os.path.exists(output_filepath):
                 log("Found {} so skipping it".format(output_filepath), INFO)
@@ -65,13 +65,6 @@ class SplitThread(threading.Thread):
                     sts = os.waitpid(p.pid, 0)
                     log("Transfer {} successfully({})".format(output_filepath, sts), INFO)
 
-
-            if job:
-                try:
-                    job.delete()
-                except Exception as e:
-                    log(e, WARN)
-
             self.queue.task_done()
 
             timestamp_end = time.time()
@@ -92,19 +85,33 @@ def producer(columns, ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETITION_GRO
 
             output_folder = os.path.join(WORKSPACE, "split", column, os.path.basename(filepath).replace(".csv", ""))
 
+            output_filepaths, values = [], []
             for unique_value in df[column].unique():
                 output_filepath = os.path.join(output_folder, "{}.csv".format(unique_value))
 
                 if os.path.exists(output_filepath):
                     log("Found {} so skipping it".format(output_filepath), INFO)
                 else:
-                    request = {"filetype": filetype,
-                               "output_filepath": output_filepath,
-                               "column": column,
-                               "value": unique_value}
-                    talk.put(json.dumps(request), TTR=3600)
+                    output_filepaths.append(output_filepath)
+                    values.append(unique_value)
 
-                    log("Put {} into the queue".format(request), INFO)
+                    if len(values) > 128:
+                        request = {"filetype": filetype,
+                                   "output_filepath": output_filepaths,
+                                   "column": column,
+                                   "value": values}
+                        talk.put(json.dumps(request), ttr=3600)
+                        log("Put {} requests into the queue".format(len(values)), INFO)
+
+                        output_filepaths, values = [], []
+
+            if values:
+                request = {"filetype": filetype,
+                           "output_filepath": output_filepaths,
+                           "column": column,
+                           "value": values}
+                talk.put(json.dumps(request), ttr=3600)
+                log("Put {} requests into the queue".format(len(values)), INFO)
 
     talk.close()
 
@@ -123,18 +130,18 @@ def consumer(ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETITION_GROUP_NAME, 
        thread.start()
 
     while True:
-        if queue.qsize() > 128:
-            log("Start to sleep 60 secends", INFO)
-            time.sleep(60)
-        else:
-            job = talk.reserve(timeout=TIMEOUT_BEANSTALK)
-            if job:
-                o = json.loads(job.body)
-                filetype, output_filepath, column, value = o["filetype"], o["output_filepath"], o["column"], o["value"]
+        job = talk.reserve(timeout=TIMEOUT_BEANSTALK)
+        if job:
+            o = json.loads(job.body)
+            filetype, output_filepaths, column, values = o["filetype"], o["output_filepath"], o["column"], o["value"]
 
+            for output_filepath, value in zip(output_filepaths, values):
                 create_folder(output_filepath)
+                queue.put((output_filepath, filetype, column, value))
 
-                queue.put((output_filepath, filetype, column, value, job))
+            queue.join()
+
+            job.delete()
 
     queue.join()
     talk.close()

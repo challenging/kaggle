@@ -23,7 +23,10 @@ from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_
 BATCH_JOB = 5000
 
 def stats(filepath_train, filepath_test, columns, fixed_column, collection):
-    df_train = pd.read_csv(filepath_train)
+    df_train = None
+    if os.path.exists(filepath_train):
+        df_train = pd.read_csv(filepath_train)
+
     df_test = pd.read_csv(filepath_test)
 
     row_num = 0
@@ -119,7 +122,7 @@ def consumer(task=COMPETITION_NAME):
 
                 if os.path.exists(filepath_test):
                     records = []
-                    for record in stats(filepath_train, filepath_test, columns, fixed_column):
+                    for record in stats(filepath_train, filepath_test, columns, fixed_column, collection):
                         if timestamp_start == None:
                             timestamp_start = time.time()
 
