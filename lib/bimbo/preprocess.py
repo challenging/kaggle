@@ -35,8 +35,6 @@ class SplitThread(threading.Thread):
         return df[df[column] == value]
 
     def run(self):
-        hostname = socket.gethostname()
-
         while True:
             timestamp_start = time.time()
 
@@ -59,11 +57,6 @@ class SplitThread(threading.Thread):
                     raise NotImplementError
 
                 self.matching(df, column, value).to_csv(output_filepath, index=False)
-
-                if hostname != IP_BEANSTALK:
-                    p = subprocess.Popen(["scp", output_filepath, "RungChiChen@{}:{}".format(IP_BEANSTALK, output_filepath)])
-                    sts = os.waitpid(p.pid, 0)
-                    log("Transfer {} successfully({})".format(output_filepath, sts), INFO)
 
             self.queue.task_done()
 
@@ -123,6 +116,8 @@ def consumer(ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETITION_GROUP_NAME, 
     talk = beanstalkc.Connection(host=ip, port=port)
     talk.watch(task)
 
+    hostname = socket.gethostname()
+
     queue = Queue.Queue()
     for n in range(0, n_jobs):
        thread = SplitThread(kwargs={"df_train": df_train, "df_test": df_test, "queue": queue})
@@ -135,11 +130,27 @@ def consumer(ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETITION_GROUP_NAME, 
             o = json.loads(job.body)
             filetype, output_filepaths, column, values = o["filetype"], o["output_filepath"], o["column"], o["value"]
 
+            output_folder = None
             for output_filepath, value in zip(output_filepaths, values):
+                output_folder = os.path.dirname(output_filepath)
+
                 create_folder(output_filepath)
                 queue.put((output_filepath, filetype, column, value))
 
             queue.join()
+
+            if hostname != ip:
+                p = subprocess.Popen(["scp", "{}/*.csv".format(output_folder), "RungChiChen@{}:{}".format(IP_BEANSTALK, output_folder)])
+                pid, sts = os.waitpid(p.pid, 0)
+                log("Transfer {} successfully({})".format(output_filepath, sts), INFO)
+
+                if sts == 0:
+                    for f in os.listdir(output_folder):
+                        if f.endswith(".csv"):
+                            filepath = os.path.join(output_folder, f)
+
+                            os.remove(filepath)
+                            log("Remove {}".format(filepath), INFO)
 
             job.delete()
 
