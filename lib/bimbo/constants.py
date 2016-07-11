@@ -3,6 +3,7 @@
 import os
 
 COMPETITION_NAME = "bimbo_competition"
+COMPETITION_GROUP_NAME = "{}_stats".format(COMPETITION_NAME)
 
 WORKSPACE = "/Users/rongqichen/Documents/programs/kaggle/cases/Grupo Bimbo Inventory Demand"
 DATA_PATH = os.path.join(WORKSPACE, "input")
@@ -22,7 +23,7 @@ COLUMNS = {"agency_id": COLUMN_AGENCY,
            "client_id": COLUMN_CLIENT}
 
 IP_BEANSTALK, PORT_BEANSTALK = "rongqide-Mac-mini.local", 11300
-#IP_BEANSTALK = "sakaes-MacBook-Pro.local"
+IP_BEANSTALK = "sakaes-MacBook-Pro.local"
 TIMEOUT_BEANSTALK=1800
 TASK_BEANSTALK = "bimbo_competition"
 

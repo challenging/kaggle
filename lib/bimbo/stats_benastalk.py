@@ -20,14 +20,27 @@ from bimbo.constants import get_stats_mongo_collection
 from bimbo.constants import COMPETITION_NAME, IP_BEANSTALK, PORT_BEANSTALK, TIMEOUT_BEANSTALK, MONGODB_URL, MONGODB_DATABASE, MONGODB_COLUMNS
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMNS, SPLIT_PATH
 
-def stats(filepath_train, filepath_test, columns, fixed_column):
-    df_train = pd.read_csv(filepath_train)
+BATCH_JOB = 5000
+
+def stats(filepath_train, filepath_test, columns, fixed_column, collection):
+    df_train = None
+    if os.path.exists(filepath_train):
+        df_train = pd.read_csv(filepath_train)
+
     df_test = pd.read_csv(filepath_test)
 
+    row_num = 0
     for rid in range(0, df_test.shape[0]):
+        if rid < row_num:
+            continue
+
         timestamp_start = time.time()
 
         row_id, week_num, agency_id, channel_id, route_id, client_id, product_id = df_test.values[rid]
+        count = collection.count({"row_id": row_id})
+        if count > 0:
+            row_num += BATCH_JOB
+
         record = {
                     "row_id": row_id,
                     "fixed_column": fixed_column,
@@ -39,37 +52,40 @@ def stats(filepath_train, filepath_test, columns, fixed_column):
                     MONGODB_COLUMNS[COLUMN_PRODUCT]: product_id,
                  }
 
-        for num in range(len(columns), 0, -1):
-            key = "{}_dimension".format(num)
-            record.setdefault(key, [])
+        if os.path.exists(filepath_train):
+            for num in range(len(columns), 0, -1):
+                key = "{}_dimension".format(num)
+                record.setdefault(key, [])
 
-            for combination in itertools.combinations(columns, num):
-                df = df_train.copy()[df_train[COLUMN_PRODUCT] == product_id]
+                for combination in itertools.combinations(columns, num):
+                    df = df_train.copy()
+                    if fixed_column != COLUMN_PRODUCT:
+                        df = df_train[df_train[COLUMN_PRODUCT] == product_id]
 
-                dimensions = []
-                for criteria in combination:
-                    dimensions.append(criteria.lower())
-                    df = df[df[criteria] == df_test[criteria].values[rid]]
+                    dimensions = []
+                    for criteria in combination:
+                        dimensions.append(criteria.lower())
+                        df = df[df[criteria] == df_test[criteria].values[rid]]
 
-                    if df.shape[0] == 0:
-                        break
+                        if df.shape[0] == 0:
+                            break
 
-                count = df.shape[0]
-                if count > 0:
-                    record[key].append({"|".join(dimensions): count})
+                    count = df.shape[0]
+                    if count > 0:
+                        record[key].append({"|".join(dimensions): count})
 
-            if record[key]:
-                record["matching_count"] = num
+                if record[key]:
+                    record["matching_count"] = num
 
-                break
-            else:
-                del record[key]
-
-        yield record
+                    break
+                else:
+                    del record[key]
 
         if rid > 0 and (rid % 1000 == 0):
             timestamp_end = time.time()
             log("Cost {:4f} secends to finish {}/{} records for {}".format(timestamp_end-timestamp_start, rid+1, df_test.shape[0], filepath_test), INFO)
+
+        yield record
 
 def consumer(task=COMPETITION_NAME):
     CLIENT = pymongo.MongoClient(MONGODB_URL)
@@ -99,20 +115,20 @@ def consumer(task=COMPETITION_NAME):
                     collection.create_index(MONGODB_COLUMNS[column])
 
                 # create index for product ID and row ID
-                collection.create_index("product_id")
+                collection.create_index(MONGODB_COLUMNS[COLUMN_PRODUCT])
                 collection.create_index("row_id")
 
                 timestamp_start, timestamp_end = None, None
 
-                if os.path.exists(filepath_train) and os.path.exists(filepath_test):
+                if os.path.exists(filepath_test):
                     records = []
-                    for record in stats(filepath_train, filepath_test, columns, fixed_column):
+                    for record in stats(filepath_train, filepath_test, columns, fixed_column, collection):
                         if timestamp_start == None:
                             timestamp_start = time.time()
 
                         records.append(record)
 
-                        if len(records) == 5000:
+                        if len(records) == BATCH_JOB:
                             collection.insert_many(records)
 
                             timestamp_end = time.time()
