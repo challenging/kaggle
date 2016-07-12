@@ -10,10 +10,13 @@ import click
 import pymongo
 import subprocess
 
+import pandas as pd
+
 from utils import log, create_folder
 from utils import DEBUG, INFO, WARN
 from bimbo.constants import get_stats_mongo_collection, get_mongo_connection
-from bimbo.constants import IP_BEANSTALK, MONGODB_DATABASE, MONGODB_BATCH_SIZE, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS, SPLIT_PATH
+from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
+from bimbo.constants import IP_BEANSTALK, MONGODB_DATABASE, MONGODB_BATCH_SIZE, SPLIT_PATH, TRAIN_FILE, TEST_FILE
 
 def purge_duplicated_records(column, batch_size=MONGODB_BATCH_SIZE):
     client = get_mongo_connection()
@@ -32,6 +35,53 @@ def purge_duplicated_records(column, batch_size=MONGODB_BATCH_SIZE):
         pre_row_id, pre_object_id = row_id, object_id
 
     log("Delete {} records".format(count), INFO)
+
+    client.close()
+
+def repair_missing_records(column, batch_size=MONGODB_BATCH_SIZE):
+    client = get_mongo_connection()
+    collection = client[MONGODB_DATABASE][get_stats_mongo_collection(column)]
+
+    row_ids = set()
+    for record in collection.find({}, {"_id": 1, COLUMN_ROW: 1}).sort([(COLUMN_ROW, pymongo.ASCENDING)]).batch_size(batch_size):
+        row_id = record[COLUMN_ROW]
+        row_ids.add(row_id)
+
+    records = []
+    with open(TEST_FILE, "rb") as INPUT:
+        header = True
+
+        #id,Semana,Agencia_ID,Canal_ID,Ruta_SAK,Cliente_ID,Producto_ID
+        for line in INPUT:
+            if header:
+                header = False
+                continue
+
+            row_id, week_num, agency_id, channel_id, route_id, client_id, product_id = line.strip().split(",")
+            row_id = int(row_id)
+            week_num = int(week_num)
+            agency_id = int(agency_id)
+            channel_id = int(channel_id)
+            route_id = int(route_id)
+            client_id = int(client_id)
+            product_id = int(product_id)
+
+            if row_id not in row_ids:
+                record = {
+                    "row_id": row_id,
+                    "fixed_column": column,
+                    "week_num": week_num,
+                    "matching_count": 0,
+                    MONGODB_COLUMNS[COLUMN_AGENCY]: agency_id,
+                    MONGODB_COLUMNS[COLUMN_CHANNEL]: channel_id,
+                    MONGODB_COLUMNS[COLUMN_ROUTE]: route_id,
+                    MONGODB_COLUMNS[COLUMN_CLIENT]: client_id,
+                    MONGODB_COLUMNS[COLUMN_PRODUCT]: product_id,
+                 }
+
+                log(record, INFO)
+
+                records.append(records)
 
     client.close()
 
@@ -76,6 +126,8 @@ def tool(column, mode):
     elif mode == "restructure":
         for filetype in ["train", "test"]:
             hierarchical_folder_structure(column, filetype)
+    elif mode == "repair":
+        repair_missing_records(column)
 
 if __name__ ==  "__main__":
     tool()
