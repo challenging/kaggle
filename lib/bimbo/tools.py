@@ -39,6 +39,10 @@ def hierarchical_folder_structure(column, filetype):
     prefixs = set()
     folder = os.path.join(SPLIT_PATH, COLUMNS[column], filetype.lower())
 
+    if not os.path.isdir(folder):
+        log("{} is not a folder".format(folder), INFO)
+        return
+
     timestamp_start = time.time()
     for filepath in glob.iglob("{}/*.csv".format(folder)):
         filename = os.path.basename(filepath)
@@ -51,6 +55,8 @@ def hierarchical_folder_structure(column, filetype):
 
         create_folder(new_filepath)
         os.rename(filepath, new_filepath)
+        log("Move {} to {}".format(filepath, new_filepath), INFO)
+
     timestamp_end = time.time()
     log("Cost {:4f} secends to move files to the sub-folders".format(timestamp_end-timestamp_start), INFO)
 
