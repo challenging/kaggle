@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import pymongo
 
 COMPETITION_NAME = "bimbo_competition"
 COMPETITION_GROUP_NAME = "{}_stats".format(COMPETITION_NAME)
@@ -15,6 +16,7 @@ TEST_FILE = os.path.join(DATA_PATH, "test.csv")
 TESTING_TRAIN_FILE = os.path.join(DATA_PATH, "train_10000.csv")
 TESTING_TEST_FILE = os.path.join(DATA_PATH, "test_10000.csv")
 
+COLUMN_ROW = "row_id"
 COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT = "Agencia_ID", "Canal_ID", "Ruta_SAK", "Producto_ID", "Cliente_ID"
 COLUMNS = {"agency_id": COLUMN_AGENCY,
            "channel_id": COLUMN_CHANNEL,
@@ -39,3 +41,6 @@ MONGODB_COLUMNS = {COLUMN_AGENCY: "agency_id",
 
 def get_stats_mongo_collection(name):
     return "{}_{}".format(MONGODB_STATS_COLLECTION, name.lower())
+
+def get_mongo_connection():
+    return pymongo.MongoClient(MONGODB_URL)
