@@ -94,9 +94,9 @@ def consumer(task=COMPETITION_CC_NAME):
 
     loss_sum, loss_count = 0, 0
     while True:
-        job = talk.reserve(timeout=TIMEOUT_BEANSTALK)
-        if job:
-            try:
+        try:
+            job = talk.reserve(timeout=TIMEOUT_BEANSTALK)
+            if job:
                 o = json.loads(zlib.decompress(job.body))
                 mongodb_database, mongodb_collection = o["mongodb_database"], o["mongodb_collection"]
                 client[mongodb_database][MONGODB_STATS_CC_COLLECTION].create_index("product_id")
@@ -104,32 +104,32 @@ def consumer(task=COMPETITION_CC_NAME):
 
                 product_id, history = o["product_id"], o["history"]
 
-                timestamp_start = time.time()
+                first_client_id = int(history.keys()[0])
+                count = client[mongodb_database][MONGODB_STATS_CC_COLLECTION].count({"product_id": product_id, "client_id": first_client_id})
+                if count == 0:
+                    timestamp_start = time.time()
+                    count, records = 0, []
+                    for rtype, record, loss_cc_sum in cc_calculation(product_id, history):
+                        if rtype == "record":
+                            records.append(record)
 
-                count, records = 0, []
-                for rtype, record, loss_cc_sum in cc_calculation(product_id, history):
-                    if rtype == "record":
-                        records.append(record)
+                            loss_sum += loss_cc_sum
+                            loss_count += 1
+                        elif rtype == "stats":
+                            client[mongodb_database][MONGODB_STATS_CC_COLLECTION].insert({"product_id": record, "rmlse": loss_cc_sum})
 
-                        loss_sum += loss_cc_sum
-                        loss_count += 1
-                    elif rtype == "stats":
-                        client[mongodb_database][MONGODB_STATS_CC_COLLECTION].insert({"product_id": record, "rmlse": loss_cc_sum})
+                    if records:
+                        client[mongodb_database][mongodb_collection].insert_many(records)
+                        count += len(records)
 
-                if records:
-                    client[mongodb_database][mongodb_collection].insert_many(records)
-                    count += len(records)
+                    log("Current RMLSE: {:8f}".format(np.sqrt(loss_sum/loss_count)), INFO)
 
-                log("Current RMLSE: {:8f}".format(np.sqrt(loss_sum/loss_count)), INFO)
-
-                timestamp_end = time.time()
-                log("Cost {:4f} secends to insert {} records into the mongodb({}-{})".format(timestamp_end-timestamp_start, count, mongodb_database, mongodb_collection), INFO)
+                    timestamp_end = time.time()
+                    log("Cost {:4f} secends to insert {} records into the mongodb({}-{})".format(timestamp_end-timestamp_start, count, mongodb_database, mongodb_collection), INFO)
 
                 job.delete()
-            except Exception as e:
-                log("Error occurs, {}".format(e), WARN)
-
-                raise
+        except Exception as e:
+            log("Error occurs, {}".format(e), WARN)
 
     client.close()
     talk.close()
