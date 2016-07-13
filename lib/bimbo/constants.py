@@ -37,7 +37,7 @@ TASK_BEANSTALK = "bimbo_competition"
 MONGODB_URL = "mongodb://{}:27017".format(IP_BEANSTALK)
 MONGODB_BATCH_SIZE = 20000
 
-MONGODB_DATABASE, MONGODB_STATS_COLLECTION = "bimbo", "naive_stats"
+MONGODB_DATABASE, MONGODB_STATS_COLLECTION, MONGODB_STATS_CC_COLLECTION = "bimbo", "naive_stats", "cc_stats"
 MONGODB_COLUMNS = {COLUMN_AGENCY: "agency_id",
                    COLUMN_CHANNEL: "channel_id",
                    COLUMN_ROUTE: "route_id",

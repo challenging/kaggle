@@ -15,6 +15,7 @@ import pandas as pd
 
 from utils import log, create_folder
 from utils import DEBUG, INFO, WARN
+from bimbo.cc_beanstalk import cc_calculation
 from bimbo.constants import get_stats_mongo_collection, get_mongo_connection
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
 from bimbo.constants import IP_BEANSTALK, MONGODB_DATABASE, MONGODB_BATCH_SIZE, SPLIT_PATH, STATS_PATH, TRAIN_FILE, TEST_FILE, TESTING_TRAIN_FILE, TESTING_TEST_FILE
@@ -165,17 +166,21 @@ def cc(filepath, threshold_value=0):
             prediction_unit = int(prediction_unit)
 
             key = product_id
+            if product_id != 9217:
+                continue
 
             history.setdefault(key, {})
             history[key].setdefault(client_id, all_zero_list())
             history[key][client_id][week-shift_week] = prediction_unit
 
-    cc_calculation(history, threshold_value)
+    for key, info in history.items():
+        for record, loss_sum, loss_count in cc_calculation(key, info, threshold_value):
+            pass
 
-def cc_calculation(history, threshold_value=0):
+def cc_calculation1111(history, threshold_value=0):
     loss_median_sum = 0
     loss_cc_sum, loss_count = 0, 0
-    for count_key, (product_id, info) in enumerate(zip(history.keys()[::-1], history.values()[::-1])):
+    for count_key, (product_id, info) in enumerate(history.items()):#zip(history.keys()[::-1], history.values()[::-1])):
         for client_id, values in info.items():
             client_mean = np.mean(values[1:-1])
 
@@ -185,7 +190,11 @@ def cc_calculation(history, threshold_value=0):
                     cc_client_ids.append(cc_client_id)
                     cc_matrix.append(cc_client_values[0:-2])
 
-            prediction_median = np.median(history[product_id][client_id][:-1])
+            l = np.array(history[product_id][client_id][:-1])
+            non_zero_idx = (l > 0)
+
+            prediction_median = max(0, np.median(l[non_zero_idx]))
+
             prediction_cc = prediction_median
             if np.sum(np.array(history[product_id][client_id]) == 0) > 4:
                 prediction_cc = 0
