@@ -99,8 +99,8 @@ def consumer(task=COMPETITION_CC_NAME):
             try:
                 o = json.loads(zlib.decompress(job.body))
                 mongodb_database, mongodb_collection = o["mongodb_database"], o["mongodb_collection"]
-                collection[mongodb_database][MONGODB_STATS_CC_COLLECTION].create_index({"product_id": pymongo.ASCENDING})
-                collection[mongodb_database][MONGODB_STATS_CC_COLLECTION].create_index({"client_id": pymongo.ASCENDING})
+                client[mongodb_database][MONGODB_STATS_CC_COLLECTION].create_index("product_id")
+                client[mongodb_database][MONGODB_STATS_CC_COLLECTION].create_index("client_id")
 
                 product_id, history = o["product_id"], o["history"]
 
