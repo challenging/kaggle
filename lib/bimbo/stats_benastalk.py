@@ -17,10 +17,8 @@ import beanstalkc
 from utils import log
 from utils import DEBUG, INFO, WARN
 from bimbo.constants import get_stats_mongo_collection
-from bimbo.constants import COMPETITION_NAME, IP_BEANSTALK, PORT_BEANSTALK, TIMEOUT_BEANSTALK, MONGODB_URL, MONGODB_DATABASE, MONGODB_COLUMNS
+from bimbo.constants import COMPETITION_NAME, IP_BEANSTALK, PORT_BEANSTALK, TIMEOUT_BEANSTALK, MONGODB_URL, MONGODB_DATABASE, MONGODB_COLUMNS, BATCH_JOB
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMNS, SPLIT_PATH
-
-BATCH_JOB = 5000
 
 def stats(filepath_train, filepath_test, columns, fixed_column, collection):
     df_train = None
@@ -155,6 +153,9 @@ def producer(column, is_testing, task=COMPETITION_NAME, ttr=TIMEOUT_BEANSTALK):
     TALK.watch(task)
 
     files = os.path.join(SPLIT_PATH, COLUMNS[column], "test", "*.csv")
+    if column == "client_id":
+        files = os.path.join(SPLIT_PATH, COLUMNS[column], "test", "*", "*.csv")
+
     for filepath_test in glob.iglob(files):
         filepath_train = filepath_test.replace("test", "train")
 
