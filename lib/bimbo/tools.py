@@ -227,11 +227,27 @@ def ftlr_solution(folder, fileid, submission_folder):
     log("Start to predict {}/{}, and then exiting code is {}".format(\
         folder, fileid, subprocess.call(cmd, shell=True)), INFO)
 
+def ensemble_solution(filepaths, output_filepath):
+    frames = []
+    for filepath in filepaths:
+        log("Start to read {}".format(filepath), INFO)
+        df = pd.read_csv(filepath)
+
+        frames.append(df)
+
+    # Header
+    # id,Demanda_uni_equil
+
+    result = pd.concat(frames)
+    target = {COLUMN_PREDICTION: np.mean}
+
+    result.groupby(["id"]).agg(target).to_csv(output_filepath)
+
 @click.command()
 @click.option("--is-testing", is_flag=True, help="testing mode")
 @click.option("--column", default=None, help="agency_id|channel_id|route_id|client_id|product_id")
 @click.option("--mode", required=True, help="purge|restructure")
-@click.option("--option", required=False, nargs=2, type=click.Tuple([unicode, int]), default=(None, None))
+@click.option("--option", required=False, nargs=2, type=click.Tuple([unicode, unicode]), default=(None, None))
 def tool(is_testing, column, mode, option):
     global TRAIN, TEST
 
@@ -254,6 +270,8 @@ def tool(is_testing, column, mode, option):
         aggregation(columns, output_filepath)
     elif mode == "cc":
         column, column_value = option
+        column_value = int(column_value)
+
         filepath = os.path.join(SPLIT_PATH, COLUMNS[column], "train", "{}.csv".format(column_value))
 
         cc(filepath)
@@ -269,6 +287,10 @@ def tool(is_testing, column, mode, option):
         create_folder("{}/1.txt".format(submission_folder))
 
         Parallel(n_jobs=6)(delayed(ftlr_solution)(folder, os.path.basename(filepath).replace(".csv", ""), submission_folder) for filepath in glob.iglob(os.path.join(folder, "*.csv")))
+    elif mode == "ensemble":
+        filepaths, output_filepath = option
+
+        ensemble_solution(filepaths.split(","), output_filepath)
     else:
         log("Not found this mode {}".format(mode), ERROR)
         sys.exit(101)
