@@ -151,7 +151,7 @@ def aggregation(group_columns, output_filepath):
     df = df_train.groupby(group_columns).agg(target)
     df.to_csv(output_filepath)
 
-def cc(filepath, threshold_value=0):
+def cc(filepath, filetype, threshold_value=0):
     shift_week = 3
     history = {}
 
@@ -178,13 +178,15 @@ def cc(filepath, threshold_value=0):
             history.setdefault(key, {})
             history[key].setdefault(client_id, all_zero_list())
             history[key][client_id][week-shift_week] = prediction_unit
+            #history[key][client_id][week-shift_week] = np.log1p(prediction_unit)
 
     loss_sum, loss_count = 0, 0
     for no, (key, info) in enumerate(history.items()):
-        for rtype, record, lsum in cc_calculation(key, info, threshold_value, progress_prefix=(no+1, len(history))):
-            if rtype == "record":
+        for rtype, record, lsum in cc_calculation(key, info, threshold_value, progress_prefix=(no+1, len(history)), alternative_filetype=filetype[0], alternative_id=filetype[1]):
+            if rtype in ["cc", "median"]:
                 loss_sum += lsum
                 loss_count += 1
+
             elif rtype == NON_PREDICTABLE:
                 pass
 
@@ -274,7 +276,7 @@ def tool(is_testing, column, mode, option):
 
         filepath = os.path.join(SPLIT_PATH, COLUMNS[column], "train", "{}.csv".format(column_value))
 
-        cc(filepath)
+        cc(filepath, ("{}_product".format(column), column_value))
     elif mode == "median":
         folder = os.path.join(SPLIT_PATH, COLUMNS[column], "train")
         output_filepaths = [os.path.join(MEDIAN_SOLUTION_PATH, "{}_product_client.json".format(column)),

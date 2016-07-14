@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 
 import os
+import json
 import pymongo
+
+from utils import log, INFO
 
 PYPY = "/Users/RungChiChen/Downloads/pypy2-v5.3.1-osx64/bin/pypy"
 
@@ -57,3 +60,16 @@ def get_stats_mongo_collection(name):
 
 def get_mongo_connection():
     return pymongo.MongoClient(MONGODB_URL)
+
+def load_median_solution(filetype):
+    solution = {}
+    filepath = os.path.join(MEDIAN_SOLUTION_PATH, "{}.json".format(filetype))
+
+    if os.path.exists(filepath):
+        log("Start to read median solution from {}".format(filepath), INFO)
+        with open(filepath, "rb") as INPUT:
+            solution = json.load(INPUT)
+    else:
+        log("Not found {}".format(filepath), WARN)
+
+    return solution
