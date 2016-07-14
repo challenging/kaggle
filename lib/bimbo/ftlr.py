@@ -41,6 +41,10 @@ else:
 
         sys.exit(9998)
 
+if os.path.exists(submission):
+    print "Found {} so skipping it".format(submission)
+    sys.exit(0)
+
 # B, model
 alpha = .01  # learning rate
 beta = 1.   # smoothing parameter for adaptive learning rate

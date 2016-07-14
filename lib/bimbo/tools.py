@@ -223,7 +223,6 @@ def median_solution(folder, output_filepaths):
 
 def ftlr_solution(folder, fileid, submission_folder):
     cmd = "{} {} \"{}\" {} \"{}\"".format(PYPY, "ftlr.py", folder, fileid, submission_folder)
-    log(cmd)
 
     log("Start to predict {}/{}, and then exiting code is {}".format(\
         folder, fileid, subprocess.call(cmd, shell=True)), INFO)
