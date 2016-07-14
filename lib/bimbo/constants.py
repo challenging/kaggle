@@ -3,6 +3,8 @@
 import os
 import pymongo
 
+PYPY = "/Users/RungChiChen/Downloads/pypy2-v5.3.1-osx64/bin/pypy"
+
 COMPETITION_NAME = "bimbo_competition"
 COMPETITION_GROUP_NAME = "{}_stats".format(COMPETITION_NAME)
 COMPETITION_CC_NAME = "{}_cc".format(COMPETITION_NAME)
@@ -10,7 +12,9 @@ COMPETITION_CC_NAME = "{}_cc".format(COMPETITION_NAME)
 NON_PREDICTABLE = -1
 
 WORKSPACE = "/Users/rongqichen/Documents/programs/kaggle/cases/Grupo Bimbo Inventory Demand"
-GLOBALSOLUTION_PATH = os.path.join(WORKSPACE, "navie_solution")
+MEDIAN_SOLUTION_PATH = os.path.join(WORKSPACE, "median_solution")
+FTLR_SOLUTION_PATH = os.path.join(WORKSPACE, "ftlr_solution")
+
 DATA_PATH = os.path.join(WORKSPACE, "input")
 SPLIT_PATH = os.path.join(DATA_PATH, "split")
 STATS_PATH = os.path.join(DATA_PATH, "stats")

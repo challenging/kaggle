@@ -17,13 +17,15 @@ import pprint
 import numpy as np
 import pandas as pd
 
+from joblib import Parallel, delayed
+
 from utils import log, create_folder
 from utils import DEBUG, INFO, WARN
 from bimbo.cc_beanstalk import cc_calculation
 from bimbo.constants import get_stats_mongo_collection, get_mongo_connection
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
-from bimbo.constants import IP_BEANSTALK, MONGODB_DATABASE, MONGODB_BATCH_SIZE
-from bimbo.constants import GLOBALSOLUTION_PATH, SPLIT_PATH, STATS_PATH, TRAIN_FILE, TEST_FILE, TESTING_TRAIN_FILE, TESTING_TEST_FILE
+from bimbo.constants import PYPY, IP_BEANSTALK, MONGODB_DATABASE, MONGODB_BATCH_SIZE
+from bimbo.constants import MEDIAN_SOLUTION_PATH, FTLR_SOLUTION_PATH, SPLIT_PATH, STATS_PATH, TRAIN_FILE, TEST_FILE, TESTING_TRAIN_FILE, TESTING_TEST_FILE
 from bimbo.constants import NON_PREDICTABLE
 
 TRAIN = TRAIN_FILE
@@ -188,11 +190,13 @@ def cc(filepath, threshold_value=0):
 
     log("Total RMLSE: {:8f}".format(loss_sum/loss_count), INFO)
 
-def global_navie_solution(folder, output_filepaths):
+def median_solution(folder, output_filepaths):
     global_route_prod_client_solution = {}
     global_route_prod_solution = {}
 
     for filepath in glob.iglob(os.path.join(folder, "*.csv")):
+        log("Start to process {}".format(filepath))
+
         df = pd.read_csv(filepath)
 
         drop_columns = [COLUMN_WEEK, 'Venta_uni_hoy', 'Venta_hoy', 'Dev_uni_proxima', 'Dev_proxima']
@@ -208,6 +212,7 @@ def global_navie_solution(folder, output_filepaths):
         for key, value in route_prod_median[COLUMN_PREDICTION].items():
             global_route_prod_solution["_".join([str(s) for s in key])] = value
 
+    log("Have {}/{} records in global_naive_solution".format(len(global_route_prod_client_solution), len(global_route_prod_solution)), INFO)
     for solution, filepath in zip([global_route_prod_client_solution, global_route_prod_solution], output_filepaths):
         create_folder(filepath)
 
@@ -215,6 +220,13 @@ def global_navie_solution(folder, output_filepaths):
             json.dump(solution, OUTPUT)
 
             log("Write naive-global solution to {}".format(filepath), INFO)
+
+def ftlr_solution(folder, fileid, submission_folder):
+    cmd = "{} {} \"{}\" {} \"{}\"".format(PYPY, "ftlr.py", folder, fileid, submission_folder)
+    log(cmd)
+
+    log("Start to predict {}/{}, and then exiting code is {}".format(\
+        folder, fileid, subprocess.call(cmd, shell=True)), INFO)
 
 @click.command()
 @click.option("--is-testing", is_flag=True, help="testing mode")
@@ -246,12 +258,18 @@ def tool(is_testing, column, mode, option):
         filepath = os.path.join(SPLIT_PATH, COLUMNS[column], "train", "{}.csv".format(column_value))
 
         cc(filepath)
-    elif mode == "solution":
+    elif mode == "median":
         folder = os.path.join(SPLIT_PATH, COLUMNS[column], "train")
-        output_filepaths = [os.path.join(GLOBALSOLUTION_PATH, "{}_product_client.json".format(column)),
-                            os.path.join(GLOBALSOLUTION_PATH, "{}_product.json".format(column))]
+        output_filepaths = [os.path.join(MEDIAN_SOLUTION_PATH, "{}_product_client.json".format(column)),
+                            os.path.join(MEDIAN_SOLUTION_PATH, "{}_product.json".format(column))]
 
-        global_navie_solution(folder, output_filepaths)
+        median_solution(folder, output_filepaths)
+    elif mode == "ftlr":
+        folder = os.path.join(SPLIT_PATH, COLUMNS[column], "test")
+        submission_folder = os.path.join(FTLR_SOLUTION_PATH, COLUMNS[column])
+        create_folder("{}/1.txt".format(submission_folder))
+
+        Parallel(n_jobs=6)(delayed(ftlr_solution)(folder, os.path.basename(filepath).replace(".csv", ""), submission_folder) for filepath in glob.iglob(os.path.join(folder, "*.csv")))
     else:
         log("Not found this mode {}".format(mode), ERROR)
         sys.exit(101)

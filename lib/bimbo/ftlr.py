@@ -1,3 +1,6 @@
+import os
+import sys
+
 from csv import DictReader
 from math import sqrt, log, expm1
 from datetime import datetime
@@ -10,13 +13,36 @@ from datetime import datetime
 # parameters #################################################################
 ##############################################################################
 
+folder = sys.argv[1]
+fileid = sys.argv[2]
+submission_folder = sys.argv[3]
+
 # A, paths
-train = '../input/train.csv'               # path to training file
-test = '../input/test.csv'                 # path to testing file
-submission = 'submission.csv'  # path of to be outputted submission file
+train = os.path.join(folder.replace("test", "train"), "{}.csv".format(fileid))               # path to training file
+test = os.path.join(folder, "{}.csv".format(fileid))                 # path to testing file
+submission = os.path.join(submission_folder, 'submission_{}.csv'.format(fileid))  # path of to be outputted submission file
+
+if not os.path.exists(test):
+    sys.exit(9999)
+else:
+    if not os.path.exists(train):
+        with open(submission, "wb") as OUTPUT:
+            with open(test, "rb") as INPUT:
+                header = True
+
+                for line in INPUT:
+                    if header:
+                        header = False
+                        continue
+
+                    row_id = line.strip().split(",")[0]
+
+                    OUTPUT.write("{},0\n".format(row_id))
+
+        sys.exit(9998)
 
 # B, model
-alpha = .02  # learning rate
+alpha = .01  # learning rate
 beta = 1.   # smoothing parameter for adaptive learning rate
 L1 = 0.     # L1 regularization, larger value means more regularized
 L2 = 1.     # L2 regularization, larger value means more regularized
@@ -26,7 +52,7 @@ D = 2 ** 23             # number of weights to use
 interaction = True     # whether to enable poly2 feature interactions
 
 # D, training/validation
-epoch = 3  # learn training data for N passes
+epoch = 8  # learn training data for N passes
 holdout = 9  # use week holdout validation
 
 
@@ -214,8 +240,6 @@ def data(path, D):
 ##############################################################################
 if __name__ == "__main__":
     print('Use PYPY!!!!')
-    print('Remove the next line!!!!')
-    exit(0)
     start = datetime.now()
 
     # initialize ourselves a learner
