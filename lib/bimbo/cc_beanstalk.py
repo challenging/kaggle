@@ -20,15 +20,23 @@ from utils import DEBUG, INFO, WARN
 from bimbo.constants import get_stats_mongo_collection
 from bimbo.constants import COMPETITION_CC_NAME, IP_BEANSTALK, PORT_BEANSTALK, TIMEOUT_BEANSTALK, MONGODB_URL, MONGODB_DATABASE, MONGODB_COLUMNS, MONGODB_STATS_CC_COLLECTION
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMNS, SPLIT_PATH
+from bimbo.constants import NON_PREDICTABLE
 
 BATCH_JOB = 5000
 
-def cc_calculation(product_id, history, threshold_value=0):
+def cc_calculation(product_id, history, threshold_value=0, progress_prefix=None):
     loss_median_sum = 0
-    loss_cc_sum, loss_count = 0, 0
+    loss_cc_sum, loss_count = 0, 0.00000001
 
+    shift = 0
     for client_id, values in history.items():
         client_mean = np.mean(values[1:-1])
+        if np.sum(values[1:-2]) == 0:
+            shift += 1
+
+            yield NON_PREDICTABLE, {"product_id": product_id, "client_id": int(client_id), "history": values, "cc": [], "prediction": NON_PREDICTABLE}, -1
+
+            continue
 
         cc_client_ids, cc_matrix = [client_id], [values[1:-1]]
         for cc_client_id, cc_client_values in history.items():
@@ -72,8 +80,9 @@ def cc_calculation(product_id, history, threshold_value=0):
 
         loss_median_sum += (np.log(prediction_median+1)-np.log(values[-1]+1))**2
 
-        log("{}/{} >>> {} - {} - {} - {:4f}({:4f}) - {:4f}({:4f})".format(\
-            loss_count, len(history), product_id, client_id, history[client_id], prediction_cc, prediction_median, np.sqrt(loss_cc_sum/loss_count), np.sqrt(loss_median_sum/loss_count)), INFO)
+        log("{} {}/{} >>> {} - {} - {} - {:4f}({:4f}) - {:4f}({:4f})".format(\
+            "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "",
+            int(loss_count+shift), len(history), product_id, client_id, history[client_id], prediction_cc, prediction_median, np.sqrt(loss_cc_sum/loss_count), np.sqrt(loss_median_sum/loss_count)), INFO)
 
         matrix = []
         for cid, value in results_cc.items():
@@ -110,11 +119,12 @@ def consumer(task=COMPETITION_CC_NAME):
                     timestamp_start = time.time()
                     count, records = 0, []
                     for rtype, record, loss_cc_sum in cc_calculation(product_id, history):
-                        if rtype == "record":
+                        if rtype in [NON_PREDICTABLE, "record"]:
                             records.append(record)
 
-                            loss_sum += loss_cc_sum
-                            loss_count += 1
+                            if rtype == "record":
+                                loss_sum += loss_cc_sum
+                                loss_count += 1
                         elif rtype == "stats":
                             client[mongodb_database][MONGODB_STATS_CC_COLLECTION].insert({"product_id": record, "rmlse": loss_cc_sum})
 
@@ -128,8 +138,10 @@ def consumer(task=COMPETITION_CC_NAME):
                     log("Cost {:4f} secends to insert {} records into the mongodb({}-{})".format(timestamp_end-timestamp_start, count, mongodb_database, mongodb_collection), INFO)
 
                 job.delete()
-        except Exception as e:
+        except BeanstalkcException as e:
             log("Error occurs, {}".format(e), WARN)
+        except Exception as e:
+            raise
 
     client.close()
     talk.close()
@@ -171,7 +183,7 @@ def producer(filetype, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
                    "mongodb_collection": get_stats_mongo_collection("{}".format(MONGODB_COLUMNS[COLUMN_PRODUCT])),
                    "history": info}
 
-        talk.put(zlib.compress(json.dumps(request)), ttr=3600)
+        talk.put(zlib.compress(json.dumps(request)), ttr=TIMEOUT_BEANSTALK)
         log("Put request(product_id={} from {}) into the queue".format(product_id, os.path.basename(filepath)), INFO)
 
     talk.close()
