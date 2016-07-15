@@ -1,13 +1,23 @@
 #!/usr/bin/env python
 
 import os
+import json
 import pymongo
+
+from utils import log, INFO
+
+PYPY = "/Users/RungChiChen/Downloads/pypy2-v5.3.1-osx64/bin/pypy"
 
 COMPETITION_NAME = "bimbo_competition"
 COMPETITION_GROUP_NAME = "{}_stats".format(COMPETITION_NAME)
 COMPETITION_CC_NAME = "{}_cc".format(COMPETITION_NAME)
 
+NON_PREDICTABLE = -1
+
 WORKSPACE = "/Users/rongqichen/Documents/programs/kaggle/cases/Grupo Bimbo Inventory Demand"
+MEDIAN_SOLUTION_PATH = os.path.join(WORKSPACE, "median_solution")
+FTLR_SOLUTION_PATH = os.path.join(WORKSPACE, "ftlr_solution")
+
 DATA_PATH = os.path.join(WORKSPACE, "input")
 SPLIT_PATH = os.path.join(DATA_PATH, "split")
 STATS_PATH = os.path.join(DATA_PATH, "stats")
@@ -20,6 +30,7 @@ TESTING_TEST_FILE = os.path.join(DATA_PATH, "10000", "test_10000.csv")
 
 COLUMN_WEEK, COLUMN_ROW = "Semana", "row_id"
 COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT = "Agencia_ID", "Canal_ID", "Ruta_SAK", "Producto_ID", "Cliente_ID"
+COLUMN_PREDICTION = "Demanda_uni_equil"
 COLUMNS = {"agency_id": COLUMN_AGENCY,
            "channel_id": COLUMN_CHANNEL,
            "route_id": COLUMN_ROUTE,
@@ -31,7 +42,7 @@ BATCH_JOB = 5000
 
 IP_BEANSTALK, PORT_BEANSTALK = "rongqide-Mac-mini.local", 11300
 #IP_BEANSTALK = "sakaes-MacBook-Pro.local"
-TIMEOUT_BEANSTALK=1800
+TIMEOUT_BEANSTALK=3600*3
 TASK_BEANSTALK = "bimbo_competition"
 
 MONGODB_URL = "mongodb://{}:27017".format(IP_BEANSTALK)
@@ -49,3 +60,16 @@ def get_stats_mongo_collection(name):
 
 def get_mongo_connection():
     return pymongo.MongoClient(MONGODB_URL)
+
+def load_median_solution(filetype):
+    solution = {}
+    filepath = os.path.join(MEDIAN_SOLUTION_PATH, "{}.json".format(filetype))
+
+    if os.path.exists(filepath):
+        log("Start to read median solution from {}".format(filepath), INFO)
+        with open(filepath, "rb") as INPUT:
+            solution = json.load(INPUT)
+    else:
+        log("Not found {}".format(filepath), WARN)
+
+    return solution
