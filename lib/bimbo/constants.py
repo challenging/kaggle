@@ -25,8 +25,8 @@ STATS_PATH = os.path.join(DATA_PATH, "stats")
 TRAIN_FILE = os.path.join(DATA_PATH, "train.csv")
 TEST_FILE = os.path.join(DATA_PATH, "test.csv")
 
-TESTING_TRAIN_FILE = os.path.join(DATA_PATH, "10000", "train_10000.csv")
-TESTING_TEST_FILE = os.path.join(DATA_PATH, "10000", "test_10000.csv")
+TESTING_TRAIN_FILE = os.path.join(DATA_PATH, "testing", "train.csv")
+TESTING_TEST_FILE = os.path.join(DATA_PATH, "testing", "test.csv")
 
 COLUMN_WEEK, COLUMN_ROW = "Semana", "row_id"
 COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT = "Agencia_ID", "Canal_ID", "Ruta_SAK", "Producto_ID", "Cliente_ID"
@@ -38,10 +38,16 @@ COLUMNS = {"agency_id": COLUMN_AGENCY,
            "client_id": COLUMN_CLIENT,
            "week": COLUMN_WEEK}
 
+ROUTE_GROUPS = [[COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT],
+                [COLUMN_PRODUCT, COLUMN_CLIENT],
+                [COLUMN_ROUTE, COLUMN_PRODUCT],
+                [COLUMN_ROUTE, COLUMN_CLIENT],
+                [COLUMN_PRODUCT]]
+
 BATCH_JOB = 5000
 
 IP_BEANSTALK, PORT_BEANSTALK = "rongqide-Mac-mini.local", 11300
-#IP_BEANSTALK = "sakaes-MacBook-Pro.local"
+IP_BEANSTALK = "rongqis-iMac.local"
 TIMEOUT_BEANSTALK=3600*3
 TASK_BEANSTALK = "bimbo_competition"
 
@@ -61,15 +67,25 @@ def get_stats_mongo_collection(name):
 def get_mongo_connection():
     return pymongo.MongoClient(MONGODB_URL)
 
-def load_median_solution(filetype):
-    solution = {}
-    filepath = os.path.join(MEDIAN_SOLUTION_PATH, "{}.json".format(filetype))
+def load_median_route_solution(week):
+    solutions = []
 
-    if os.path.exists(filepath):
+    for group in ROUTE_GROUPS:
+        filepath = os.path.join(MEDIAN_SOLUTION_PATH, "week={}".format(week), "{}.json".format("_".join(group)))
+
         log("Start to read median solution from {}".format(filepath), INFO)
         with open(filepath, "rb") as INPUT:
             solution = json.load(INPUT)
-    else:
-        log("Not found {}".format(filepath), WARN)
 
-    return solution
+        solutions.append(solution)
+
+    return solutions
+
+def get_median(classifiers, keys, values):
+    for key, classifier in zip(keys, classifiers):
+        k = "_".join([str(values[k]) for k in key])
+
+        if k in classifier:
+            return classifier[k]
+
+    return 0.0
