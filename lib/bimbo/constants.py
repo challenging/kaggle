@@ -62,7 +62,8 @@ MONGODB_COLUMNS = {COLUMN_AGENCY: "agency_id",
                    COLUMN_CHANNEL: "channel_id",
                    COLUMN_ROUTE: "route_id",
                    COLUMN_PRODUCT: "product_id",
-                   COLUMN_CLIENT: "client_id"}
+                   COLUMN_CLIENT: "client_id",
+                   COLUMN_WEEK: "week"}
 
 def get_stats_mongo_collection(name):
     return "{}_{}".format(MONGODB_STATS_COLLECTION, name).lower()
