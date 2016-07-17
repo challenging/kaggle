@@ -138,9 +138,8 @@ def consumer(median_solution, task=COMPETITION_CC_NAME, n_jobs=4):
 
                         client[mongodb_stats_database][mongodb_stats_collection].update(query, {"$set": r}, upsert=True)
 
-                log("Current RMLSE: {:8f} for {} records".format(np.sqrt(loss_sum/loss_count), loss_count), INFO)
-
                 timestamp_end = time.time()
+                log("Cost {} secends to get current RMLSE: {:8f} for {} records".format(timestamp_end-timestamp_start, np.sqrt(loss_sum/loss_count), loss_count), INFO)
 
                 job.delete()
         except beanstalkc.BeanstalkcException as e:
@@ -182,7 +181,7 @@ def producer(week, filetype, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
 
     client = get_mongo_connection()
 
-    mongodb_cc_database, mongodb_cc_collection = MONGODB_CC_DATABASE, get_cc_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
+    mongodb_cc_database, mongodb_cc_collection = MONGODB_CC_DATABASE, get_cc_mongo_collection("{}_{}".format(filetype[0], int(filetype[1])%256, MONGODB_COLUMNS[COLUMN_PRODUCT]))
     client[mongodb_cc_database][mongodb_cc_collection].create_index([("week", pymongo.ASCENDING), ("groupby", pymongo.ASCENDING), ("client_id", pymongo.ASCENDING), ("product_id", pymongo.ASCENDING)])
     client[mongodb_cc_database][mongodb_cc_collection].create_index([("week", pymongo.ASCENDING), ("groupby", pymongo.ASCENDING)])
     client[mongodb_cc_database][mongodb_cc_collection].create_index("week")
@@ -190,7 +189,7 @@ def producer(week, filetype, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
     client[mongodb_cc_database][mongodb_cc_collection].create_index("product_id")
     client[mongodb_cc_database][mongodb_cc_collection].create_index("client_id")
 
-    mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
+    mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("{}_{}".format(filetype[0], int(filetype[1])%256, MONGODB_COLUMNS[COLUMN_PRODUCT]))
     client[mongodb_prediction_database][mongodb_prediction_collection].create_index([("week", pymongo.ASCENDING),
                                                                                      ("groupby", pymongo.ASCENDING),
                                                                                      ("client_id", pymongo.ASCENDING),
@@ -204,9 +203,9 @@ def producer(week, filetype, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
         request = {"product_id": product_id,
                    "week": week,
                    "filetype": list(filetype),
-                   "mongodb_cc": [MONGODB_CC_DATABASE, get_cc_mongo_collection("{}_{}".format("_".join(filetype), MONGODB_COLUMNS[COLUMN_PRODUCT]))],
-                   "mongodb_prediction": [MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("{}_{}".format("_".join(filetype), MONGODB_COLUMNS[COLUMN_PRODUCT]))],
-                   "mongodb_stats": [MONGODB_CC_DATABASE, MONGODB_STATS_CC_COLLECTION],
+                   "mongodb_cc": [mongodb_cc_database, mongodb_cc_collection],
+                   "mongodb_prediction": [mongodb_prediction_database, mongodb_prediction_collection],
+                   "mongodb_stats": [mongodb_stats_database, mongodb_stats_collection],
                    "history": info}
 
         talk.put(zlib.compress(json.dumps(request)), ttr=TIMEOUT_BEANSTALK)
