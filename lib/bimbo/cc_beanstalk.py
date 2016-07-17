@@ -40,7 +40,7 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
 
         record = {"groupby": MONGODB_COLUMNS[filetype[0]], MONGODB_COLUMNS[filetype[0]]: int(filetype[1]), "product_id": product_id, "client_id": int(client_id), "history": values, "cc": []}
         prediction = {"row_id": predicted_rows[client_id],
-                      MOGNODB_COLUMNS[COLUMN_WEEK]: week,
+                      MONGODB_COLUMNS[COLUMN_WEEK]: week,
                       "groupby": MONGODB_COLUMNS[filetype[0]],
                       MONGODB_COLUMNS[filetype[0]]: int(filetype[1]),
                       "client_id": int(client_id),
@@ -192,36 +192,39 @@ def producer(week, filetype, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
     filepath_train = os.path.join(SPLIT_PATH, COLUMNS[filetype[0]], "train", "{}.csv".format(filetype[1]))
     filepath_test = os.path.join(SPLIT_PATH, COLUMNS[filetype[0]], "test", "{}.csv".format(filetype[1]))
 
-    talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
-    talk.watch(task)
+    if os.path.exists(filepath_test):
+        talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
+        talk.watch(task)
 
-    client = get_mongo_connection()
+        client = get_mongo_connection()
 
-    mongodb_cc_database, mongodb_cc_collection = MONGODB_CC_DATABASE, get_cc_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
-    client[mongodb_cc_database][mongodb_cc_collection].create_index([("groupby", pymongo.ASCENDING), (filetype[0], pymongo.ASCENDING), ("client_id", pymongo.ASCENDING), ("product_id", pymongo.ASCENDING)])
-    client[mongodb_cc_database][mongodb_cc_collection].create_index("groupby")
-    client[mongodb_cc_database][mongodb_cc_collection].create_index("product_id")
-    client[mongodb_cc_database][mongodb_cc_collection].create_index("client_id")
+        mongodb_cc_database, mongodb_cc_collection = MONGODB_CC_DATABASE, get_cc_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
+        client[mongodb_cc_database][mongodb_cc_collection].create_index([("groupby", pymongo.ASCENDING), (filetype[0], pymongo.ASCENDING), ("client_id", pymongo.ASCENDING), ("product_id", pymongo.ASCENDING)])
+        client[mongodb_cc_database][mongodb_cc_collection].create_index("groupby")
+        client[mongodb_cc_database][mongodb_cc_collection].create_index("product_id")
+        client[mongodb_cc_database][mongodb_cc_collection].create_index("client_id")
 
-    mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
-    client[mongodb_prediction_database][mongodb_prediction_collection].create_index([(COLUMN_WEEK, pymongo.ASCENDING),
-                                                                                     (filetype[0], pymongo.ASCENDING),
-                                                                                     ("groupby", pymongo.ASCENDING),
-                                                                                     ("client_id", pymongo.ASCENDING),
-                                                                                     ("product_id", pymongo.ASCENDING)])
+        mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
+        client[mongodb_prediction_database][mongodb_prediction_collection].create_index([(COLUMN_WEEK, pymongo.ASCENDING),
+                                                                                         (filetype[0], pymongo.ASCENDING),
+                                                                                         ("groupby", pymongo.ASCENDING),
+                                                                                         ("client_id", pymongo.ASCENDING),
+                                                                                         ("product_id", pymongo.ASCENDING)])
 
-    history, predicted_rows = get_history(filepath_train, filepath_test)
-    for product_id, info in predicted_rows.items():
-        request = {"product_id": product_id,
-                   COLUMN_WEEK: week,
-                   "filetype": list(filetype),
-                   "mongodb_cc": [mongodb_cc_database, mongodb_cc_collection],
-                   "mongodb_prediction": [mongodb_prediction_database, mongodb_prediction_collection],
-                   "history": history[product_id],
-                   "predicted_rows": predicted_rows[product_id]}
+        history, predicted_rows = get_history(filepath_train, filepath_test)
+        for product_id, info in predicted_rows.items():
+            request = {"product_id": product_id,
+                       COLUMN_WEEK: week,
+                       "filetype": list(filetype),
+                       "mongodb_cc": [mongodb_cc_database, mongodb_cc_collection],
+                       "mongodb_prediction": [mongodb_prediction_database, mongodb_prediction_collection],
+                       "history": history[product_id],
+                       "predicted_rows": predicted_rows[product_id]}
 
-        talk.put(zlib.compress(json.dumps(request)), ttr=TIMEOUT_BEANSTALK)
-        log("Put request(product_id={} from {}) into the {}".format(product_id, os.path.basename(filepath_train), task), INFO)
+            talk.put(zlib.compress(json.dumps(request)), ttr=TIMEOUT_BEANSTALK)
+            log("Put request(product_id={} from {}) into the {}".format(product_id, os.path.basename(filepath_train), task), INFO)
 
-    client.close()
-    talk.close()
+        client.close()
+        talk.close()
+    else:
+        log("Not found {} so skipping it".format(filepath_test), INFO)
