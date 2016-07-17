@@ -89,7 +89,7 @@ def cc_calculation(week, filetype, product_id, history, threshold_value=0, progr
 
         log("{} {}. {}/{} >>> {} - {} - {} - {:4f}({:4f}) - {:4f}({:4f})".format(\
             "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "",
-            rtype, int(loss_count), len(history), product_id, client_id, history[client_id], prediction_cc, prediction_median, np.sqrt(loss_cc_sum/loss_count), np.sqrt(loss_median_sum/loss_count)), INFO)
+            rtype, int(loss_count), len(history), product_id, client_id, history[client_id], prediction_cc, prediction_median, np.sqrt(loss_cc_sum/loss_count), np.sqrt(loss_median_sum/loss_count)), DEBUG)
 
         prediction["prediction_type"] = rtype
 
@@ -204,8 +204,8 @@ def producer(week, filetype, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
         request = {"product_id": product_id,
                    "week": week,
                    "filetype": list(filetype),
-                   "mongodb_cc": [MONGODB_CC_DATABASE, get_cc_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])],
-                   "mongodb_prediction": [MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])],
+                   "mongodb_cc": [MONGODB_CC_DATABASE, get_cc_mongo_collection("{}_{}".format("_".join(filetype), MONGODB_COLUMNS[COLUMN_PRODUCT]))],
+                   "mongodb_prediction": [MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("{}_{}".format("_".join(filetype), MONGODB_COLUMNS[COLUMN_PRODUCT]))],
                    "mongodb_stats": [MONGODB_CC_DATABASE, MONGODB_STATS_CC_COLLECTION],
                    "history": info}
 
