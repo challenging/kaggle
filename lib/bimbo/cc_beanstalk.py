@@ -18,23 +18,35 @@ from utils import DEBUG, INFO, WARN
 from bimbo.constants import get_mongo_connection, get_cc_mongo_collection, get_prediction_mongo_collection, load_median_route_solution, get_median
 from bimbo.constants import COMPETITION_CC_NAME, IP_BEANSTALK, PORT_BEANSTALK, TIMEOUT_BEANSTALK
 from bimbo.constants import MONGODB_PREDICTION_COLLECTION, MONGODB_STATS_CC_COLLECTION, MONGODB_PREDICTION_DATABASE, MONGODB_CC_DATABASE
-from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMNS, MONGODB_COLUMNS, SPLIT_PATH
-from bimbo.constants import NON_PREDICTABLE
+from bimbo.constants import COLUMN_WEEK, COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMNS, MONGODB_COLUMNS
+from bimbo.constants import SPLIT_PATH, NON_PREDICTABLE, TOTAL_WEEK
 
-def cc_calculation(week, filetype, product_id, history, threshold_value=0, progress_prefix=None, median_solution=([], [])):
-    end_idx = 7 - (9-week)
+def cc_calculation(week, filetype, product_id, predicted_rows, history, threshold_value=0, progress_prefix=None, median_solution=([], [])):
+    global TOTAL_WEEK
 
-    loss_median_sum = 0
-    loss_cc_sum, loss_count = 0, 0.00000001
+    end_idx = (TOTAL_WEEK-3) - (TOTAL_WEEK-week)
 
     rtype = NON_PREDICTABLE
     record = None
+
+    count = 0
+
     for client_id, values in history.items():
+        if client_id not in predicted_rows:
+            continue
+
         prediction_median = get_median(median_solution[0], median_solution[1], {filetype[0]: filetype[1], COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
         prediction_cc = prediction_median
 
-        record = {"groupby": MONGODB_COLUMNS[filetype[0]], "week": week, "product_id": product_id, "client_id": int(client_id), "history": values, "cc": []}
-        prediction = {"groupby": MONGODB_COLUMNS[filetype[0]], "week": week, "client_id": int(client_id), "product_id": product_id, "prediction_type": None, "prediction": NON_PREDICTABLE}
+        record = {"groupby": MONGODB_COLUMNS[filetype[0]], MONGODB_COLUMNS[filetype[0]]: int(filetype[1]), "product_id": product_id, "client_id": int(client_id), "history": values, "cc": []}
+        prediction = {"row_id": predicted_rows[client_id],
+                      COLUMN_WEEK: week,
+                      "groupby": MONGODB_COLUMNS[filetype[0]],
+                      MONGODB_COLUMNS[filetype[0]]: int(filetype[1]),
+                      "client_id": int(client_id),
+                      "product_id": product_id,
+                      "prediction_type": None,
+                      "prediction": NON_PREDICTABLE}
 
         client_mean = np.mean(values[1:end_idx])
         if np.sum(values[1:end_idx-1]) == 0:
@@ -69,7 +81,8 @@ def cc_calculation(week, filetype, product_id, history, threshold_value=0, progr
                 else:
                     prediction_cc = max(0, values[end_idx-2] + num_sum/num_count)
 
-                prediction_cc = prediction_cc*0.71 + 0.243
+                if prediction_cc > 0:
+                    prediction_cc = prediction_cc*0.71 + 0.243
 
                 matrix = []
                 for cid, value in results_cc.items():
@@ -80,24 +93,15 @@ def cc_calculation(week, filetype, product_id, history, threshold_value=0, progr
                 record["cc"] = matrix
                 prediction["prediction"] = prediction_cc
 
-        loss = (np.log1p(prediction_cc)-np.log1p(values[-1]))**2
+        count += 1
 
-        loss_count += 1
-        loss_cc_sum += loss
-
-        loss_median_sum += (np.log1p(prediction_median)-np.log1p(values[-1]))**2
-
-        log("{} {}. {}/{} >>> {} - {} - {} - {:4f}({:4f}) - {:4f}({:4f})".format(\
+        log("{} {}. {}/{} >>> {} - {} - {} - {:4f}({:4f})".format(\
             "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "",
-            rtype, int(loss_count), len(history), product_id, client_id, history[client_id], prediction_cc, prediction_median, np.sqrt(loss_cc_sum/loss_count), np.sqrt(loss_median_sum/loss_count)), DEBUG)
+            rtype, count, len(predicted_rows), product_id, client_id, history[client_id], prediction_cc, prediction_median), DEBUG)
 
         prediction["prediction_type"] = rtype
 
-        yield rtype, (record, prediction), loss
-
-    log("RMLSE for {} -  {}/{} = {:6f}".format(product_id, loss_cc_sum, loss_count, np.sqrt(loss_cc_sum/loss_count)), INFO)
-
-    yield "stats", product_id, np.sqrt(loss_cc_sum/loss_count)
+        yield rtype, record, prediction
 
 def consumer(median_solution, task=COMPETITION_CC_NAME, n_jobs=4):
     client = get_mongo_connection()
@@ -105,41 +109,29 @@ def consumer(median_solution, task=COMPETITION_CC_NAME, n_jobs=4):
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
     talk.watch(task)
 
-    loss_sum, loss_count = 0, 0.00000001
     while True:
         try:
             job = talk.reserve(timeout=TIMEOUT_BEANSTALK)
             if job:
                 o = json.loads(zlib.decompress(job.body))
-                week, filetype = o["week"], o["filetype"]
+                week, filetype = o[COLUMN_WEEK], o["filetype"]
+                predicted_rows = o["predicted_rows"]
 
                 mongodb_cc_database, mongodb_cc_collection = o["mongodb_cc"]
                 mongodb_prediction_database, mongodb_prediction_collection = o["mongodb_prediction"]
-                mongodb_stats_database, mongodb_stats_collection = o["mongodb_stats"]
 
                 product_id, history = o["product_id"], o["history"]
 
                 timestamp_start = time.time()
 
-                for rtype, record, loss_cc_sum in cc_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, history, median_solution=median_solution):
-                    if rtype in ["cc", "median"]:
-                        loss_sum += loss_cc_sum
-                        loss_count += 1
+                for rtype, cc, prediction in cc_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, history, median_solution=median_solution):
+                    query = {"groupby": cc["groupby"], filetype[0]: filetype[1], "client_id": cc["client_id"], "product_id": cc["product_id"]}
+                    client[mongodb_cc_database][mongodb_cc_collection].update(query, {"$set": cc}, upsert=True)
 
-                        cc, prediction = record
-
-                        query = {"week": week, "groupby": cc["groupby"], "client_id": cc["client_id"], "product_id": cc["product_id"]}
-                        client[mongodb_cc_database][mongodb_cc_collection].update(query, {"$set": cc}, upsert=True)
-
-                        client[mongodb_prediction_database][mongodb_prediction_collection].update(query, {"$set": prediction}, upsert=True)
-                    elif rtype == "stats":
-                        query = {"week": week, "groupby": filetype[0], "product_id": record}
-                        r = {"week": week, "groupby": filetype[0], "product_id": record, "rmlse": loss_cc_sum}
-
-                        client[mongodb_stats_database][mongodb_stats_collection].update(query, {"$set": r}, upsert=True)
+                    query[COLUMN_WEEK] = week
+                    client[mongodb_prediction_database][mongodb_prediction_collection].update(query, {"$set": prediction}, upsert=True)
 
                 timestamp_end = time.time()
-                log("Cost {} secends to get current RMLSE: {:8f} for {} records".format(timestamp_end-timestamp_start, np.sqrt(loss_sum/loss_count), loss_count), INFO)
 
                 job.delete()
         except beanstalkc.BeanstalkcException as e:
@@ -150,9 +142,10 @@ def consumer(median_solution, task=COMPETITION_CC_NAME, n_jobs=4):
     talk.close()
     client.close()
 
-def get_history(filepath, shift_week=3, week=[3, 10]):
+def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK]):
     history = {}
-    with open(filepath, "rb") as INPUT:
+
+    with open(filepath_train, "rb") as INPUT:
         header = True
 
         for line in INPUT:
@@ -171,45 +164,64 @@ def get_history(filepath, shift_week=3, week=[3, 10]):
             history[product_id].setdefault(client_id, [0 for _ in range(week[0], week[1])])
             history[product_id][client_id][w-shift_week] = prediction_unit
 
-    return history
+    predicted_rows = {}
+    with open(filepath_test, "rb") as INPUT:
+        header = True
+
+        for line in INPUT:
+            if header:
+                header = False
+                continue
+
+            row_id, w, agency_id, channel_id, route_id, client_id, product_id = line.strip().split(",")
+
+            row_id = int(row_id)
+            w = int(w)
+            client_id = int(client_id)
+            product_id = int(product_id)
+
+            history.setdefault(product_id, {})
+            history[product_id].setdefault(client_id, [0 for _ in range(week[0], week[1])])
+
+            predicted_rows.setdefault(product_id, {})
+            predicted_rows[product_id][client_id] = row_id
+
+    return history, predicted_rows
 
 def producer(week, filetype, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
-    filepath = os.path.join(SPLIT_PATH, COLUMNS[filetype[0]], "train", "{}.csv".format(filetype[1]))
+    filepath_train = os.path.join(SPLIT_PATH, COLUMNS[filetype[0]], "train", "{}.csv".format(filetype[1]))
+    filepath_test = os.path.join(SPLIT_PATH, COLUMNS[filetype[0]], "test", "{}.csv".format(filetype[1]))
 
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
     talk.watch(task)
 
     client = get_mongo_connection()
 
-    mongodb_cc_database, mongodb_cc_collection = MONGODB_CC_DATABASE, get_cc_mongo_collection("{}_{}_{}".format(filetype[0], int(filetype[1])%256, MONGODB_COLUMNS[COLUMN_PRODUCT]))
-    client[mongodb_cc_database][mongodb_cc_collection].create_index([("week", pymongo.ASCENDING), ("groupby", pymongo.ASCENDING), ("client_id", pymongo.ASCENDING), ("product_id", pymongo.ASCENDING)])
-    client[mongodb_cc_database][mongodb_cc_collection].create_index([("week", pymongo.ASCENDING), ("groupby", pymongo.ASCENDING)])
-    client[mongodb_cc_database][mongodb_cc_collection].create_index("week")
+    mongodb_cc_database, mongodb_cc_collection = MONGODB_CC_DATABASE, get_cc_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
+    client[mongodb_cc_database][mongodb_cc_collection].create_index([("groupby", pymongo.ASCENDING), (filetype[0], pymongo.ASCENDING), ("client_id", pymongo.ASCENDING), ("product_id", pymongo.ASCENDING)])
     client[mongodb_cc_database][mongodb_cc_collection].create_index("groupby")
     client[mongodb_cc_database][mongodb_cc_collection].create_index("product_id")
     client[mongodb_cc_database][mongodb_cc_collection].create_index("client_id")
 
-    mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("{}_{}_{}".format(filetype[0], int(filetype[1])%256, MONGODB_COLUMNS[COLUMN_PRODUCT]))
-    client[mongodb_prediction_database][mongodb_prediction_collection].create_index([("week", pymongo.ASCENDING),
+    mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
+    client[mongodb_prediction_database][mongodb_prediction_collection].create_index([(COLUMN_WEEK, pymongo.ASCENDING),
+                                                                                     (filetype[0], pymongo.ASCENDING),
                                                                                      ("groupby", pymongo.ASCENDING),
                                                                                      ("client_id", pymongo.ASCENDING),
                                                                                      ("product_id", pymongo.ASCENDING)])
 
-    mongodb_stats_database, mongodb_stats_collection = MONGODB_CC_DATABASE, MONGODB_STATS_CC_COLLECTION + "_{}".format(MONGODB_COLUMNS[COLUMN_PRODUCT])
-    client[mongodb_stats_database][mongodb_stats_collection].create_index([("week", pymongo.ASCENDING), ("groupby", pymongo.ASCENDING), ("product_id", pymongo.ASCENDING)])
-
-    history = get_history(filepath)
-    for product_id, info in history.items():
+    history, predicted_rows = get_history(filepath_train, filepath_test)
+    for product_id, info in predicted_rows.items():
         request = {"product_id": product_id,
-                   "week": week,
+                   COLUMN_WEEK: week,
                    "filetype": list(filetype),
                    "mongodb_cc": [mongodb_cc_database, mongodb_cc_collection],
                    "mongodb_prediction": [mongodb_prediction_database, mongodb_prediction_collection],
-                   "mongodb_stats": [mongodb_stats_database, mongodb_stats_collection],
-                   "history": info}
+                   "history": history[product_id],
+                   "predicted_rows": predicted_rows[product_id]}
 
         talk.put(zlib.compress(json.dumps(request)), ttr=TIMEOUT_BEANSTALK)
-        log("Put request(product_id={} from {}) into the {}".format(product_id, os.path.basename(filepath), task), INFO)
+        log("Put request(product_id={} from {}) into the {}".format(product_id, os.path.basename(filepath_train), task), INFO)
 
     client.close()
     talk.close()

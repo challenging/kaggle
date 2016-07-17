@@ -46,13 +46,18 @@ def stats(is_testing, n_jobs, week, column, option):
                 producer(week, (column, fid), task=task)
 
                 count += 1
-                if is_testing and count > 5:
+                if is_testing and count > 1:
                     break
         elif mode.lower() == "consumer":
-            if column == "route_id":
-                median_solution = (load_median_route_solution(week), ROUTE_GROUPS)
+            median_solution = ({}, {})
+
+            if is_testing:
+                median_solution = ({}, {})
             else:
-                raise NotImplementError
+                if column == "route_id":
+                    median_solution = (load_median_route_solution(week), ROUTE_GROUPS)
+                else:
+                    raise NotImplementError
 
             if is_testing:
                 n_jobs = 1
