@@ -40,7 +40,7 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
 
         record = {"groupby": MONGODB_COLUMNS[filetype[0]], MONGODB_COLUMNS[filetype[0]]: int(filetype[1]), "product_id": product_id, "client_id": int(client_id), "history": values, "cc": []}
         prediction = {"row_id": predicted_rows[client_id],
-                      COLUMN_WEEK: week,
+                      MOGNODB_COLUMNS[COLUMN_WEEK]: week,
                       "groupby": MONGODB_COLUMNS[filetype[0]],
                       MONGODB_COLUMNS[filetype[0]]: int(filetype[1]),
                       "client_id": int(client_id),

@@ -55,7 +55,7 @@ def stats(is_testing, n_jobs, week, column, option):
                 median_solution = ({}, {})
             else:
                 if column == "route_id":
-                    median_solution = (load_median_route_solution(week), ROUTE_GROUPS)
+                    median_solution = (load_median_route_solution(week-1), ROUTE_GROUPS)
                 else:
                     raise NotImplementError
 
