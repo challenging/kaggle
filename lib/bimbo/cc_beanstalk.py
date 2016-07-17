@@ -181,7 +181,7 @@ def producer(week, filetype, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
 
     client = get_mongo_connection()
 
-    mongodb_cc_database, mongodb_cc_collection = MONGODB_CC_DATABASE, get_cc_mongo_collection("{}_{}".format(filetype[0], int(filetype[1])%256, MONGODB_COLUMNS[COLUMN_PRODUCT]))
+    mongodb_cc_database, mongodb_cc_collection = MONGODB_CC_DATABASE, get_cc_mongo_collection("{}_{}_{}".format(filetype[0], int(filetype[1])%256, MONGODB_COLUMNS[COLUMN_PRODUCT]))
     client[mongodb_cc_database][mongodb_cc_collection].create_index([("week", pymongo.ASCENDING), ("groupby", pymongo.ASCENDING), ("client_id", pymongo.ASCENDING), ("product_id", pymongo.ASCENDING)])
     client[mongodb_cc_database][mongodb_cc_collection].create_index([("week", pymongo.ASCENDING), ("groupby", pymongo.ASCENDING)])
     client[mongodb_cc_database][mongodb_cc_collection].create_index("week")
@@ -189,13 +189,13 @@ def producer(week, filetype, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
     client[mongodb_cc_database][mongodb_cc_collection].create_index("product_id")
     client[mongodb_cc_database][mongodb_cc_collection].create_index("client_id")
 
-    mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("{}_{}".format(filetype[0], int(filetype[1])%256, MONGODB_COLUMNS[COLUMN_PRODUCT]))
+    mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("{}_{}_{}".format(filetype[0], int(filetype[1])%256, MONGODB_COLUMNS[COLUMN_PRODUCT]))
     client[mongodb_prediction_database][mongodb_prediction_collection].create_index([("week", pymongo.ASCENDING),
                                                                                      ("groupby", pymongo.ASCENDING),
                                                                                      ("client_id", pymongo.ASCENDING),
                                                                                      ("product_id", pymongo.ASCENDING)])
 
-    mongodb_stats_database, mongodb_stats_collection = MONGODB_CC_DATABASE, MONGODB_STATS_CC_COLLECTION
+    mongodb_stats_database, mongodb_stats_collection = MONGODB_CC_DATABASE, MONGODB_STATS_CC_COLLECTION + "_{}".format(MONGODB_COLUMNS[COLUMN_PRODUCT])
     client[mongodb_stats_database][mongodb_stats_collection].create_index([("week", pymongo.ASCENDING), ("groupby", pymongo.ASCENDING), ("product_id", pymongo.ASCENDING)])
 
     history = get_history(filepath)
