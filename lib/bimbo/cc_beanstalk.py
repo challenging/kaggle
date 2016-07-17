@@ -95,7 +95,7 @@ def cc_calculation(week, filetype, product_id, history, threshold_value=0, progr
 
         yield rtype, (record, prediction), loss
 
-    log("RMLSE for {}: {:6f}".format(product_id, np.sqrt(loss_cc_sum/loss_count)), INFO)
+    log("RMLSE for {} -  {}/{} = {:6f}".format(product_id, loss_cc_sum, loss_count, np.sqrt(loss_cc_sum/loss_count)), INFO)
 
     yield "stats", product_id, np.sqrt(loss_cc_sum/loss_count)
 
@@ -105,7 +105,7 @@ def consumer(median_solution, task=COMPETITION_CC_NAME, n_jobs=4):
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
     talk.watch(task)
 
-    loss_sum, loss_count = 0, 0
+    loss_sum, loss_count = 0, 0.00000001
     while True:
         try:
             job = talk.reserve(timeout=TIMEOUT_BEANSTALK)
