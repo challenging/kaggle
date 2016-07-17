@@ -1,35 +1,20 @@
 #!/usr/bin/env python
 
 import os
-import sys
-import json
 import glob
-import shutil
 import socket
 import time
-import click
 import pymongo
 import subprocess
 
-# for debug
-import pprint
-
-import numpy as np
 import pandas as pd
-
-from joblib import Parallel, delayed
 
 from utils import log, create_folder
 from utils import DEBUG, INFO, WARN
-from bimbo.cc_beanstalk import cc_calculation
-from bimbo.constants import get_stats_mongo_collection, get_mongo_connection
+from bimbo.cc_beanstalk import cc_calculation, get_history
+from bimbo.constants import get_stats_mongo_collection, get_mongo_connection, load_median_route_solution
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
-from bimbo.constants import PYPY, IP_BEANSTALK, MONGODB_DATABASE, MONGODB_BATCH_SIZE
-from bimbo.constants import MEDIAN_SOLUTION_PATH, FTLR_SOLUTION_PATH, SPLIT_PATH, STATS_PATH, TRAIN_FILE, TEST_FILE, TESTING_TRAIN_FILE, TESTING_TEST_FILE
-from bimbo.constants import NON_PREDICTABLE
-
-TRAIN = TRAIN_FILE
-TEST = TEST_FILE
+from bimbo.constants import PYPY, IP_BEANSTALK, MONGODB_DATABASE, MONGODB_BATCH_SIZE, SPLIT_PATH, NON_PREDICTABLE
 
 def purge_duplicated_records(column, batch_size=MONGODB_BATCH_SIZE):
     client = get_mongo_connection()
@@ -138,10 +123,8 @@ def hierarchical_folder_structure(column, filetype):
     timestamp_end = time.time()
     log("Cost {:4f} secends to copy files to the {}".format(timestamp_end-timestamp_start, IP_BEANSTALK), INFO)
 
-def aggregation(group_columns, output_filepath):
-    global TRAIN
-
-    df_train = pd.read_csv(TRAIN)
+def aggregation(filepath, group_columns, output_filepath):
+    df_train = pd.read_csv(filepath)
 
     target = {"Venta_uni_hoy":sum, "Dev_uni_proxima":sum, "Demanda_uni_equil": sum}
 
@@ -151,38 +134,14 @@ def aggregation(group_columns, output_filepath):
     df = df_train.groupby(group_columns).agg(target)
     df.to_csv(output_filepath)
 
-def cc(filepath, filetype, threshold_value=0):
+def cc(week, filepath, filetype, median_solution=([], []), threshold_value=0):
     shift_week = 3
-    history = {}
 
-    def all_zero_list():
-        return [0 for _ in range(3, 10)]
-
-    with open(filepath, "rb") as INPUT:
-        header = True
-
-        for line in INPUT:
-            if header:
-                header = False
-                continue
-
-            week, agency_id, channel_id, route_id, client_id, product_id, sales_unit, sales_price, return_unit, return_price, prediction_unit = line.strip().split(",")
-
-            week = int(week)
-            client_id = int(client_id)
-            product_id = int(product_id)
-            prediction_unit = int(prediction_unit)
-
-            key = product_id
-
-            history.setdefault(key, {})
-            history[key].setdefault(client_id, all_zero_list())
-            history[key][client_id][week-shift_week] = prediction_unit
-            #history[key][client_id][week-shift_week] = np.log1p(prediction_unit)
+    history = get_history(filepath, shift_week=shift_week)
 
     loss_sum, loss_count = 0, 0
     for no, (key, info) in enumerate(history.items()):
-        for rtype, record, lsum in cc_calculation(key, info, threshold_value, progress_prefix=(no+1, len(history)), alternative_filetype=filetype[0], alternative_id=filetype[1]):
+        for rtype, record, lsum in cc_calculation(week, filetype, key, info, threshold_value, (no+1, len(history)), median_solution):
             if rtype in ["cc", "median"]:
                 loss_sum += lsum
                 loss_count += 1
@@ -191,111 +150,3 @@ def cc(filepath, filetype, threshold_value=0):
                 pass
 
     log("Total RMLSE: {:8f}".format(loss_sum/loss_count), INFO)
-
-def median_solution(folder, output_filepaths):
-    global_route_prod_client_solution = {}
-    global_route_prod_solution = {}
-
-    for filepath in glob.iglob(os.path.join(folder, "*.csv")):
-        log("Start to process {}".format(filepath))
-
-        df = pd.read_csv(filepath)
-
-        drop_columns = [COLUMN_WEEK, 'Venta_uni_hoy', 'Venta_hoy', 'Dev_uni_proxima', 'Dev_proxima']
-        df.drop(drop_columns, inplace=True, axis=1)
-
-        target = {COLUMN_PREDICTION: np.median}
-
-        route_prod_client_median = df.groupby([COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT]).agg(target).to_dict()
-        for key, value in route_prod_client_median[COLUMN_PREDICTION].items():
-            global_route_prod_client_solution["_".join([str(s) for s in key])] = value
-
-        route_prod_median = df.groupby([COLUMN_ROUTE, COLUMN_PRODUCT]).agg(target).to_dict()
-        for key, value in route_prod_median[COLUMN_PREDICTION].items():
-            global_route_prod_solution["_".join([str(s) for s in key])] = value
-
-    log("Have {}/{} records in global_naive_solution".format(len(global_route_prod_client_solution), len(global_route_prod_solution)), INFO)
-    for solution, filepath in zip([global_route_prod_client_solution, global_route_prod_solution], output_filepaths):
-        create_folder(filepath)
-
-        with open(filepath, "wb") as OUTPUT:
-            json.dump(solution, OUTPUT)
-
-            log("Write naive-global solution to {}".format(filepath), INFO)
-
-def ftlr_solution(folder, fileid, submission_folder):
-    cmd = "{} {} \"{}\" {} \"{}\"".format(PYPY, "ftlr.py", folder, fileid, submission_folder)
-
-    log("Start to predict {}/{}, and then exiting code is {}".format(\
-        folder, fileid, subprocess.call(cmd, shell=True)), INFO)
-
-def ensemble_solution(filepaths, output_filepath):
-    frames = []
-    for filepath in filepaths:
-        log("Start to read {}".format(filepath), INFO)
-        df = pd.read_csv(filepath)
-
-        frames.append(df)
-
-    # Header
-    # id,Demanda_uni_equil
-
-    result = pd.concat(frames)
-    target = {COLUMN_PREDICTION: np.mean}
-
-    result.groupby(["id"]).agg(target).to_csv(output_filepath)
-
-@click.command()
-@click.option("--is-testing", is_flag=True, help="testing mode")
-@click.option("--column", default=None, help="agency_id|channel_id|route_id|client_id|product_id")
-@click.option("--mode", required=True, help="purge|restructure")
-@click.option("--option", required=False, nargs=2, type=click.Tuple([unicode, unicode]), default=(None, None))
-def tool(is_testing, column, mode, option):
-    global TRAIN, TEST
-
-    if is_testing:
-        TRAIN = TESTING_TRAIN_FILE
-        TEST = TESTING_TEST_FILE
-
-    if mode == "purge":
-        purge_duplicated_records(column)
-    elif mode == "restructure":
-        for filetype in ["train", "test"]:
-            hierarchical_folder_structure(column, filetype)
-    elif mode == "repair":
-        repair_missing_records(column)
-    elif mode == "aggregation":
-        columns = [COLUMNS[c] for c in column.split(",")]
-        output_filepath = os.path.join(STATS_PATH, "{}.csv".format("_".join(columns)))
-        create_folder(output_filepath)
-
-        aggregation(columns, output_filepath)
-    elif mode == "cc":
-        column, column_value = option
-        column_value = int(column_value)
-
-        filepath = os.path.join(SPLIT_PATH, COLUMNS[column], "train", "{}.csv".format(column_value))
-
-        cc(filepath, ("{}_product".format(column), column_value))
-    elif mode == "median":
-        folder = os.path.join(SPLIT_PATH, COLUMNS[column], "train")
-        output_filepaths = [os.path.join(MEDIAN_SOLUTION_PATH, "{}_product_client.json".format(column)),
-                            os.path.join(MEDIAN_SOLUTION_PATH, "{}_product.json".format(column))]
-
-        median_solution(folder, output_filepaths)
-    elif mode == "ftlr":
-        folder = os.path.join(SPLIT_PATH, COLUMNS[column], "test")
-        submission_folder = os.path.join(FTLR_SOLUTION_PATH, COLUMNS[column])
-        create_folder("{}/1.txt".format(submission_folder))
-
-        Parallel(n_jobs=6)(delayed(ftlr_solution)(folder, os.path.basename(filepath).replace(".csv", ""), submission_folder) for filepath in glob.iglob(os.path.join(folder, "*.csv")))
-    elif mode == "ensemble":
-        filepaths, output_filepath = option
-
-        ensemble_solution(filepaths.split(","), output_filepath)
-    else:
-        log("Not found this mode {}".format(mode), ERROR)
-        sys.exit(101)
-
-if __name__ ==  "__main__":
-    tool()
