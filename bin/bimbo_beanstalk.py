@@ -4,16 +4,18 @@ import os
 import sys
 import glob
 import click
+import threading
 
 from utils import log, INFO
 from bimbo.constants import load_median_route_solution, COMPETITION_CC_NAME, COLUMNS, ROUTE_GROUPS, SPLIT_PATH
 
 @click.command()
 @click.option("--is-testing", is_flag=True, help="testing mode")
+@click.option("--n-jobs", default=1, help="number of thread")
 @click.option("--week", default=9, help="week number(6-9)")
 @click.option("--column", default="agency_id", help="agency_id|channel_id|route_id|product_id")
 @click.option("--option", required=True, nargs=2, type=click.Tuple([unicode, unicode]), default=(None, None), help="producer mode | consumer mode")
-def stats(is_testing, week, column, option):
+def stats(is_testing, n_jobs, week, column, option):
     beanstype, mode = option
 
     task = COMPETITION_CC_NAME
@@ -35,6 +37,7 @@ def stats(is_testing, week, column, option):
         task += "_{}".format(column)
 
         if mode.lower() == "producer":
+            count = 1
             pattern_file = os.path.join(SPLIT_PATH, COLUMNS[column], "train", "*.csv")
             for filepath in glob.iglob(pattern_file):
                 filename = os.path.basename(filepath)
@@ -42,7 +45,8 @@ def stats(is_testing, week, column, option):
 
                 producer(week, (column, fid), task=task)
 
-                if is_testing:
+                count += 1
+                if is_testing and count > 5:
                     break
         elif mode.lower() == "consumer":
             if column == "route_id":
@@ -50,7 +54,19 @@ def stats(is_testing, week, column, option):
             else:
                 raise NotImplementError
 
-            consumer(median_solution, task=task)
+            if is_testing:
+                n_jobs = 1
+
+            threads = []
+            for i in range(0, n_jobs):
+                thread = threading.Thread(target=consumer, kwargs={"median_solution": median_solution, "task": task})
+                thread.setDaemon(True)
+                thread.start()
+
+                threads.append(thread)
+
+            for thread in threads:
+                thread.join()
         else:
             log("Not implement this mode({})".format(mode), INFO)
 

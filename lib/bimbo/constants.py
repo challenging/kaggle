@@ -47,14 +47,15 @@ ROUTE_GROUPS = [[COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT],
 BATCH_JOB = 5000
 
 IP_BEANSTALK, PORT_BEANSTALK = "rongqide-Mac-mini.local", 11300
-IP_BEANSTALK = "rongqis-iMac.local"
+#IP_BEANSTALK = "rongqis-iMac.local"
 TIMEOUT_BEANSTALK=3600*3
 TASK_BEANSTALK = "bimbo_competition"
 
 MONGODB_URL = "mongodb://{}:27017".format(IP_BEANSTALK)
 MONGODB_BATCH_SIZE = 20000
 
-MONGODB_DATABASE, MONGODB_STATS_COLLECTION, MONGODB_STATS_CC_COLLECTION = "bimbo", "naive_stats", "cc_stats"
+MONGODB_DATABASE, MONGODB_PREDICTION_DATABASE, MONGODB_CC_DATABASE = "bimbo", "bimbo_prediction", "bimbo_cc"
+MONGODB_STATS_COLLECTION, MONGODB_STATS_CC_COLLECTION, MONGODB_PREDICTION_COLLECTION = "naive_stats", "cc_stats", "prediction"
 MONGODB_COLUMNS = {COLUMN_AGENCY: "agency_id",
                    COLUMN_CHANNEL: "channel_id",
                    COLUMN_ROUTE: "route_id",
@@ -62,7 +63,13 @@ MONGODB_COLUMNS = {COLUMN_AGENCY: "agency_id",
                    COLUMN_CLIENT: "client_id"}
 
 def get_stats_mongo_collection(name):
-    return "{}_{}".format(MONGODB_STATS_COLLECTION, name.lower())
+    return "{}_{}".format(MONGODB_STATS_COLLECTION, name).lower()
+
+def get_cc_mongo_collection(name):
+    return "cc_{}".format(name).lower()
+
+def get_prediction_mongo_collection(name):
+    return "{}_{}".format(MONGODB_PREDICTION_COLLECTION, name).lower()
 
 def get_mongo_connection():
     return pymongo.MongoClient(MONGODB_URL)
