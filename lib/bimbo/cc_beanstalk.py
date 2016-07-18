@@ -114,7 +114,7 @@ def cc_consumer(task=COMPETITION_CC_NAME):
     client = get_mongo_connection()
 
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
-    talk.use(task)
+    talk.watch(task)
 
     while True:
         try:
@@ -154,7 +154,7 @@ def median_consumer(median_solution, task=COMPETITION_CC_NAME):
 
     log("Ready to use {}".format(task))
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
-    talk.use(task)
+    talk.watch(task)
 
     while True:
         try:
