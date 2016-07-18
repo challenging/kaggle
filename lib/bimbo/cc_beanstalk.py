@@ -128,7 +128,7 @@ def consumer(median_solution, task=COMPETITION_CC_NAME, n_jobs=4):
                     query = {"groupby": cc["groupby"], filetype[0]: filetype[1], "client_id": cc["client_id"], "product_id": cc["product_id"]}
                     client[mongodb_cc_database][mongodb_cc_collection].update(query, {"$set": cc}, upsert=True)
 
-                    query[COLUMN_WEEK] = week
+                    query[MONGODB_COLUMNS[COLUMN_WEEK]] = week
                     client[mongodb_prediction_database][mongodb_prediction_collection].update(query, {"$set": prediction}, upsert=True)
 
                 timestamp_end = time.time()
@@ -184,7 +184,8 @@ def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK
             history[product_id].setdefault(client_id, [0 for _ in range(week[0], week[1])])
 
             predicted_rows.setdefault(product_id, {})
-            predicted_rows[product_id][client_id] = row_id
+            predicted_rows[product_id].setdefault(client_id, [])
+            predicted_rows[product_id][client_id].append(row_id)
 
     return history, predicted_rows
 
@@ -205,7 +206,7 @@ def producer(week, filetype, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
         client[mongodb_cc_database][mongodb_cc_collection].create_index("client_id")
 
         mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
-        client[mongodb_prediction_database][mongodb_prediction_collection].create_index([(COLUMN_WEEK, pymongo.ASCENDING),
+        client[mongodb_prediction_database][mongodb_prediction_collection].create_index([(MONGODB_COLUMNS[COLUMN_WEEK], pymongo.ASCENDING),
                                                                                          (filetype[0], pymongo.ASCENDING),
                                                                                          ("groupby", pymongo.ASCENDING),
                                                                                          ("client_id", pymongo.ASCENDING),
