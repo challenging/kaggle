@@ -32,11 +32,6 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
 
         record = {"groupby": MONGODB_COLUMNS[filetype[0]], MONGODB_COLUMNS[filetype[0]]: int(filetype[1]), "product_id": product_id, "client_id": int(client_id), "history": values, "cc": []}
         prediction = {"row_id": predicted_rows[client_id],
-                      MONGODB_COLUMNS[COLUMN_WEEK]: week,
-                      "groupby": MONGODB_COLUMNS[filetype[0]],
-                      MONGODB_COLUMNS[filetype[0]]: int(filetype[1]),
-                      "client_id": int(client_id),
-                      "product_id": product_id,
                       "prediction_cc": NON_PREDICTABLE}
 
         client_mean = np.mean(values[1:end_idx])
@@ -96,11 +91,6 @@ def median_calculation(week, filetype, product_id, predicted_rows, median_soluti
         prediction_median = get_median(median_solution[0], median_solution[1], {filetype[0]: filetype[1], COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
 
         prediction = {"row_id": predicted_rows[client_id],
-                      MONGODB_COLUMNS[COLUMN_WEEK]: week,
-                      "groupby": MONGODB_COLUMNS[filetype[0]],
-                      MONGODB_COLUMNS[filetype[0]]: int(filetype[1]),
-                      "client_id": int(client_id),
-                      "product_id": product_id,
                       "prediction_median": prediction_median}
 
         count += 1
@@ -130,21 +120,23 @@ def cc_consumer(task=COMPETITION_CC_NAME):
                 product_id, history = o["product_id"], o["history"]
 
                 timestamp_start = time.time()
-                records = []
+                records, predictions = [], []
                 for cc, prediction in cc_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, history):
-                    #query = {"groupby": cc["groupby"], filetype[0]: filetype[1], "client_id": cc["client_id"], "product_id": cc["product_id"]}
-                    #client[mongodb_cc_database][mongodb_cc_collection].update(query, {"$set": cc}, upsert=True)
                     records.append(cc)
+
+                    for row_id in prediction["row_id"]:
+                        predictions.append({"row_id": row_id, "prediction": prediction["prediction_cc"]})
 
                     if len(records) > 128:
                         client[mongodb_cc_database][mongodb_cc_collection].insert_many(records)
-                        records = []
+                        client[mongodb_prediction_database][mongodb_prediction_collection].insert_many(predictions)
 
-                    for row_id in prediction["row_id"]:
-                        client[mongodb_prediction_database][mongodb_prediction_collection].update({"row_id": row_id}, {"$set": {"prediction_cc": prediction["prediction_cc"]}}, upsert=True)
+                        records = []
+                        predictions = []
 
                 if records:
                     client[mongodb_cc_database][mongodb_cc_collection].insert_many(records)
+                    client[mongodb_prediction_database][mongodb_prediction_collection].insert_many(predictions)
 
                 timestamp_end = time.time()
                 log("Cost {:4f} secends to insert {} records into mongodb".format(timestamp_end-timestamp_start, len(predicted_rows)), INFO)
@@ -178,10 +170,19 @@ def median_consumer(median_solution, task=COMPETITION_CC_NAME):
 
                 product_id, history = o["product_id"], o["history"]
 
+                predictions = []
                 timestamp_start = time.time()
                 for prediction in median_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, median_solution):
                     for row_id in prediction["row_id"]:
-                        client[mongodb_prediction_database][mongodb_prediction_collection].update({"row_id": row_id}, {"$set": {"prediction_median": prediction["prediction_median"]}}, upsert=True)
+                        predictions.append({"row_id": row_id, "prediction": prediction["prediction_median"]})
+
+                        if len(predictions) > 128:
+                            client[mongodb_prediction_database][mongodb_prediction_collection].insert_many(predictions)
+
+                            predictions = []
+
+                if predictions:
+                    client[mongodb_prediction_database][mongodb_prediction_collection].insert_many(predictions)
 
                 timestamp_end = time.time()
                 log("Cost {:4f} secends to insert {} records into mongodb".format(timestamp_end-timestamp_start, len(predicted_rows)), INFO)
@@ -246,7 +247,7 @@ def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK
 
     return history, predicted_rows
 
-def producer(week, filetype, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
+def producer(week, filetype, solution_type, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
     filepath_train = os.path.join(SPLIT_PATH, COLUMNS[filetype[0]], "train", "{}.csv".format(filetype[1]))
     filepath_test = os.path.join(SPLIT_PATH, COLUMNS[filetype[0]], "test", "{}.csv".format(filetype[1]))
 
@@ -262,8 +263,8 @@ def producer(week, filetype, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
         client[mongodb_cc_database][mongodb_cc_collection].create_index("product_id")
         client[mongodb_cc_database][mongodb_cc_collection].create_index("client_id")
 
-        mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
-        client[mongodb_prediction_database][mongodb_prediction_collection].create_index(["row_id", pymongo.ASCENDING])
+        mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("{}_{}".format(solution_type, MONGODB_COLUMNS[COLUMN_PRODUCT]))
+        client[mongodb_prediction_database][mongodb_prediction_collection].create_index("row_id")
 
         history, predicted_rows = get_history(filepath_train, filepath_test)
         for product_id, info in predicted_rows.items():
