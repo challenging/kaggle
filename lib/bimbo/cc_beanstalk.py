@@ -21,18 +21,14 @@ from bimbo.constants import MONGODB_PREDICTION_COLLECTION, MONGODB_STATS_CC_COLL
 from bimbo.constants import COLUMN_WEEK, COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMNS, MONGODB_COLUMNS
 from bimbo.constants import SPLIT_PATH, NON_PREDICTABLE, TOTAL_WEEK
 
-def cc_calculation(week, filetype, product_id, predicted_rows, history, threshold_value=0, progress_prefix=None, median_solution=([], [])):
+def cc_calculation(week, filetype, product_id, predicted_rows, history, threshold_value=0, progress_prefix=None):
     global TOTAL_WEEK
 
     end_idx = (TOTAL_WEEK-3) - (TOTAL_WEEK-week)
 
     count = 0
-    for client_id, values in history.items():
-        if client_id not in predicted_rows:
-            continue
-
-        prediction_median = get_median(median_solution[0], median_solution[1], {filetype[0]: filetype[1], COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
-        prediction_cc = prediction_median
+    for client_id in predicted_rows.keys():
+        values = history[client_id]
 
         record = {"groupby": MONGODB_COLUMNS[filetype[0]], MONGODB_COLUMNS[filetype[0]]: int(filetype[1]), "product_id": product_id, "client_id": int(client_id), "history": values, "cc": []}
         prediction = {"row_id": predicted_rows[client_id],
@@ -41,7 +37,6 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
                       MONGODB_COLUMNS[filetype[0]]: int(filetype[1]),
                       "client_id": int(client_id),
                       "product_id": product_id,
-                      "prediction_median": prediction_median,
                       "prediction_cc": NON_PREDICTABLE}
 
         client_mean = np.mean(values[1:end_idx])
@@ -88,12 +83,34 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
 
         count += 1
 
-        log("{} {}/{} >>> {} - {} - {} - {:4f}({:4f})".format(\
-            "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "", count, len(predicted_rows), product_id, client_id, history[client_id], prediction["prediction_cc"], prediction["prediction_median"]), DEBUG)
+        log("{} {}/{} >>> {} - {} - {} - {:4f}".format(\
+            "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "", count, len(predicted_rows), product_id, client_id, history[client_id], prediction["prediction_cc"]), DEBUG)
 
         yield record, prediction
 
-def consumer(median_solution, task=COMPETITION_CC_NAME, n_jobs=4):
+def median_calculation(week, filetype, product_id, predicted_rows, median_solution, progress_prefix=None):
+    global TOTAL_WEEK
+
+    count = 0
+    for client_id in predicted_rows.keys():
+        prediction_median = get_median(median_solution[0], median_solution[1], {filetype[0]: filetype[1], COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
+
+        prediction = {"row_id": predicted_rows[client_id],
+                      MONGODB_COLUMNS[COLUMN_WEEK]: week,
+                      "groupby": MONGODB_COLUMNS[filetype[0]],
+                      MONGODB_COLUMNS[filetype[0]]: int(filetype[1]),
+                      "client_id": int(client_id),
+                      "product_id": product_id,
+                      "prediction_median": prediction_median}
+
+        count += 1
+
+        log("{} {}/{} >>> {} - {} - {} - {:4f}".format(\
+            "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "", count, len(predicted_rows), product_id, client_id, prediction["prediction_median"]), DEBUG)
+
+        yield record, prediction
+
+def cc_consumer(task=COMPETITION_CC_NAME):
     client = get_mongo_connection()
 
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
@@ -113,12 +130,47 @@ def consumer(median_solution, task=COMPETITION_CC_NAME, n_jobs=4):
                 product_id, history = o["product_id"], o["history"]
 
                 timestamp_start = time.time()
-
-                for cc, prediction in cc_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, history, median_solution=median_solution):
+                for cc, prediction in cc_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, history):
                     query = {"groupby": cc["groupby"], filetype[0]: filetype[1], "client_id": cc["client_id"], "product_id": cc["product_id"]}
                     client[mongodb_cc_database][mongodb_cc_collection].update(query, {"$set": cc}, upsert=True)
 
                     query[MONGODB_COLUMNS[COLUMN_WEEK]] = week
+                    client[mongodb_prediction_database][mongodb_prediction_collection].update(query, {"$set": prediction}, upsert=True)
+
+                timestamp_end = time.time()
+                log("Cost {:4f} secends to insert {} records into mongodb".format(timestamp_end-timestamp_start, len(predicted_rows)), INFO)
+
+                job.delete()
+        except beanstalkc.BeanstalkcException as e:
+            log("Error occurs, {}".format(e), WARN)
+        except Exception as e:
+            raise
+
+    talk.close()
+    client.close()
+
+def median_consumer(median_solution, task=COMPETITION_CC_NAME):
+    client = get_mongo_connection()
+
+    talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
+    talk.watch(task)
+
+    while True:
+        try:
+            job = talk.reserve(timeout=TIMEOUT_BEANSTALK)
+            if job:
+                o = json.loads(zlib.decompress(job.body))
+                week, filetype = o[COLUMN_WEEK], o["filetype"]
+                predicted_rows = o["predicted_rows"]
+
+                mongodb_cc_database, mongodb_cc_collection = o["mongodb_cc"]
+                mongodb_prediction_database, mongodb_prediction_collection = o["mongodb_prediction"]
+
+                product_id, history = o["product_id"], o["history"]
+
+                timestamp_start = time.time()
+                for cc, prediction in median_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, median_solution):
+                    query = {MONGODB_COLUMNS[COLUMN_WEEK]: week, "groupby": cc["groupby"], filetype[0]: filetype[1], "client_id": cc["client_id"], "product_id": cc["product_id"]}
                     client[mongodb_prediction_database][mongodb_prediction_collection].update(query, {"$set": prediction}, upsert=True)
 
                 timestamp_end = time.time()

@@ -32,9 +32,44 @@ def beanstalk(is_testing, n_jobs, week, column, option):
 
             sys.exit(999)
     elif beanstype == "cc":
-        from bimbo.cc_beanstalk import producer, consumer
+        from bimbo.cc_beanstalk import producer, cc_consumer
 
-        task += "_{}_{}".format(column, week)
+        task += "_{}_{}_{}".format(beanstype, column, week)
+
+        if mode.lower() == "producer":
+            count = 1
+            pattern_file = os.path.join(SPLIT_PATH, COLUMNS[column], "train", "*.csv")
+            for filepath in glob.iglob(pattern_file):
+                filename = os.path.basename(filepath)
+                fid = filename.replace(".csv", "")
+
+                producer(week, (column, fid), task=task)
+
+                count += 1
+                if is_testing and count > 1:
+                    break
+        elif mode.lower() == "consumer":
+            if is_testing:
+                n_jobs = 1
+
+            threads = []
+            for i in range(0, n_jobs):
+                thread = threading.Thread(target=cc_consumer, kwargs={"task": task})
+                thread.setDaemon(True)
+                thread.start()
+
+                threads.append(thread)
+
+            for thread in threads:
+                thread.join()
+        else:
+            log("Not implement this mode({})".format(mode), INFO)
+
+            sys.exit(999)
+    elif beanstype == "median":
+        from bimbo.cc_beanstalk import producer, median_consumer
+
+        task += "_{}_{}_{}".format(beanstype, column, week)
 
         if mode.lower() == "producer":
             count = 1
@@ -56,12 +91,11 @@ def beanstalk(is_testing, n_jobs, week, column, option):
             else:
                 raise NotImplementError
 
-            if is_testing:
-                n_jobs = 1
+            n_jobs = 1
 
             threads = []
             for i in range(0, n_jobs):
-                thread = threading.Thread(target=consumer, kwargs={"median_solution": median_solution, "task": task})
+                thread = threading.Thread(target=median_consumer, kwargs={"median_solution": median_solution, "task": task})
                 thread.setDaemon(True)
                 thread.start()
 
