@@ -67,12 +67,16 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
                     break
             '''
             matrix = []
+            num_sum, num_count = 0, 0.00000001
             for c, value in results_cc.items():
                 if c == client_id or np.isnan(value):
                     continue
                 else:
                     ratio = client_mean/np.mean(history[c][0:end_idx-1])
                     score = (history[c][end_idx-2] - history[c][end_idx-3])*value*ratio
+
+                    num_sum += score
+                    num_count += 1
 
                     matrix.append({client_id: int(c), "value": value})
 
@@ -85,6 +89,7 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
             if prediction_cc > 0:
                 prediction_cc = prediction_cc*0.71 + 0.243
             '''
+            prediction_cc = max(0, values[end_idx-1] + num_sum/num_count)
 
             record["cc"] = matrix
             prediction["prediction_cc"] = prediction_cc
