@@ -21,6 +21,9 @@ from bimbo.constants import MONGODB_PREDICTION_COLLECTION, MONGODB_STATS_CC_COLL
 from bimbo.constants import COLUMN_WEEK, COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMNS, MONGODB_COLUMNS
 from bimbo.constants import SPLIT_PATH, NON_PREDICTABLE, TOTAL_WEEK
 
+END_FLAG = "ending"
+BATCH_NUM = 127
+
 def cc_calculation(week, filetype, product_id, predicted_rows, history, threshold_value=0, progress_prefix=None):
     global TOTAL_WEEK
 
@@ -106,40 +109,46 @@ def cc_consumer(task=COMPETITION_CC_NAME):
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
     talk.watch(task)
 
+    records, predictions = [], []
+    timestamp_start = time.time()
+
     while True:
         try:
             job = talk.reserve(timeout=TIMEOUT_BEANSTALK)
             if job:
                 o = json.loads(zlib.decompress(job.body))
-                week, filetype = o[COLUMN_WEEK], o["filetype"]
-                predicted_rows = o["predicted_rows"]
-
-                mongodb_cc_database, mongodb_cc_collection = o["mongodb_cc"]
-                mongodb_prediction_database, mongodb_prediction_collection = o["mongodb_prediction"]
-
-                product_id, history = o["product_id"], o["history"]
-
-                timestamp_start = time.time()
-                records, predictions = [], []
-                for cc, prediction in cc_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, history):
-                    records.append(cc)
-
-                    for row_id in prediction["row_id"]:
-                        predictions.append({"row_id": row_id, "prediction": prediction["prediction_cc"]})
-
-                    if len(records) > 128:
-                        client[mongodb_cc_database][mongodb_cc_collection].insert_many(records)
-                        client[mongodb_prediction_database][mongodb_prediction_collection].insert_many(predictions)
-
-                        records = []
-                        predictions = []
-
-                if records:
+                if END_FLAG in o and records:
                     client[mongodb_cc_database][mongodb_cc_collection].insert_many(records)
                     client[mongodb_prediction_database][mongodb_prediction_collection].insert_many(predictions)
+                else:
+                    week, filetype = o[COLUMN_WEEK], o["filetype"]
+                    predicted_rows = o["predicted_rows"]
 
-                timestamp_end = time.time()
-                log("Cost {:4f} secends to insert {} records into mongodb".format(timestamp_end-timestamp_start, len(predicted_rows)), INFO)
+                    mongodb_cc_database, mongodb_cc_collection = o["mongodb_cc"]
+                    mongodb_prediction_database, mongodb_prediction_collection = o["mongodb_prediction"]
+
+                    product_id, history = o["product_id"], o["history"]
+
+                    if not timestamp_start:
+                        timestamp_start = time.time()
+
+                    for cc, prediction in cc_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, history):
+                        records.append(cc)
+
+                        for row_id in prediction["row_id"]:
+                            predictions.append({"row_id": row_id, "prediction": prediction["prediction_cc"]})
+
+                        if len(records) > BATCH_NUM:
+                            client[mongodb_cc_database][mongodb_cc_collection].insert_many(records)
+                            client[mongodb_prediction_database][mongodb_prediction_collection].insert_many(predictions)
+
+                            timestamp_end = time.time()
+                            log("Cost {:4f} secends to insert {}/{} records into mongodb".format(timestamp_end-timestamp_start, len(records), len(predictions)), INFO)
+
+                            records = []
+                            predictions = []
+
+                            timepstamp_start = None
 
                 job.delete()
         except beanstalkc.BeanstalkcException as e:
@@ -157,35 +166,33 @@ def median_consumer(median_solution, task=COMPETITION_CC_NAME):
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
     talk.watch(task)
 
+    predictions = []
     while True:
         try:
             job = talk.reserve(timeout=TIMEOUT_BEANSTALK)
             if job:
                 o = json.loads(zlib.decompress(job.body))
-                week, filetype = o[COLUMN_WEEK], o["filetype"]
-                predicted_rows = o["predicted_rows"]
+                if END_FLAG in o and predictions:
+                    client[mongodb_prediction_database][mongodb_prediction_collection].insert_many(predictions)
+                else:
+                    week, filetype = o[COLUMN_WEEK], o["filetype"]
+                    predicted_rows = o["predicted_rows"]
 
-                mongodb_cc_database, mongodb_cc_collection = o["mongodb_cc"]
-                mongodb_prediction_database, mongodb_prediction_collection = o["mongodb_prediction"]
+                    mongodb_cc_database, mongodb_cc_collection = o["mongodb_cc"]
+                    mongodb_prediction_database, mongodb_prediction_collection = o["mongodb_prediction"]
 
-                product_id, history = o["product_id"], o["history"]
+                    product_id, history = o["product_id"], o["history"]
 
-                predictions = []
-                timestamp_start = time.time()
-                for prediction in median_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, median_solution):
-                    for row_id in prediction["row_id"]:
-                        predictions.append({"row_id": row_id, "prediction": prediction["prediction_median"]})
+                    for prediction in median_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, median_solution):
+                        for row_id in prediction["row_id"]:
+                            predictions.append({"row_id": row_id, "prediction": prediction["prediction_median"]})
 
-                        if len(predictions) > 128:
+                        if len(predictions) > BATCH_NUM:
                             client[mongodb_prediction_database][mongodb_prediction_collection].insert_many(predictions)
 
+                            log("Insert {} records into mongodb".format(len(predictions)), INFO)
+
                             predictions = []
-
-                if predictions:
-                    client[mongodb_prediction_database][mongodb_prediction_collection].insert_many(predictions)
-
-                timestamp_end = time.time()
-                log("Cost {:4f} secends to insert {} records into mongodb".format(timestamp_end-timestamp_start, len(predicted_rows)), INFO)
 
                 job.delete()
         except beanstalkc.BeanstalkcException as e:
@@ -278,6 +285,9 @@ def producer(week, filetype, solution_type, task=COMPETITION_CC_NAME, ttr=TIMEOU
 
             talk.put(zlib.compress(json.dumps(request)), ttr=TIMEOUT_BEANSTALK)
             log("Put request(product_id={} from {}) into the {}".format(product_id, os.path.basename(filepath_train), task), INFO)
+
+        talk.put(zlib.compress(json.dumps({END_FLAG: 1})), ttr=TIMEOUT_BEANSTALK)
+        log("Put the flag to force inserting records into mongodb", INFO)
 
         client.close()
         talk.close()

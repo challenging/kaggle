@@ -43,7 +43,7 @@ def beanstalk(is_testing, n_jobs, week, column, option):
                 filename = os.path.basename(filepath)
                 fid = filename.replace(".csv", "")
 
-                producer(week, (column, fid), task=task)
+                producer(week, (column, fid), beanstype, task=task)
 
                 count += 1
                 if is_testing and count > 1:
@@ -79,7 +79,7 @@ def beanstalk(is_testing, n_jobs, week, column, option):
                 filename = os.path.basename(filepath)
                 fid = filename.replace(".csv", "")
 
-                producer(week, (column, fid), task=task)
+                producer(week, (column, fid), beanstype, task=task)
 
                 count += 1
                 if is_testing and count > 1:
