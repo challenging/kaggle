@@ -15,7 +15,7 @@ from bimbo.constants import load_median_route_solution, COMPETITION_CC_NAME, COL
 @click.option("--week", default=9, help="week number(6-9)")
 @click.option("--column", default="agency_id", help="agency_id|channel_id|route_id|product_id")
 @click.option("--option", required=True, nargs=2, type=click.Tuple([unicode, unicode]), default=(None, None), help="producer mode | consumer mode")
-def stats(is_testing, n_jobs, week, column, option):
+def beanstalk(is_testing, n_jobs, week, column, option):
     beanstype, mode = option
 
     task = COMPETITION_CC_NAME
@@ -75,4 +75,4 @@ def stats(is_testing, n_jobs, week, column, option):
             sys.exit(999)
 
 if __name__ == "__main__":
-    stats()
+    beanstalk()

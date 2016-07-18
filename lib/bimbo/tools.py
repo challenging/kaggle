@@ -7,14 +7,15 @@ import time
 import pymongo
 import subprocess
 
+import numpy as np
 import pandas as pd
 
 from utils import log, create_folder
 from utils import DEBUG, INFO, WARN
-from bimbo.cc_beanstalk import cc_calculation, get_history
+from bimbo.cc_beanstalk import cc_calculation, get_history, get_median
 from bimbo.constants import get_stats_mongo_collection, get_mongo_connection, load_median_route_solution
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
-from bimbo.constants import PYPY, IP_BEANSTALK, MONGODB_DATABASE, MONGODB_BATCH_SIZE, SPLIT_PATH, NON_PREDICTABLE
+from bimbo.constants import TOTAL_WEEK, PYPY, IP_BEANSTALK, MONGODB_DATABASE, MONGODB_BATCH_SIZE, SPLIT_PATH, NON_PREDICTABLE
 
 def purge_duplicated_records(column, batch_size=MONGODB_BATCH_SIZE):
     client = get_mongo_connection()
@@ -134,18 +135,41 @@ def aggregation(filepath, group_columns, output_filepath):
     df = df_train.groupby(group_columns).agg(target)
     df.to_csv(output_filepath)
 
-def cc(week, filepath, filetype, median_solution=([], []), threshold_value=0):
+def cc(week, filepath_train, filepath_test, filetype, median_solution=([], []), threshold_value=0):
+    global TOTAL_WEEK
+
     shift_week = 3
+    end_idx = (TOTAL_WEEK-shift_week) - (TOTAL_WEEK-week)
 
-    history = get_history(filepath, shift_week=shift_week)
+    history, predicted_rows = get_history(filepath_train, filepath_test, shift_week=shift_week)
 
-    loss_sum, loss_count = 0, 0
-    for no, (key, info) in enumerate(history.items()):
-        for rtype, record, prediction in cc_calculation(week, filetype, key, info, threshold_value, (no+1, len(history)), median_solution):
-            if rtype in ["cc", "median"]:
-                loss_sum += lsum
-                loss_count += 1
-            elif rtype == NON_PREDICTABLE:
-                pass
+    rmsle_mean, rmsle_cc, rmsle_median, loss_count = 0, 0, 0, 0.00000001
+    for no, (product_id, info) in enumerate(history.items()):
+        partial_rmsle_mean, partial_rmsle_cc, partial_rmsle_median, partial_loss_count = 0, 0, 0, 0.00000001
 
-    log("Total RMLSE: {:8f}".format(loss_sum/loss_count), INFO)
+        for rtype, record, prediction in cc_calculation(week, filetype, product_id, predicted_rows[product_id], info, threshold_value, (no+1, len(history)), median_solution):
+            client_id = record["client_id"]
+
+            true_value = history[product_id][client_id][end_idx]
+            prediction_median = get_median(median_solution[0], median_solution[1], {filetype[0]: filetype[1], COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
+            prediction_cc = prediction["prediction"]
+
+            loss_mean = (np.log1p((prediction_median+prediction_cc)/2)-np.log1p(true_value))**2
+            loss_cc = (np.log1p(prediction_cc)-np.log1p(true_value))**2
+            loss_median = (np.log1p(prediction_median)-np.log1p(true_value))**2
+
+            log("Predict {} - {}({}), {} / {}".format(product_id, client_id, history[product_id][client_id], prediction_cc, prediction_median), DEBUG)
+
+            partial_rmsle_mean += loss_mean
+            partial_rmsle_cc += loss_cc
+            partial_rmsle_median += loss_median
+            partial_loss_count += 1
+
+        log("RMSLE of {} is {} / {} / {}".format(product_id, np.sqrt(partial_rmsle_cc/partial_loss_count), np.sqrt(partial_rmsle_median/partial_loss_count), np.sqrt(partial_rmsle_mean/partial_loss_count)), INFO)
+
+        rmsle_mean += partial_rmsle_mean
+        rmsle_cc += partial_rmsle_cc
+        rmsle_median += partial_rmsle_median
+        loss_count += partial_loss_count
+
+    log("Total RMLSE({}): {:4f} / {:4f} / {:4f}".format(loss_count, np.sqrt(rmsle_cc/loss_count), np.sqrt(rmsle_median/loss_count), np.sqrt(rmsle_mean/loss_count)), INFO)

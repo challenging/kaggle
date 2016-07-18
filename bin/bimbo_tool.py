@@ -56,10 +56,13 @@ def tool(is_testing, column, mode, week, option):
         filepath = os.path.join(SPLIT_PATH, COLUMNS[column], "train", "{}.csv".format(column_value))
 
         solution = ([], [])
-        if column == MONGODB_COLUMNS[COLUMN_ROUTE]:
-            solution = (load_median_route_solution(week-1), ROUTE_GROUPS)
+        if not is_testing:
+            if column == MONGODB_COLUMNS[COLUMN_ROUTE]:
+                solution = (load_median_route_solution(week-1), ROUTE_GROUPS)
+            else:
+                raise NotImplementError
 
-        cc(week, filepath, (COLUMNS[column], column_value), solution)
+        cc(week, filepath, filepath, (COLUMNS[column], column_value), solution)
     elif mode == "median":
         median_solution(TRAIN, week)
     elif mode == "ftlr":

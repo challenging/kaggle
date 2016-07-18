@@ -26,11 +26,7 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
 
     end_idx = (TOTAL_WEEK-3) - (TOTAL_WEEK-week)
 
-    rtype = NON_PREDICTABLE
-    record = None
-
     count = 0
-
     for client_id, values in history.items():
         if client_id not in predicted_rows:
             continue
@@ -45,63 +41,61 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
                       MONGODB_COLUMNS[filetype[0]]: int(filetype[1]),
                       "client_id": int(client_id),
                       "product_id": product_id,
-                      "prediction_type": None,
-                      "prediction": prediction_cc}
+                      "prediction_median": prediction_median,
+                      "prediction_cc": NON_PREDICTABLE}
 
         client_mean = np.mean(values[1:end_idx])
-        if np.sum(values[1:end_idx]) == 0:
-            rtype = "median"
-        else:
-            cc_client_ids, cc_matrix = [client_id], [values[1:end_idx]]
-            for cc_client_id, cc_client_values in history.items():
-                if client_id != cc_client_id:
-                    cc_client_ids.append(cc_client_id)
-                    cc_matrix.append(cc_client_values[0:end_idx-1])
+        cc_client_ids, cc_matrix = [client_id], [values[1:end_idx]]
+        for cc_client_id, cc_client_values in history.items():
+            if client_id != cc_client_id:
+                cc_client_ids.append(cc_client_id)
+                cc_matrix.append(cc_client_values[0:end_idx-1])
 
-            results_cc = {}
-            if len(cc_client_ids) > 1:
-                cc_results = np.corrcoef(cc_matrix)[0]
-                results_cc = dict(zip(cc_client_ids, cc_results))
+        results_cc = {}
+        if len(cc_client_ids) > 1:
+            cc_results = np.corrcoef(cc_matrix)[0]
+            results_cc = dict(zip(cc_client_ids, cc_results))
 
-                num_sum, num_count = 0, 0.00000001
-                for c, value in sorted(results_cc.items(), key=lambda (k, v): abs(v), reverse=True):
-                    if c == client_id or np.isnan(value):
-                        continue
-                    elif abs(value) > threshold_value :
-                        ratio = client_mean/np.mean(history[c][0:end_idx-1])
-                        score = (history[c][end_idx-2] - history[c][end_idx-3])*value*ratio
-                        num_sum += score
-                        num_count += 1
+            num_sum, num_count = 0, 0.00000001
+            for c, value in sorted(results_cc.items(), key=lambda (k, v): abs(v), reverse=True):
+                if c == client_id or np.isnan(value):
+                    continue
+                elif abs(value) > threshold_value :
+                    ratio = client_mean/np.mean(history[c][0:end_idx-1])
+                    score = (history[c][end_idx-2] - history[c][end_idx-3])*value*ratio
+                    num_sum += score
+                    num_count += 1
 
-                    else:
-                        break
-
-                if values[end_idx-1] == 0  and np.sum(np.array(values[0:end_idx]) == 0) > 4:
-                    prediction_cc = 0
                 else:
-                    prediction_cc = max(0, values[end_idx-1] + num_sum/num_count)
+                    break
 
-                if prediction_cc > 0:
-                    prediction_cc = prediction_cc*0.71 + 0.243
+            '''
+            if values[end_idx-1] == 0 and np.sum(np.array(values[0:end_idx]) == 0) > 4:
+                prediction_cc = 0
+            else:
+                prediction_cc = max(0, values[end_idx-1] + num_sum/num_count)
 
-                matrix = []
-                for cid, value in results_cc.items():
-                    if not np.isnan(value):
-                        matrix.append({"client_id": int(cid), "value": value})
+            if prediction_cc > 0:
+                prediction_cc = prediction_cc*0.71 + 0.243
+            '''
 
-                rtype = "cc"
-                record["cc"] = matrix
-                prediction["prediction"] = prediction_cc
+            matrix = []
+            for cid, value in results_cc.items():
+                if not np.isnan(value):
+                    matrix.append({"client_id": int(cid), "value": value})
+
+            record["cc"] = matrix
+            prediction["prediction_cc"] = prediction_cc
+        else:
+            log("Found only {} in {}({})".format(client_id, product_id, len(history)), WARN)
 
         count += 1
 
-        log("{} {}. {}/{} >>> {} - {} - {} - {:4f}({:4f})".format(\
+        log("{} {}/{} >>> {} - {} - {} - {:4f}({:4f})".format(\
             "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "",
-            rtype, count, len(predicted_rows), product_id, client_id, history[client_id], prediction_cc, prediction_median), INFO)
+            count, len(predicted_rows), product_id, client_id, history[client_id], prediction_cc, prediction_median), INFO)
 
-        prediction["prediction_type"] = rtype
-
-        yield rtype, record, prediction
+        yield record, prediction
 
 def consumer(median_solution, task=COMPETITION_CC_NAME, n_jobs=4):
     client = get_mongo_connection()
@@ -124,7 +118,7 @@ def consumer(median_solution, task=COMPETITION_CC_NAME, n_jobs=4):
 
                 timestamp_start = time.time()
 
-                for rtype, cc, prediction in cc_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, history, median_solution=median_solution):
+                for cc, prediction in cc_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, history, median_solution=median_solution):
                     query = {"groupby": cc["groupby"], filetype[0]: filetype[1], "client_id": cc["client_id"], "product_id": cc["product_id"]}
                     client[mongodb_cc_database][mongodb_cc_collection].update(query, {"$set": cc}, upsert=True)
 
@@ -173,7 +167,11 @@ def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK
                 header = False
                 continue
 
-            row_id, w, agency_id, channel_id, route_id, client_id, product_id = line.strip().split(",")
+            if filepath_train == filepath_test:
+                w, agency_id, channel_id, route_id, client_id, product_id, sales_unit, sales_price, return_unit, return_price, prediction_unit = line.strip().split(",")
+                row_id = int(time.time())
+            else:
+                row_id, w, agency_id, channel_id, route_id, client_id, product_id = line.strip().split(",")
 
             row_id = int(row_id)
             w = int(w)
