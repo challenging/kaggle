@@ -115,26 +115,21 @@ def cc_consumer(task=COMPETITION_CC_NAME):
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
     talk.watch(task)
 
-    records, predictions = [], []
-    timestamp_start = time.time()
-
     while True:
         try:
             job = talk.reserve(timeout=TIMEOUT_BEANSTALK)
             if job:
                 o = json.loads(zlib.decompress(job.body))
                 if END_FLAG in o:
-                    if records:
-                        cc_collection.insert_many(records)
-                        prediction_collection.insert_many(predictions)
+                    pass
                 else:
                     week, filetype = o[COLUMN_WEEK], o["filetype"]
                     predicted_rows = o["predicted_rows"]
                     product_id, history = o["product_id"], o["history"]
 
-                    if not timestamp_start:
-                        timestamp_start = time.time()
+                    timestamp_start = time.time()
 
+                    records, predictions = [], []
                     log("There are {}/{} predicted_rows/history in this task".format(len(predicted_rows), len(history)), INFO)
                     for cc, prediction in cc_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, history):
                         records.append(cc)
@@ -142,32 +137,14 @@ def cc_consumer(task=COMPETITION_CC_NAME):
                         for row_id in prediction["row_id"]:
                             predictions.append({"row_id": row_id, "prediction": prediction["prediction_cc"]})
 
-                        if len(records) > BATCH_NUM:
-                            while True:
-                                try:
-                                    cc_collection.insert_many(records)
+                    if records:
+                        cc_collection.insert_many(records)
 
-                                    break
-                                except pymongo.errors.BulkWriteError as e:
-                                    log(e)
-                                    time.sleep(1)
+                    if predictions:
+                        prediction_collection.insert_many(predictions)
 
-                            while True:
-                                try:
-                                    prediction_collection.insert_many(predictions)
-
-                                    break
-                                except pymongo.errors.BulkWriteError as e:
-                                    log(e)
-                                    time.sleep(1)
-
-                            timestamp_end = time.time()
-                            log("Cost {:4f} secends to insert {}/{} records into mongodb".format(timestamp_end-timestamp_start, len(records), len(predictions)), INFO)
-
-                            records = []
-                            predictions = []
-
-                            timepstamp_start = None
+                    timestamp_end = time.time()
+                    log("Cost {:4f} secends to insert {}/{} records into mongodb".format(timestamp_end-timestamp_start, len(records), len(predictions)), INFO)
 
                 job.delete()
         except beanstalkc.BeanstalkcException as e:
