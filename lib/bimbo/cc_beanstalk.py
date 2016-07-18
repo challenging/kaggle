@@ -92,8 +92,7 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
         count += 1
 
         log("{} {}/{} >>> {} - {} - {} - {:4f}({:4f})".format(\
-            "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "",
-            count, len(predicted_rows), product_id, client_id, history[client_id], prediction_cc, prediction_median), INFO)
+            "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "", count, len(predicted_rows), product_id, client_id, history[client_id], prediction_cc, prediction_median), DEBUG)
 
         yield record, prediction
 
