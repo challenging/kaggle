@@ -46,10 +46,10 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
                       "client_id": int(client_id),
                       "product_id": product_id,
                       "prediction_type": None,
-                      "prediction": NON_PREDICTABLE}
+                      "prediction": prediction_cc}
 
         client_mean = np.mean(values[1:end_idx])
-        if np.sum(values[1:end_idx-1]) == 0:
+        if np.sum(values[1:end_idx]) == 0:
             rtype = "median"
         else:
             cc_client_ids, cc_matrix = [client_id], [values[1:end_idx]]
@@ -76,10 +76,10 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
                     else:
                         break
 
-                if np.sum(np.array(history[client_id]) == 0) > 4:
+                if values[end_idx-1] == 0  and np.sum(np.array(values[0:end_idx]) == 0) > 4:
                     prediction_cc = 0
                 else:
-                    prediction_cc = max(0, values[end_idx-2] + num_sum/num_count)
+                    prediction_cc = max(0, values[end_idx-1] + num_sum/num_count)
 
                 if prediction_cc > 0:
                     prediction_cc = prediction_cc*0.71 + 0.243
@@ -97,7 +97,7 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
 
         log("{} {}. {}/{} >>> {} - {} - {} - {:4f}({:4f})".format(\
             "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "",
-            rtype, count, len(predicted_rows), product_id, client_id, history[client_id], prediction_cc, prediction_median), DEBUG)
+            rtype, count, len(predicted_rows), product_id, client_id, history[client_id], prediction_cc, prediction_median), INFO)
 
         prediction["prediction_type"] = rtype
 

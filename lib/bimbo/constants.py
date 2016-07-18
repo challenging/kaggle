@@ -94,6 +94,7 @@ def load_median_route_solution(week):
 def get_median(classifiers, keys, values):
     for key, classifier in zip(keys, classifiers):
         k = "_".join([str(values[k]) for k in key])
+        log("{} is in classifier - {}".format(k, k in classifier), INFO)
 
         if k in classifier:
             return classifier[k]

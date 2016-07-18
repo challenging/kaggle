@@ -34,7 +34,7 @@ def stats(is_testing, n_jobs, week, column, option):
     elif beanstype == "cc":
         from bimbo.cc_beanstalk import producer, consumer
 
-        task += "_{}".format(column)
+        task += "_{}_{}".format(column, week)
 
         if mode.lower() == "producer":
             count = 1
@@ -51,13 +51,10 @@ def stats(is_testing, n_jobs, week, column, option):
         elif mode.lower() == "consumer":
             median_solution = ({}, {})
 
-            if is_testing:
-                median_solution = ({}, {})
+            if column == "route_id":
+                median_solution = (load_median_route_solution(week-1), ROUTE_GROUPS)
             else:
-                if column == "route_id":
-                    median_solution = (load_median_route_solution(week-1), ROUTE_GROUPS)
-                else:
-                    raise NotImplementError
+                raise NotImplementError
 
             if is_testing:
                 n_jobs = 1

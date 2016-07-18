@@ -141,11 +141,10 @@ def cc(week, filepath, filetype, median_solution=([], []), threshold_value=0):
 
     loss_sum, loss_count = 0, 0
     for no, (key, info) in enumerate(history.items()):
-        for rtype, record, lsum in cc_calculation(week, filetype, key, info, threshold_value, (no+1, len(history)), median_solution):
+        for rtype, record, prediction in cc_calculation(week, filetype, key, info, threshold_value, (no+1, len(history)), median_solution):
             if rtype in ["cc", "median"]:
                 loss_sum += lsum
                 loss_count += 1
-
             elif rtype == NON_PREDICTABLE:
                 pass
 
