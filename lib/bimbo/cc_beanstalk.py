@@ -56,16 +56,6 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
             cc_results = np.corrcoef(cc_matrix)[0]
             results_cc = dict(zip(cc_client_ids, cc_results))
 
-            '''
-            for c, value in sorted(results_cc.items(), key=lambda (k, v): abs(v), reverse=True):
-                if c == client_id or np.isnan(value):
-                    continue
-                elif abs(value) > threshold_value :
-                    ratio = client_mean/np.mean(history[c][0:end_idx-1])
-                    score = (history[c][end_idx-2] - history[c][end_idx-3])*value*ratio
-                else:
-                    break
-            '''
             matrix = []
             num_sum, num_count = 0, 0.00000001
             for c, value in results_cc.items():
@@ -99,7 +89,7 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
         count += 1
 
         log("{} {}/{} >>> {} - {} - {} - {:4f}({:4f})".format(\
-            "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "", count, len(predicted_rows), product_id, client_id, history[client_id], prediction["prediction_cc"], prediction["prediction_median"]), INFO)
+            "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "", count, len(predicted_rows), product_id, client_id, history[client_id], prediction["prediction_cc"], prediction["prediction_median"]), DEBUG)
 
         yield record, prediction
 
