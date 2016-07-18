@@ -108,13 +108,13 @@ def median_calculation(week, filetype, product_id, predicted_rows, median_soluti
         log("{} {}/{} >>> {} - {} - {:4f}".format(\
             "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "", count, len(predicted_rows), product_id, client_id, prediction["prediction_median"]), DEBUG)
 
-        yield record, prediction
+        yield prediction
 
 def cc_consumer(task=COMPETITION_CC_NAME):
     client = get_mongo_connection()
 
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
-    talk.watch(task)
+    talk.use(task)
 
     while True:
         try:
@@ -152,8 +152,9 @@ def cc_consumer(task=COMPETITION_CC_NAME):
 def median_consumer(median_solution, task=COMPETITION_CC_NAME):
     client = get_mongo_connection()
 
+    log("Ready to use {}".format(task))
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
-    talk.watch(task)
+    talk.use(task)
 
     while True:
         try:
@@ -169,8 +170,8 @@ def median_consumer(median_solution, task=COMPETITION_CC_NAME):
                 product_id, history = o["product_id"], o["history"]
 
                 timestamp_start = time.time()
-                for cc, prediction in median_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, median_solution):
-                    query = {MONGODB_COLUMNS[COLUMN_WEEK]: week, "groupby": cc["groupby"], filetype[0]: filetype[1], "client_id": cc["client_id"], "product_id": cc["product_id"]}
+                for prediction in median_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, median_solution):
+                    query = {MONGODB_COLUMNS[COLUMN_WEEK]: week, "groupby": prediction["groupby"], filetype[0]: filetype[1], "client_id": prediction["client_id"], "product_id": prediction["product_id"]}
                     client[mongodb_prediction_database][mongodb_prediction_collection].update(query, {"$set": prediction}, upsert=True)
 
                 timestamp_end = time.time()
@@ -242,7 +243,7 @@ def producer(week, filetype, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
 
     if os.path.exists(filepath_test):
         talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
-        talk.watch(task)
+        talk.use(task)
 
         client = get_mongo_connection()
 
