@@ -105,7 +105,7 @@ def median_calculation(week, filetype, product_id, predicted_rows, median_soluti
 
         count += 1
 
-        log("{} {}/{} >>> {} - {} - {} - {:4f}".format(\
+        log("{} {}/{} >>> {} - {} - {:4f}".format(\
             "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "", count, len(predicted_rows), product_id, client_id, prediction["prediction_median"]), DEBUG)
 
         yield record, prediction

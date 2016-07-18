@@ -70,6 +70,7 @@ def beanstalk(is_testing, n_jobs, week, column, option):
         from bimbo.cc_beanstalk import producer, median_consumer
 
         task += "_{}_{}_{}".format(beanstype, column, week)
+        log("Watching {}".format(task), INFO)
 
         if mode.lower() == "producer":
             count = 1
