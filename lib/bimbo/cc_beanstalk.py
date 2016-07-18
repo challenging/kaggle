@@ -130,12 +130,21 @@ def cc_consumer(task=COMPETITION_CC_NAME):
                 product_id, history = o["product_id"], o["history"]
 
                 timestamp_start = time.time()
+                records = []
                 for cc, prediction in cc_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, history):
-                    query = {"groupby": cc["groupby"], filetype[0]: filetype[1], "client_id": cc["client_id"], "product_id": cc["product_id"]}
-                    client[mongodb_cc_database][mongodb_cc_collection].update(query, {"$set": cc}, upsert=True)
+                    #query = {"groupby": cc["groupby"], filetype[0]: filetype[1], "client_id": cc["client_id"], "product_id": cc["product_id"]}
+                    #client[mongodb_cc_database][mongodb_cc_collection].update(query, {"$set": cc}, upsert=True)
+                    records.append(cc)
+
+                    if len(records) > 128:
+                        client[mongodb_cc_database][mongodb_cc_collection].insert_many(records)
+                        records = []
 
                     for row_id in prediction["row_id"]:
                         client[mongodb_prediction_database][mongodb_prediction_collection].update({"row_id": row_id}, {"$set": {"prediction_cc": prediction["prediction_cc"]}}, upsert=True)
+
+                if records:
+                    client[mongodb_cc_database][mongodb_cc_collection].insert_many(records)
 
                 timestamp_end = time.time()
                 log("Cost {:4f} secends to insert {} records into mongodb".format(timestamp_end-timestamp_start, len(predicted_rows)), INFO)
