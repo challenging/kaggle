@@ -4,8 +4,7 @@ import os
 import json
 import zlib
 import time
-
-import threading
+import pickle
 
 import pandas as pd
 import numpy as np
@@ -74,7 +73,7 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
             '''
             prediction_cc = max(0, values[end_idx-1] + num_sum/num_count)
 
-            record["cc"] = matrix
+            record["cc"] = zlib.compress(pickle.dumps(matrix))
             prediction["prediction_cc"] = prediction_cc
         else:
             log("Found only {} in {}({})".format(client_id, product_id, len(history)), WARN)
@@ -130,7 +129,7 @@ def cc_consumer(task=COMPETITION_CC_NAME):
                     timestamp_start = time.time()
 
                     records, predictions = [], []
-                    log("There are {}/{} predicted_rows/history in this task".format(len(predicted_rows), len(history)), INFO)
+                    log("There are {}/{} predicted_rows/history in {} of {}".format(len(predicted_rows), len(history), product_id, filetype), INFO)
                     for cc, prediction in cc_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, history):
                         records.append(cc)
 
