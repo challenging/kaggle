@@ -125,6 +125,7 @@ def consumer(median_solution, task=COMPETITION_CC_NAME, n_jobs=4):
                     client[mongodb_prediction_database][mongodb_prediction_collection].update(query, {"$set": prediction}, upsert=True)
 
                 timestamp_end = time.time()
+                log("Cost {:4f} secends to insert {} records into mongodb".format(timestamp_end-timestamp_start, len(predicted_rows)), INFO)
 
                 job.delete()
         except beanstalkc.BeanstalkcException as e:
