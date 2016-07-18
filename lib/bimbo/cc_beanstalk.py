@@ -134,8 +134,8 @@ def cc_consumer(task=COMPETITION_CC_NAME):
                     query = {"groupby": cc["groupby"], filetype[0]: filetype[1], "client_id": cc["client_id"], "product_id": cc["product_id"]}
                     client[mongodb_cc_database][mongodb_cc_collection].update(query, {"$set": cc}, upsert=True)
 
-                    query[MONGODB_COLUMNS[COLUMN_WEEK]] = week
-                    client[mongodb_prediction_database][mongodb_prediction_collection].update(query, {"$set": prediction}, upsert=True)
+                    for row_id in prediction["row_id"]:
+                        client[mongodb_prediction_database][mongodb_prediction_collection].update({"row_id": row_id}, {"$set": {"prediction_cc": prediction["prediction_cc"]}}, upsert=True)
 
                 timestamp_end = time.time()
                 log("Cost {:4f} secends to insert {} records into mongodb".format(timestamp_end-timestamp_start, len(predicted_rows)), INFO)
@@ -171,8 +171,8 @@ def median_consumer(median_solution, task=COMPETITION_CC_NAME):
 
                 timestamp_start = time.time()
                 for prediction in median_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, median_solution):
-                    query = {MONGODB_COLUMNS[COLUMN_WEEK]: week, "groupby": prediction["groupby"], filetype[0]: filetype[1], "client_id": prediction["client_id"], "product_id": prediction["product_id"]}
-                    client[mongodb_prediction_database][mongodb_prediction_collection].update(query, {"$set": prediction}, upsert=True)
+                    for row_id in prediction["row_id"]:
+                        client[mongodb_prediction_database][mongodb_prediction_collection].update({"row_id": row_id}, {"$set": {"prediction_median": prediction["prediction_median"]}}, upsert=True)
 
                 timestamp_end = time.time()
                 log("Cost {:4f} secends to insert {} records into mongodb".format(timestamp_end-timestamp_start, len(predicted_rows)), INFO)
@@ -254,11 +254,7 @@ def producer(week, filetype, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
         client[mongodb_cc_database][mongodb_cc_collection].create_index("client_id")
 
         mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
-        client[mongodb_prediction_database][mongodb_prediction_collection].create_index([(MONGODB_COLUMNS[COLUMN_WEEK], pymongo.ASCENDING),
-                                                                                         (filetype[0], pymongo.ASCENDING),
-                                                                                         ("groupby", pymongo.ASCENDING),
-                                                                                         ("client_id", pymongo.ASCENDING),
-                                                                                         ("product_id", pymongo.ASCENDING)])
+        client[mongodb_prediction_database][mongodb_prediction_collection].create_index(["row_id", pymongo.ASCENDING])
 
         history, predicted_rows = get_history(filepath_train, filepath_test)
         for product_id, info in predicted_rows.items():
