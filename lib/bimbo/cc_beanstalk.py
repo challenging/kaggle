@@ -19,8 +19,13 @@ from bimbo.constants import MONGODB_PREDICTION_COLLECTION, MONGODB_STATS_CC_COLL
 from bimbo.constants import COLUMN_WEEK, COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMNS, MONGODB_COLUMNS
 from bimbo.constants import SPLIT_PATH, NON_PREDICTABLE, TOTAL_WEEK
 
-END_FLAG = "ending"
-BATCH_NUM = 2**9 - 1
+def adjust_prediction_cc(values, prediction_cc):
+    if values[end_idx-1] == 0 and np.sum(np.array(values[0:end_idx]) == 0) > 4:
+        prediction_cc = 0
+    elif prediction_cc > 0:
+        prediction_cc = prediction_cc*0.71 + 0.243
+
+    return prediction_cc
 
 def cc_calculation(week, filetype, product_id, predicted_rows, history, threshold_value=0, progress_prefix=None):
     global TOTAL_WEEK
@@ -62,15 +67,6 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
 
                     matrix.append({client_id: int(c), "value": value})
 
-            '''
-            if values[end_idx-1] == 0 and np.sum(np.array(values[0:end_idx]) == 0) > 4:
-                prediction_cc = 0
-            else:
-                prediction_cc = max(0, values[end_idx-1] + num_sum/num_count)
-
-            if prediction_cc > 0:
-                prediction_cc = prediction_cc*0.71 + 0.243
-            '''
             prediction_cc = max(0, values[end_idx-1] + num_sum/num_count)
 
             record["cc"] = matrix
@@ -81,7 +77,7 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
         count += 1
 
         log("{} {}/{} >>> {} - {} - {} - {:4f}".format(\
-            "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "", count, len(predicted_rows), product_id, client_id, history[client_id], prediction["prediction_cc"]), DEBUG)
+            "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "", count, len(predicted_rows), product_id, client_id, history[client_id], prediction["prediction_cc"]), INFO)
 
         yield record, prediction
 
@@ -187,14 +183,20 @@ def median_consumer(median_solution, task=COMPETITION_CC_NAME):
                         predictions.append({"row_id": row_id, "prediction": prediction["prediction_median"]})
 
                 prediction_collection.insert_many(predictions)
-                log("Insert {} records into mongodb".format(len(predictions)), INFO)
+                log("Insert {} records into mongodb from {} of {}".format(len(predictions), product_id, filetype), INFO)
 
                 # To avoid BulkWriteErrors if the speed is too fast
-                time.sleep(1)
+                time.sleep(0.5)
 
                 job.delete()
         except beanstalkc.BeanstalkcException as e:
             log("Error occurs, {}".format(e), WARN)
+        except KeyError as e:
+            o = json.loads(zlib.decompress(job.body))
+            if "ending" in o:
+                job.delete()
+            else:
+                log("{} - {}".format(e, o), WARN)
         except Exception as e:
             raise
 

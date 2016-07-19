@@ -135,7 +135,7 @@ def aggregation(filepath, group_columns, output_filepath):
     df = df_train.groupby(group_columns).agg(target)
     df.to_csv(output_filepath)
 
-def cc(week, filepath_train, filepath_test, filetype, median_solution=([], []), threshold_value=0):
+def cc_solution(week, filepath_train, filepath_test, filetype, threshold_value=0):
     global TOTAL_WEEK
 
     shift_week = 3
@@ -143,33 +143,34 @@ def cc(week, filepath_train, filepath_test, filetype, median_solution=([], []), 
 
     history, predicted_rows = get_history(filepath_train, filepath_test, shift_week=shift_week)
 
-    rmsle_mean, rmsle_cc, rmsle_median, loss_count = 0, 0, 0, 0.00000001
+    ts = time.time()
+    rmsle_cc, loss_count = 0, 0.00000001
     for no, (product_id, info) in enumerate(history.items()):
-        partial_rmsle_mean, partial_rmsle_cc, partial_rmsle_median, partial_loss_count = 0, 0, 0, 0.00000001
+        partial_rmsle_cc, partial_loss_count = 0, 0.00000001
 
-        for rtype, record, prediction in cc_calculation(week, filetype, product_id, predicted_rows[product_id], info, threshold_value, (no+1, len(history)), median_solution):
+        for record, prediction in cc_calculation(week, filetype, product_id, predicted_rows[product_id], info, threshold_value, (no+1, len(history))):
             client_id = record["client_id"]
 
             true_value = history[product_id][client_id][end_idx]
-            prediction_median = get_median(median_solution[0], median_solution[1], {filetype[0]: filetype[1], COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
-            prediction_cc = prediction["prediction"]
+            #prediction_median = get_median(median_solution[0], median_solution[1], {filetype[0]: filetype[1], COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
+            prediction_cc = prediction["prediction_cc"]
 
-            loss_mean = (np.log1p((prediction_median+prediction_cc)/2)-np.log1p(true_value))**2
+            if prediction_cc < 0:
+                prediction_cc = 0
+
             loss_cc = (np.log1p(prediction_cc)-np.log1p(true_value))**2
-            loss_median = (np.log1p(prediction_median)-np.log1p(true_value))**2
 
-            log("Predict {} - {}({}), {} / {}".format(product_id, client_id, history[product_id][client_id], prediction_cc, prediction_median), DEBUG)
+            log("Predict {} - {}({}), {}".format(product_id, client_id, history[product_id][client_id], prediction_cc), DEBUG)
 
-            partial_rmsle_mean += loss_mean
             partial_rmsle_cc += loss_cc
-            partial_rmsle_median += loss_median
             partial_loss_count += 1
 
-        log("RMSLE of {} is {} / {} / {}".format(product_id, np.sqrt(partial_rmsle_cc/partial_loss_count), np.sqrt(partial_rmsle_median/partial_loss_count), np.sqrt(partial_rmsle_mean/partial_loss_count)), INFO)
+        log("RMSLE of {} is {}".format(product_id, np.sqrt(partial_rmsle_cc/partial_loss_count)), INFO)
 
-        rmsle_mean += partial_rmsle_mean
         rmsle_cc += partial_rmsle_cc
-        rmsle_median += partial_rmsle_median
         loss_count += partial_loss_count
 
-    log("Total RMLSE({}): {:4f} / {:4f} / {:4f}".format(loss_count, np.sqrt(rmsle_cc/loss_count), np.sqrt(rmsle_median/loss_count), np.sqrt(rmsle_mean/loss_count)), INFO)
+    loss_count = int(loss_count)
+    te = time.time()
+
+    log("Cost {:4f} secends to get the total RMLSE({}): {:4f}".format(te-ts, loss_count, np.sqrt(rmsle_cc/loss_count)), INFO)

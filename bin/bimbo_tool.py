@@ -18,7 +18,7 @@ from bimbo.constants import SPLIT_PATH, STATS_PATH, TRAIN_FILE, TEST_FILE, TESTI
 from bimbo.constants import ROUTE_GROUPS
 from bimbo.constants import TRAIN_FILE, TEST_FILE, TESTING_TRAIN_FILE, TESTING_TEST_FILE
 from bimbo.solutions import ensemble_solution, median_solution, ftlr_solution
-from bimbo.tools import purge_duplicated_records, hierarchical_folder_structure, repair_missing_records, aggregation, cc
+from bimbo.tools import purge_duplicated_records, hierarchical_folder_structure, repair_missing_records, aggregation, cc_solution
 
 TRAIN = TRAIN_FILE
 TEST = TEST_FILE
@@ -62,7 +62,7 @@ def tool(is_testing, column, mode, week, option):
             else:
                 raise NotImplementError
 
-        cc(week, filepath, filepath, (COLUMNS[column], column_value), solution)
+        cc_solution(week, filepath, filepath, (COLUMNS[column], column_value), solution)
     elif mode == "median":
         median_solution(TRAIN, week)
     elif mode == "ftlr":
