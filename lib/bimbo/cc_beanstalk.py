@@ -33,6 +33,7 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
 
         record = {"groupby": MONGODB_COLUMNS[filetype[0]], MONGODB_COLUMNS[filetype[0]]: int(filetype[1]), "product_id": product_id, "client_id": int(client_id), "history": values, "cc": []}
         prediction = {"row_id": predicted_rows[client_id],
+                      "history": values,
                       "prediction_cc": NON_PREDICTABLE}
 
         client_mean = np.mean(values[1:end_idx])
@@ -72,7 +73,7 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
             '''
             prediction_cc = max(0, values[end_idx-1] + num_sum/num_count)
 
-            record["cc"] = zlib.compress(json.dumps(matrix))
+            record["cc"] = matrix
             prediction["prediction_cc"] = prediction_cc
         else:
             log("Found only {} in {}({})".format(client_id, product_id, len(history)), WARN)
@@ -118,25 +119,26 @@ def cc_consumer(task=COMPETITION_CC_NAME):
             job = talk.reserve(timeout=TIMEOUT_BEANSTALK)
             if job:
                 o = json.loads(zlib.decompress(job.body))
-                if END_FLAG in o:
-                    pass
-                else:
-                    week, filetype = o[COLUMN_WEEK], o["filetype"]
-                    predicted_rows = o["predicted_rows"]
-                    product_id, history = o["product_id"], o["history"]
+                week, filetype = o[COLUMN_WEEK], o["filetype"]
+                predicted_rows = o["predicted_rows"]
+                product_id, history = o["product_id"], o["history"]
 
+                if "version" not in o or o["version"] < 1.1:
+                    log("Skip this {} of {} because of the lower version".format(product_id, filetype), INFO)
+                else:
                     timestamp_start = time.time()
 
                     records, predictions = [], []
                     log("There are {}/{} predicted_rows/history in {} of {}".format(len(predicted_rows), len(history), product_id, filetype), INFO)
                     for cc, prediction in cc_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, history):
-                        records.append(cc)
+                        #records.append(cc)
 
                         for row_id in prediction["row_id"]:
-                            predictions.append({"row_id": row_id, "prediction": prediction["prediction_cc"]})
+                            predictions.append({"row_id": row_id, "history": prediciton["history"], "prediction": prediction["prediction_cc"]})
 
-                    if records:
-                        cc_collection.insert_many(records)
+                    # The storage is not enought to store matrix of CC
+                    #if records:
+                    #    cc_collection.insert_many(records)
 
                     if predictions:
                         prediction_collection.insert_many(predictions)
@@ -147,6 +149,12 @@ def cc_consumer(task=COMPETITION_CC_NAME):
                 job.delete()
         except beanstalkc.BeanstalkcException as e:
             log("Error occurs, {}".format(e), WARN)
+        except KeyError as e:
+            o = json.loads(zlib.decompress(job.body))
+            if "ending" in o:
+                job.delete()
+            else:
+                log("{} - {}".format(e, o), WARN)
         except Exception as e:
             raise
 
@@ -168,23 +176,21 @@ def median_consumer(median_solution, task=COMPETITION_CC_NAME):
             job = talk.reserve(timeout=TIMEOUT_BEANSTALK)
             if job:
                 o = json.loads(zlib.decompress(job.body))
-                if END_FLAG in o:
-                    pass
-                else:
-                    week, filetype = o[COLUMN_WEEK], o["filetype"]
-                    predicted_rows = o["predicted_rows"]
+                week, filetype = o[COLUMN_WEEK], o["filetype"]
+                predicted_rows = o["predicted_rows"]
 
-                    product_id, history = o["product_id"], o["history"]
+                product_id, history = o["product_id"], o["history"]
 
-                    predictions = []
-                    for prediction in median_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, median_solution):
-                        for row_id in prediction["row_id"]:
-                            predictions.append({"row_id": row_id, "prediction": prediction["prediction_median"]})
+                predictions = []
+                for prediction in median_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, median_solution):
+                    for row_id in prediction["row_id"]:
+                        predictions.append({"row_id": row_id, "prediction": prediction["prediction_median"]})
 
-                    prediction_collection.insert_many(predictions)
-                    log("Insert {} records into mongodb".format(len(predictions)), INFO)
+                prediction_collection.insert_many(predictions)
+                log("Insert {} records into mongodb".format(len(predictions)), INFO)
 
-                    time.sleep(1)
+                # To avoid BulkWriteErrors if the speed is too fast
+                time.sleep(1)
 
                 job.delete()
         except beanstalkc.BeanstalkcException as e:
@@ -264,7 +270,8 @@ def producer(week, filetype, solution_type, task=COMPETITION_CC_NAME, ttr=TIMEOU
 
         history, predicted_rows = get_history(filepath_train, filepath_test)
         for product_id, info in predicted_rows.items():
-            request = {"product_id": product_id,
+            request = {"version": 1.1,
+                       "product_id": product_id,
                        COLUMN_WEEK: week,
                        "filetype": list(filetype),
                        "history": history[product_id],
@@ -272,9 +279,6 @@ def producer(week, filetype, solution_type, task=COMPETITION_CC_NAME, ttr=TIMEOU
 
             talk.put(zlib.compress(json.dumps(request)), ttr=TIMEOUT_BEANSTALK)
             log("Put request(product_id={} from {}) into the {}".format(product_id, os.path.basename(filepath_train), task), INFO)
-
-        talk.put(zlib.compress(json.dumps({END_FLAG: 1})), ttr=TIMEOUT_BEANSTALK)
-        log("Put the flag to force inserting records into mongodb", INFO)
 
         client.close()
         talk.close()
