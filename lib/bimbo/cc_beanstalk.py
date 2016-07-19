@@ -4,7 +4,6 @@ import os
 import json
 import zlib
 import time
-import pickle
 
 import pandas as pd
 import numpy as np
@@ -73,7 +72,7 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
             '''
             prediction_cc = max(0, values[end_idx-1] + num_sum/num_count)
 
-            record["cc"] = zlib.compress(pickle.dumps(matrix))
+            record["cc"] = zlib.compress(json.dumps(matrix))
             prediction["prediction_cc"] = prediction_cc
         else:
             log("Found only {} in {}({})".format(client_id, product_id, len(history)), WARN)
