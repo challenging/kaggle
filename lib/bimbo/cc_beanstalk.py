@@ -134,7 +134,7 @@ def cc_consumer(task=COMPETITION_CC_NAME):
                         #records.append(cc)
 
                         for row_id in prediction["row_id"]:
-                            predictions.append({"row_id": row_id, "history": prediciton["history"], "prediction": prediction["prediction_cc"]})
+                            predictions.append({"row_id": row_id, "history": prediction["history"], "prediction": prediction["prediction_cc"]})
 
                     # The storage is not enought to store matrix of CC
                     #if records:
