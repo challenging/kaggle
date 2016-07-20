@@ -1,19 +1,22 @@
 #!/usr/bin/python
 
 import os
-import sys
+import glob
+import gzip
+import time
 import json
 import subprocess
 
 import numpy as np
 import pandas as pd
 
-from utils import log
+from utils import log, create_folder
 from utils import INFO
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
-from bimbo.constants import MEDIAN_SOLUTION_PATH, FTLR_SOLUTION_PATH, ROUTE_GROUPS
+from bimbo.constants import MEDIAN_SOLUTION_PATH, FTLR_SOLUTION_PATH, ROUTE_GROUPS, BATCH_JOB
+from bimbo.constants import get_mongo_connection, get_median
 
-def median_solution(filepath, week=9, output_folder=MEDIAN_SOLUTION_PATH):
+def cache_median(filepath, week=9, output_folder=MEDIAN_SOLUTION_PATH):
     df = pd.read_csv(filepath)
 
     shape = df.shape
@@ -42,6 +45,32 @@ def median_solution(filepath, week=9, output_folder=MEDIAN_SOLUTION_PATH):
             json.dump(solution, OUTPUT)
 
             log("Write median solution to {}".format(output_filepath), INFO)
+
+def median_solution(output_filepath, filepath_test, solution):
+    log("Store the solution in {}".format(output_filepath), INFO)
+    create_folder(output_filepath)
+
+    ts = time.time()
+    with gzip.open(output_filepath, "wb") as OUTPUT:
+        OUTPUT.write("id,Demanda_uni_equil\n")
+
+        for filepath in glob.iglob(filepath_test):
+            log("Read {}".format(filepath), INFO)
+            header = True
+
+            with open(filepath, "rb") as INPUT:
+                for line in INPUT:
+                    if header:
+                        header = False
+                    else:
+                        row_id, w, agency_id, channel_id, route_id, client_id, product_id = line.strip().split(",")
+
+                        prediction_median = get_median(solution[0], solution[1], {COLUMN_ROUTE: route_id, COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
+
+                        OUTPUT.write("{},{}\n".format(row_id, prediction_median))
+
+    te = time.time()
+    log("Cost {:4f} secends to generate the solution".format(te-ts), INFO)
 
 def ftlr_solution(folder, fileid, submission_folder):
     cmd = "{} {} \"{}\" {} \"{}\"".format(PYPY, "ftlr.py", folder, fileid, submission_folder)

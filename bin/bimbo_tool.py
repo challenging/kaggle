@@ -13,11 +13,11 @@ from joblib import Parallel, delayed
 from utils import log, create_folder
 from utils import DEBUG, INFO, WARN
 from bimbo.constants import load_median_route_solution
-from bimbo.constants import MONGODB_COLUMNS, COLUMNS, COLUMN_ROUTE
-from bimbo.constants import SPLIT_PATH, STATS_PATH, TRAIN_FILE, TEST_FILE, TESTING_TRAIN_FILE, TESTING_TEST_FILE, FTLR_SOLUTION_PATH
+from bimbo.constants import MONGODB_COLUMNS, COLUMNS, COLUMN_ROUTE, MONGODB_PREDICTION_DATABASE
+from bimbo.constants import SPLIT_PATH, STATS_PATH, TRAIN_FILE, TEST_FILE, TESTING_TRAIN_FILE, TESTING_TEST_FILE, FTLR_SOLUTION_PATH, MEDIAN_SOLUTION_PATH
 from bimbo.constants import ROUTE_GROUPS
 from bimbo.constants import TRAIN_FILE, TEST_FILE, TESTING_TRAIN_FILE, TESTING_TEST_FILE
-from bimbo.solutions import ensemble_solution, median_solution, ftlr_solution
+from bimbo.solutions import ensemble_solution, median_solution, ftlr_solution, cache_median
 from bimbo.tools import purge_duplicated_records, hierarchical_folder_structure, repair_missing_records, aggregation, cc_solution
 
 TRAIN = TRAIN_FILE
@@ -63,14 +63,23 @@ def tool(is_testing, column, mode, week, option):
                 raise NotImplementError
 
         cc_solution(week, filepath, filepath, (COLUMNS[column], column_value), solution)
-    elif mode == "median":
-        median_solution(TRAIN, week)
-    elif mode == "ftlr":
-        folder = os.path.join(SPLIT_PATH, COLUMNS[column], "test")
-        submission_folder = os.path.join(FTLR_SOLUTION_PATH, COLUMNS[column])
-        create_folder("{}/1.txt".format(submission_folder))
+    elif mode == "cache":
+        cache_median(TRAIN, week)
+    elif mode == "solution":
+        solution, column = option
 
-        Parallel(n_jobs=6)(delayed(ftlr_solution)(folder, os.path.basename(filepath).replace(".csv", ""), submission_folder) for filepath in glob.iglob(os.path.join(folder, "*.csv")))
+        if solution == "ftlr":
+            folder = os.path.join(SPLIT_PATH, COLUMNS[column], "test")
+            submission_folder = os.path.join(FTLR_SOLUTION_PATH, COLUMNS[column])
+            create_folder("{}/1.txt".format(submission_folder))
+
+            Parallel(n_jobs=6)(delayed(ftlr_solution)(folder, os.path.basename(filepath).replace(".csv", ""), submission_folder) for filepath in glob.iglob(os.path.join(folder, "*.csv")))
+        elif solution == "median":
+            output_filepath = os.path.join(MEDIAN_SOLUTION_PATH, "{}.csv.gz".format(column))
+            filepath_test = os.path.join(SPLIT_PATH, COLUMNS[column], "test", "*.csv")
+            solution = (load_median_route_solution(week-1), ROUTE_GROUPS)
+
+            median_solution(output_filepath, filepath_test, solution)
     elif mode == "ensemble":
         filepaths, output_filepath = option
 

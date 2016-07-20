@@ -77,7 +77,7 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
         count += 1
 
         log("{} {}/{} >>> {} - {} - {} - {:4f}".format(\
-            "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "", count, len(predicted_rows), product_id, client_id, history[client_id], prediction["prediction_cc"]), INFO)
+            "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "", count, len(predicted_rows), product_id, client_id, history[client_id], prediction["prediction_cc"]), DEBUG)
 
         yield record, prediction
 
@@ -98,13 +98,13 @@ def median_calculation(week, filetype, product_id, predicted_rows, median_soluti
 
         yield prediction
 
-def cc_consumer(task=COMPETITION_CC_NAME):
+def cc_consumer(column, task=COMPETITION_CC_NAME):
     client = get_mongo_connection()
 
     mongodb_cc_database, mongodb_cc_collection = MONGODB_CC_DATABASE, get_cc_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
     cc_collection = client[mongodb_cc_database][mongodb_cc_collection]
 
-    mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("cc_{}".format(MONGODB_COLUMNS[COLUMN_PRODUCT]))
+    mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("cc_{}_product_client".format(column))
     prediction_collection = client[mongodb_prediction_database][mongodb_prediction_collection]
 
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
@@ -186,7 +186,7 @@ def median_consumer(median_solution, task=COMPETITION_CC_NAME):
                 log("Insert {} records into mongodb from {} of {}".format(len(predictions), product_id, filetype), INFO)
 
                 # To avoid BulkWriteErrors if the speed is too fast
-                time.sleep(0.5)
+                time.sleep(0.05)
 
                 job.delete()
         except beanstalkc.BeanstalkcException as e:

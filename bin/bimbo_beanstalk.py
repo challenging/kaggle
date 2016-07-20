@@ -54,7 +54,7 @@ def beanstalk(is_testing, n_jobs, week, column, option):
 
             threads = []
             for i in range(0, n_jobs):
-                thread = threading.Thread(target=cc_consumer, kwargs={"task": task})
+                thread = threading.Thread(target=cc_consumer, kwargs={"column": column, "task": task})
                 thread.setDaemon(True)
                 thread.start()
 
