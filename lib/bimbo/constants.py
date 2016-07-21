@@ -40,6 +40,12 @@ COLUMNS = {"agency_id": COLUMN_AGENCY,
            "client_id": COLUMN_CLIENT,
            "week": COLUMN_WEEK}
 
+AGENCY_GROUPS = [[COLUMN_AGENCY, COLUMN_PRODUCT, COLUMN_CLIENT],
+                [COLUMN_PRODUCT, COLUMN_CLIENT],
+                [COLUMN_AGENCY, COLUMN_PRODUCT],
+                [COLUMN_AGENCY, COLUMN_CLIENT],
+                [COLUMN_PRODUCT]]
+
 ROUTE_GROUPS = [[COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT],
                 [COLUMN_PRODUCT, COLUMN_CLIENT],
                 [COLUMN_ROUTE, COLUMN_PRODUCT],
@@ -77,11 +83,11 @@ def get_prediction_mongo_collection(name):
 def get_mongo_connection():
     return pymongo.MongoClient(MONGODB_URL)
 
-def load_median_route_solution(week):
+def load_median_solution(week, filetype):
     solutions = []
 
     for group in ROUTE_GROUPS:
-        filepath = os.path.join(MEDIAN_SOLUTION_PATH, "week={}".format(week), "{}.json".format("_".join(group)))
+        filepath = os.path.join(MEDIAN_SOLUTION_PATH, filetype, "week={}".format(week), "{}.json".format("_".join(group)))
 
         log("Start to read median solution from {}".format(filepath), INFO)
         with open(filepath, "rb") as INPUT:

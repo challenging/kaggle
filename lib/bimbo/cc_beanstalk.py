@@ -13,7 +13,7 @@ import beanstalkc
 
 from utils import log
 from utils import DEBUG, INFO, WARN
-from bimbo.constants import get_mongo_connection, get_cc_mongo_collection, get_prediction_mongo_collection, load_median_route_solution, get_median
+from bimbo.constants import get_mongo_connection, get_cc_mongo_collection, get_prediction_mongo_collection, get_median
 from bimbo.constants import COMPETITION_CC_NAME, IP_BEANSTALK, PORT_BEANSTALK, TIMEOUT_BEANSTALK
 from bimbo.constants import MONGODB_PREDICTION_COLLECTION, MONGODB_STATS_CC_COLLECTION, MONGODB_PREDICTION_DATABASE, MONGODB_CC_DATABASE
 from bimbo.constants import COLUMN_WEEK, COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMNS, MONGODB_COLUMNS
@@ -35,6 +35,12 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
     count = 0
     for client_id in predicted_rows.keys():
         values = history[client_id]
+
+        if values[end_idx-1] == 0 or np.sum(values[0:end_idx]) == 0:
+            continue
+
+        #if client_id != 1686333:
+        #    continue
 
         record = {"groupby": MONGODB_COLUMNS[filetype[0]], MONGODB_COLUMNS[filetype[0]]: int(filetype[1]), "product_id": product_id, "client_id": int(client_id), "history": values, "cc": []}
         prediction = {"row_id": predicted_rows[client_id],
@@ -58,16 +64,23 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
             for c, value in results_cc.items():
                 if c == client_id or np.isnan(value):
                     continue
-                else:
-                    ratio = client_mean/np.mean(history[c][0:end_idx-1])
-                    score = (history[c][end_idx-2] - history[c][end_idx-3])*value*ratio
+                elif np.sum(np.array(history[c][:end_idx-1]) == 0) < 3:
+                    diff = history[c][end_idx-1] - history[c][end_idx-2]
+                    if diff != 0:
+                        ratio = client_mean/np.mean(history[c][0:end_idx-1])
 
-                    num_sum += score
-                    num_count += 1
+                        if diff < 0:
+                            diff *= 8.9728
 
-                    matrix.append({client_id: int(c), "value": value})
+                        score = diff*value*ratio
 
-            prediction_cc = max(0, values[end_idx-1] + num_sum/num_count)
+                        num_sum += score
+                        num_count += 1
+
+                        matrix.append({client_id: int(c), "value": value})
+                        log("!!!! {} - {} >>> {}, {}-{}={}, {}".format(history[client_id], history[c], value, history[c][end_idx-1], history[c][end_idx-2], score, num_sum/num_count), INFO)
+
+            prediction_cc = values[end_idx-1] + (num_sum/num_count)
 
             record["cc"] = matrix
             prediction["prediction_cc"] = prediction_cc

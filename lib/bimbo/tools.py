@@ -13,7 +13,7 @@ import pandas as pd
 from utils import log, create_folder
 from utils import DEBUG, INFO, WARN
 from bimbo.cc_beanstalk import cc_calculation, get_history, get_median
-from bimbo.constants import get_stats_mongo_collection, get_mongo_connection, load_median_route_solution
+from bimbo.constants import get_stats_mongo_collection, get_mongo_connection
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
 from bimbo.constants import TOTAL_WEEK, PYPY, IP_BEANSTALK, MONGODB_DATABASE, MONGODB_BATCH_SIZE, SPLIT_PATH, NON_PREDICTABLE
 
@@ -147,35 +147,38 @@ def cc_solution(week, filepath_train, filepath_test, filetype, median_solution, 
     ts = time.time()
     rmsle_mean, rmsle_cc, rmsle_median, loss_count = 0, 0, 0, 0.00000001
     for no, (product_id, info) in enumerate(history.items()):
+        #if product_id != 5000:
+        #    continue
+
         partial_rmsle_mean, partial_rmsle_cc, partial_rmsle_median, partial_loss_count = 0, 0, 0, 0.00000001
 
         for record, prediction in cc_calculation(week, filetype, product_id, predicted_rows[product_id], info, threshold_value, (no+1, len(history))):
             client_id = record["client_id"]
 
             true_value = history[product_id][client_id][end_idx]
-            if true_value == 0:
+            if true_value == 0 or np.sum(history[product_id][client_id][0:end_idx]) == 0:
                 continue
 
-            prediction_median = get_median(median_solution[0], median_solution[1], {filetype[0]: filetype[1], COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
+            prediction_median = get_median(median_solution[0], median_solution[1], {COLUMN_ROUTE: filetype[1], COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
             prediction_cc = prediction["prediction_cc"]
 
             if prediction_cc < 0:
                 prediction_cc = 0
-            else:
-                prediction_cc = prediction_cc*0.71+1.5
+            #else:
+            #    prediction_cc = prediction_cc*0.71+1.5
 
-            prediction_mean = (prediction_median+prediction_cc)/2
+            prediction_mean = prediction_median*0.5+prediction_cc*0.5
 
             loss_cc = (np.log1p(prediction_cc)-np.log1p(true_value))**2
             loss_median = (np.log1p(prediction_median)-np.log1p(true_value))**2
             loss_mean = (np.log1p(prediction_mean)-np.log1p(true_value))**2
 
-            if prediction_cc > true_value:
+            if prediction_mean > true_value:
                 sign_plus += loss_cc
-            elif prediction_cc < true_value:
+            elif prediction_mean < true_value:
                 sign_minus += loss_cc
 
-            log("Predict {} - {} - {}, {}/{}/{}".format(product_id, client_id, history[product_id][client_id], prediction_cc, prediction_median, prediction_mean), INFO)
+            log("Predict {} - {} - {}, {}/{}/{} {}".format(product_id, client_id, history[product_id][client_id], prediction_cc, prediction_median, prediction_mean, np.sum(history[product_id][client_id][0:end_idx])), INFO)
 
             partial_rmsle_cc += loss_cc
             partial_rmsle_median += loss_median
@@ -189,7 +192,6 @@ def cc_solution(week, filepath_train, filepath_test, filetype, median_solution, 
         rmsle_mean += partial_rmsle_mean
         loss_count += partial_loss_count
 
-    loss_count = int(loss_count)
     te = time.time()
 
     log("Cost {:4f} secends to get the total RMLSE: {:4f}/{:4f}/{:4f}".format(te-ts, np.sqrt(rmsle_cc/loss_count), np.sqrt(rmsle_median/loss_count), np.sqrt(rmsle_mean/loss_count)), INFO)

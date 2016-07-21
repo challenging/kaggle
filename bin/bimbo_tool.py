@@ -12,10 +12,10 @@ from joblib import Parallel, delayed
 
 from utils import log, create_folder
 from utils import DEBUG, INFO, WARN
-from bimbo.constants import load_median_route_solution
+from bimbo.constants import load_median_solution
 from bimbo.constants import MONGODB_COLUMNS, COLUMNS, COLUMN_ROUTE, MONGODB_PREDICTION_DATABASE
 from bimbo.constants import SPLIT_PATH, STATS_PATH, TRAIN_FILE, TEST_FILE, TESTING_TRAIN_FILE, TESTING_TEST_FILE, FTLR_SOLUTION_PATH, MEDIAN_SOLUTION_PATH
-from bimbo.constants import ROUTE_GROUPS
+from bimbo.constants import ROUTE_GROUPS, AGENCY_GROUPS
 from bimbo.constants import TRAIN_FILE, TEST_FILE, TESTING_TRAIN_FILE, TESTING_TEST_FILE
 from bimbo.solutions import ensemble_solution, median_solution, ftlr_solution, cache_median
 from bimbo.tools import purge_duplicated_records, hierarchical_folder_structure, repair_missing_records, aggregation, cc_solution
@@ -57,14 +57,18 @@ def tool(is_testing, column, mode, week, option):
 
         solution = ([], [])
         if not is_testing:
-            if column == MONGODB_COLUMNS[COLUMN_ROUTE]:
-                solution = (load_median_route_solution(week-1), ROUTE_GROUPS)
-            else:
-                raise NotImplementError
+            groups = None
+
+            if MONGODB_COLUMNS[COLUMN_ROUTE] == column:
+                groups = ROUTE_GROUPS
+            elif MONGODB_COLUMNS[COLUMN_AGENCY] == column:
+                groups = AGENCY_GROUPS
+
+            solution = (load_median_solution(week-1, column), groups)
 
         cc_solution(week, filepath, filepath, (COLUMNS[column], column_value), solution)
     elif mode == "cache":
-        cache_median(TRAIN, week)
+        cache_median(TRAIN, column, week)
     elif mode == "solution":
         solution, column = option
 
@@ -77,7 +81,14 @@ def tool(is_testing, column, mode, week, option):
         elif solution == "median":
             output_filepath = os.path.join(MEDIAN_SOLUTION_PATH, "{}.csv.gz".format(column))
             filepath_test = os.path.join(SPLIT_PATH, COLUMNS[column], "test", "*.csv")
-            solution = (load_median_route_solution(week-1), ROUTE_GROUPS)
+
+            groups = None
+            if MONGODB_COLUMNS[COLUMN_ROUTE] == column:
+                groups = ROUTE_GROUPS
+            elif MONGODB_COLUMNS[COLUMN_ROUTE] == column:
+                groups = AGENCY_GROUPS
+
+            solution = (load_median_solution(column, week-1), groups)
 
             median_solution(output_filepath, filepath_test, solution)
     elif mode == "ensemble":

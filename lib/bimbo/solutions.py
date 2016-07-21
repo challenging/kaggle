@@ -13,10 +13,10 @@ import pandas as pd
 from utils import log, create_folder
 from utils import INFO
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
-from bimbo.constants import MEDIAN_SOLUTION_PATH, FTLR_SOLUTION_PATH, ROUTE_GROUPS, BATCH_JOB
+from bimbo.constants import MEDIAN_SOLUTION_PATH, FTLR_SOLUTION_PATH, ROUTE_GROUPS, AGENCY_GROUPS, BATCH_JOB
 from bimbo.constants import get_mongo_connection, get_median
 
-def cache_median(filepath, week=9, output_folder=MEDIAN_SOLUTION_PATH):
+def cache_median(filepath, filetype, week=9, output_folder=MEDIAN_SOLUTION_PATH):
     df = pd.read_csv(filepath)
 
     shape = df.shape
@@ -29,7 +29,13 @@ def cache_median(filepath, week=9, output_folder=MEDIAN_SOLUTION_PATH):
 
     target = {COLUMN_PREDICTION: np.median}
 
-    for group in ROUTE_GROUPS:
+    groups = None
+    if filetype == MONGODB_COLUMNS[COLUMN_ROUTE]:
+        groups = ROUTE_GROUPS
+    elif filetype == MONGODB_COLUMNS[COLUMN_AGENCY]:
+        groups = AGENCY_GROUPS
+
+    for group in groups:
         median = df.groupby(group).agg(target).to_dict()
 
         solution = {}
@@ -40,7 +46,8 @@ def cache_median(filepath, week=9, output_folder=MEDIAN_SOLUTION_PATH):
                 solution["_".join([str(s) for s in key])] = value
 
         log("There are {} records in median_solution".format(len(solution)), INFO)
-        output_filepath = os.path.join(output_folder, "week={}".format(week), "{}.json".format("_".join([str(s) for s in group])))
+        output_filepath = os.path.join(output_folder, filetype, "week={}".format(week), "{}.json".format("_".join([str(s) for s in group])))
+        create_folder(output_filepath)
         with open(output_filepath, "wb") as OUTPUT:
             json.dump(solution, OUTPUT)
 
