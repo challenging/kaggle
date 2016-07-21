@@ -39,9 +39,6 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
         if values[end_idx-1] == 0 or np.sum(values[0:end_idx]) == 0:
             continue
 
-        #if client_id != 1686333:
-        #    continue
-
         record = {"groupby": MONGODB_COLUMNS[filetype[0]], MONGODB_COLUMNS[filetype[0]]: int(filetype[1]), "product_id": product_id, "client_id": int(client_id), "history": values, "cc": []}
         prediction = {"row_id": predicted_rows[client_id],
                       "history": values,
@@ -68,10 +65,6 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
                     diff = history[c][end_idx-1] - history[c][end_idx-2]
                     if diff != 0:
                         ratio = client_mean/np.mean(history[c][0:end_idx-1])
-
-                        #if diff < 0:
-                        #    diff *= 3.5728
-
                         score = diff*value*ratio
 
                         num_sum += score
