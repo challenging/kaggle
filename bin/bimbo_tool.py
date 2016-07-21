@@ -88,7 +88,7 @@ def tool(is_testing, column, mode, week, option):
             elif MONGODB_COLUMNS[COLUMN_ROUTE] == column:
                 groups = AGENCY_GROUPS
 
-            solution = (load_median_solution(column, week-1), groups)
+            solution = (load_median_solution(week-1, column), groups)
 
             median_solution(output_filepath, filepath_test, solution)
     elif mode == "ensemble":

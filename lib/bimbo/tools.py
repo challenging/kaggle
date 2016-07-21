@@ -166,19 +166,25 @@ def cc_solution(week, filepath_train, filepath_test, filetype, median_solution, 
                 prediction_cc = 0
             #else:
             #    prediction_cc = prediction_cc*0.71+1.5
+            prediction_cc = prediction_cc*0.8
 
-            prediction_mean = prediction_median*0.5+prediction_cc*0.5
+            prediction_mean = prediction_median*0.7+(np.e**prediction_cc-1)*0.3
 
+            '''
             loss_cc = (np.log1p(prediction_cc)-np.log1p(true_value))**2
             loss_median = (np.log1p(prediction_median)-np.log1p(true_value))**2
             loss_mean = (np.log1p(prediction_mean)-np.log1p(true_value))**2
+            '''
+            loss_cc = (prediction_cc-true_value)**2
+            loss_median = (np.log1p(prediction_median)-true_value)**2
+            loss_mean = (np.log1p(prediction_mean)-true_value)**2
 
             if prediction_mean > true_value:
                 sign_plus += loss_cc
             elif prediction_mean < true_value:
                 sign_minus += loss_cc
 
-            log("Predict {} - {} - {}, {}/{}/{} {}".format(product_id, client_id, history[product_id][client_id], prediction_cc, prediction_median, prediction_mean, np.sum(history[product_id][client_id][0:end_idx])), INFO)
+            log("Predict {} - {} - {}, {}/{}/{} {}".format(product_id, client_id, history[product_id][client_id], np.e**prediction_cc-1, prediction_median, prediction_mean, np.sum(history[product_id][client_id][0:end_idx])), INFO)
 
             partial_rmsle_cc += loss_cc
             partial_rmsle_median += loss_median

@@ -69,8 +69,8 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
                     if diff != 0:
                         ratio = client_mean/np.mean(history[c][0:end_idx-1])
 
-                        if diff < 0:
-                            diff *= 8.9728
+                        #if diff < 0:
+                        #    diff *= 3.5728
 
                         score = diff*value*ratio
 
@@ -78,7 +78,7 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
                         num_count += 1
 
                         matrix.append({client_id: int(c), "value": value})
-                        log("!!!! {} - {} >>> {}, {}-{}={}, {}".format(history[client_id], history[c], value, history[c][end_idx-1], history[c][end_idx-2], score, num_sum/num_count), INFO)
+                        log("!!!! {} - {} >>> {}, {}-{}={}, {}".format(history[client_id], history[c], value, history[c][end_idx-1], history[c][end_idx-2], score, num_sum/num_count), DEBUG)
 
             prediction_cc = values[end_idx-1] + (num_sum/num_count)
 
@@ -236,7 +236,7 @@ def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK
 
             history.setdefault(product_id, {})
             history[product_id].setdefault(client_id, [0 for _ in range(week[0], week[1])])
-            history[product_id][client_id][w-shift_week] = prediction_unit
+            history[product_id][client_id][w-shift_week] = np.log1p(prediction_unit)
 
     predicted_rows = {}
     with open(filepath_test, "rb") as INPUT:

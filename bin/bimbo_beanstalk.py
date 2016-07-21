@@ -7,7 +7,7 @@ import click
 import threading
 
 from utils import log, INFO
-from bimbo.constants import load_median_route_solution, COMPETITION_CC_NAME, COLUMNS, ROUTE_GROUPS, SPLIT_PATH
+from bimbo.constants import load_median_solution, COMPETITION_CC_NAME, COLUMNS, ROUTE_GROUPS, SPLIT_PATH
 
 @click.command()
 @click.option("--is-testing", is_flag=True, help="testing mode")
@@ -34,7 +34,7 @@ def beanstalk(is_testing, n_jobs, week, column, option):
     elif beanstype == "cc":
         from bimbo.cc_beanstalk import producer, cc_consumer
 
-        task += "_{}_{}_{}".format(beanstype, column, week)
+        task += "_{}_{}_{}_log1p".format(beanstype, column, week)
 
         if mode.lower() == "producer":
             count = 1
@@ -88,7 +88,7 @@ def beanstalk(is_testing, n_jobs, week, column, option):
             median_solution = ({}, {})
 
             if column == "route_id":
-                median_solution = (load_median_route_solution(week-1), ROUTE_GROUPS)
+                median_solution = (load_median_solution(week-1, column), ROUTE_GROUPS)
             else:
                 raise NotImplementError
 
