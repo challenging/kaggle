@@ -166,7 +166,7 @@ def cc_solution(week, filepath_train, filepath_test, filetype, median_solution, 
                 prediction_cc = 0
             #else:
             #    prediction_cc = prediction_cc*0.71+1.5
-            prediction_cc = prediction_cc*0.8
+            #prediction_cc = prediction_cc*0.9
 
             prediction_mean = prediction_median*0.7+(np.e**prediction_cc-1)*0.3
 
@@ -184,14 +184,14 @@ def cc_solution(week, filepath_train, filepath_test, filetype, median_solution, 
             elif prediction_mean < true_value:
                 sign_minus += loss_cc
 
-            log("Predict {} - {} - {}, {}/{}/{} {}".format(product_id, client_id, history[product_id][client_id], np.e**prediction_cc-1, prediction_median, prediction_mean, np.sum(history[product_id][client_id][0:end_idx])), INFO)
+            log("Predict {} - {} - {}, {}/{}/{} {}".format(product_id, client_id, history[product_id][client_id], np.e**prediction_cc-1, prediction_median, prediction_mean, np.sum(history[product_id][client_id][0:end_idx])), DEBUG)
 
             partial_rmsle_cc += loss_cc
             partial_rmsle_median += loss_median
             partial_rmsle_mean += loss_mean
             partial_loss_count += 1
 
-        log("RMSLE of {} is {}/{}/{}".format(product_id, np.sqrt(partial_rmsle_cc/partial_loss_count), np.sqrt(partial_rmsle_median/partial_loss_count), np.sqrt(partial_rmsle_mean/partial_loss_count)), INFO)
+        log("RMSLE({}) of {} is {}/{}/{}".format(partial_loss_count, product_id, np.sqrt(partial_rmsle_cc/partial_loss_count), np.sqrt(partial_rmsle_median/partial_loss_count), np.sqrt(partial_rmsle_mean/partial_loss_count)), INFO)
 
         rmsle_cc += partial_rmsle_cc
         rmsle_median += partial_rmsle_median

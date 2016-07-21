@@ -114,11 +114,11 @@ def median_calculation(week, filetype, product_id, predicted_rows, median_soluti
 def cc_consumer(column, task=COMPETITION_CC_NAME):
     client = get_mongo_connection()
 
-    mongodb_cc_database, mongodb_cc_collection = MONGODB_CC_DATABASE, get_cc_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
-    cc_collection = client[mongodb_cc_database][mongodb_cc_collection]
+    #mongodb_cc_database, mongodb_cc_collection = MONGODB_CC_DATABASE, get_cc_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
+    #cc_collection = client[mongodb_cc_database][mongodb_cc_collection]
 
-    mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("cc_{}_product_client".format(column))
-    prediction_collection = client[mongodb_prediction_database][mongodb_prediction_collection]
+    #mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("cc_{}_product_client".format(column))
+    #prediction_collection = client[mongodb_prediction_database][mongodb_prediction_collection]
 
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
     talk.watch(task)
@@ -131,6 +131,12 @@ def cc_consumer(column, task=COMPETITION_CC_NAME):
                 week, filetype = o[COLUMN_WEEK], o["filetype"]
                 predicted_rows = o["predicted_rows"]
                 product_id, history = o["product_id"], o["history"]
+
+                mongodb_cc_database, mongodb_cc_collection = o["mongodb_cc"]
+                cc_collection = client[mongodb_cc_database][mongodb_cc_collection]
+
+                mongodb_prediction_database, mongodb_prediction_collection = o["mongodb_prediction"]
+                prediction_collection = client[mongodb_prediction_database][mongodb_prediction_collection]
 
                 if "version" not in o or o["version"] < 1.1:
                     log("Skip this {} of {} because of the lower version".format(product_id, filetype), INFO)
@@ -280,7 +286,7 @@ def producer(week, filetype, solution_type, task=COMPETITION_CC_NAME, ttr=TIMEOU
         mongodb_cc_database, mongodb_cc_collection = MONGODB_CC_DATABASE, get_cc_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
         client[mongodb_cc_database][mongodb_cc_collection].create_index([("groupby", pymongo.ASCENDING), (filetype[0], pymongo.ASCENDING), ("client_id", pymongo.ASCENDING), ("product_id", pymongo.ASCENDING)])
 
-        mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("{}_{}".format(solution_type, MONGODB_COLUMNS[COLUMN_PRODUCT]))
+        mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("{}_{}_product_client_log1p".format(solution_type, filetype[0]))
         client[mongodb_prediction_database][mongodb_prediction_collection].create_index("row_id")
 
         history, predicted_rows = get_history(filepath_train, filepath_test)
@@ -290,7 +296,9 @@ def producer(week, filetype, solution_type, task=COMPETITION_CC_NAME, ttr=TIMEOU
                        COLUMN_WEEK: week,
                        "filetype": list(filetype),
                        "history": history[product_id],
-                       "predicted_rows": predicted_rows[product_id]}
+                       "predicted_rows": predicted_rows[product_id],
+                       "mongodb_cc": (mongodb_cc_database, mongodb_cc_collection),
+                       "mongodb_prediction": (mongodb_prediction_database, mongodb_prediction_collection)}
 
             talk.put(zlib.compress(json.dumps(request)), ttr=TIMEOUT_BEANSTALK)
             log("Put request(product_id={} from {}) into the {}".format(product_id, os.path.basename(filepath_train), task), INFO)
