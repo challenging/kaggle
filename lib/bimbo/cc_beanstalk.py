@@ -36,13 +36,15 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
     for client_id in predicted_rows.keys():
         values = history[client_id]
 
-        if values[end_idx-1] == 0 or np.sum(values[0:end_idx]) == 0:
-            continue
-
         record = {"groupby": MONGODB_COLUMNS[filetype[0]], MONGODB_COLUMNS[filetype[0]]: int(filetype[1]), "product_id": product_id, "client_id": int(client_id), "history": values, "cc": []}
         prediction = {"row_id": predicted_rows[client_id],
                       "history": values,
                       "prediction_cc": NON_PREDICTABLE}
+
+        if np.sum(values[0:end_idx]) == 0:
+            yield record, prediction
+
+            continue
 
         client_mean = np.mean(values[1:end_idx])
         cc_client_ids, cc_matrix = [client_id], [values[1:end_idx]]
@@ -106,12 +108,6 @@ def median_calculation(week, filetype, product_id, predicted_rows, median_soluti
 
 def cc_consumer(column, task=COMPETITION_CC_NAME):
     client = get_mongo_connection()
-
-    #mongodb_cc_database, mongodb_cc_collection = MONGODB_CC_DATABASE, get_cc_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
-    #cc_collection = client[mongodb_cc_database][mongodb_cc_collection]
-
-    #mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("cc_{}_product_client".format(column))
-    #prediction_collection = client[mongodb_prediction_database][mongodb_prediction_collection]
 
     talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
     talk.watch(task)
@@ -215,7 +211,7 @@ def median_consumer(median_solution, task=COMPETITION_CC_NAME):
     talk.close()
     client.close()
 
-def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK]):
+def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK], collection=None):
     history = {}
 
     with open(filepath_train, "rb") as INPUT:
@@ -253,12 +249,20 @@ def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK
                 row_id, w, agency_id, channel_id, route_id, client_id, product_id = line.strip().split(",")
 
             row_id = int(row_id)
+
             w = int(w)
             client_id = int(client_id)
             product_id = int(product_id)
 
             history.setdefault(product_id, {})
             history[product_id].setdefault(client_id, [0 for _ in range(week[0], week[1])])
+
+            # workaround
+            count = collection.count({"row_id": row_id})
+            if count == 0:
+                log("Miss Row ID: {}".format(row_id))
+            else:
+                continue
 
             predicted_rows.setdefault(product_id, {})
             predicted_rows[product_id].setdefault(client_id, [])
@@ -282,7 +286,7 @@ def producer(week, filetype, solution_type, task=COMPETITION_CC_NAME, ttr=TIMEOU
         mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("{}_{}_product_client_log1p".format(solution_type, filetype[0]))
         client[mongodb_prediction_database][mongodb_prediction_collection].create_index("row_id")
 
-        history, predicted_rows = get_history(filepath_train, filepath_test)
+        history, predicted_rows = get_history(filepath_train, filepath_test, collection=client[mongodb_prediction_database][mongodb_prediction_collection])
         for product_id, info in predicted_rows.items():
             request = {"version": 1.1,
                        "product_id": product_id,

@@ -13,7 +13,7 @@ from joblib import Parallel, delayed
 from utils import log, create_folder
 from utils import DEBUG, INFO, WARN
 from bimbo.constants import load_median_solution
-from bimbo.constants import MONGODB_COLUMNS, COLUMNS, COLUMN_ROUTE, MONGODB_PREDICTION_DATABASE
+from bimbo.constants import MONGODB_COLUMNS, COLUMNS, COLUMN_ROUTE, COLUMN_AGENCY, MONGODB_PREDICTION_DATABASE
 from bimbo.constants import SPLIT_PATH, STATS_PATH, TRAIN_FILE, TEST_FILE, TESTING_TRAIN_FILE, TESTING_TEST_FILE, FTLR_SOLUTION_PATH, MEDIAN_SOLUTION_PATH
 from bimbo.constants import ROUTE_GROUPS, AGENCY_GROUPS
 from bimbo.constants import TRAIN_FILE, TEST_FILE, TESTING_TRAIN_FILE, TESTING_TEST_FILE
@@ -64,7 +64,7 @@ def tool(is_testing, column, mode, week, option):
             elif MONGODB_COLUMNS[COLUMN_AGENCY] == column:
                 groups = AGENCY_GROUPS
 
-            solution = (load_median_solution(week-1, column), groups)
+            solution = (load_median_solution(week-1, column, groups), groups)
 
         cc_solution(week, filepath, filepath, (COLUMNS[column], column_value), solution)
     elif mode == "cache":
@@ -88,7 +88,7 @@ def tool(is_testing, column, mode, week, option):
             elif MONGODB_COLUMNS[COLUMN_ROUTE] == column:
                 groups = AGENCY_GROUPS
 
-            solution = (load_median_solution(week-1, column), groups)
+            solution = (load_median_solution(week-1, column, groups), groups)
 
             median_solution(output_filepath, filepath_test, solution)
     elif mode == "ensemble":

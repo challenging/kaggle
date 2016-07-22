@@ -83,10 +83,10 @@ def get_prediction_mongo_collection(name):
 def get_mongo_connection():
     return pymongo.MongoClient(MONGODB_URL)
 
-def load_median_solution(week, filetype):
+def load_median_solution(week, filetype, groups):
     solutions = []
 
-    for group in ROUTE_GROUPS:
+    for group in groups:
         filepath = os.path.join(MEDIAN_SOLUTION_PATH, filetype, "week={}".format(week), "{}.json".format("_".join(group)))
 
         log("Start to read median solution from {}".format(filepath), INFO)

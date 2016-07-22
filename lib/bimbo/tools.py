@@ -147,19 +147,16 @@ def cc_solution(week, filepath_train, filepath_test, filetype, median_solution, 
     ts = time.time()
     rmsle_mean, rmsle_cc, rmsle_median, loss_count = 0, 0, 0, 0.00000001
     for no, (product_id, info) in enumerate(history.items()):
-        #if product_id != 5000:
-        #    continue
-
-        partial_rmsle_mean, partial_rmsle_cc, partial_rmsle_median, partial_loss_count = 0, 0, 0, 0.00000001
+        partial_rmsle_mean, partial_rmsle_cc, partial_rmsle_median, partial_loss_count = 0, 0, 0, 0
 
         for record, prediction in cc_calculation(week, filetype, product_id, predicted_rows[product_id], info, threshold_value, (no+1, len(history))):
             client_id = record["client_id"]
 
             true_value = history[product_id][client_id][end_idx]
-            if true_value == 0 or np.sum(history[product_id][client_id][0:end_idx]) == 0:
+            if true_value == 0 or len(history[product_id]) == 1 or np.sum(history[product_id][client_id][0:end_idx]) == 0:
                 continue
 
-            prediction_median = get_median(median_solution[0], median_solution[1], {COLUMN_ROUTE: filetype[1], COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
+            prediction_median = get_median(median_solution[0], median_solution[1], {filetype[0]: filetype[1], COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
             prediction_cc = prediction["prediction_cc"]
 
             if prediction_cc < 0:
@@ -191,7 +188,8 @@ def cc_solution(week, filepath_train, filepath_test, filetype, median_solution, 
             partial_rmsle_mean += loss_mean
             partial_loss_count += 1
 
-        log("RMSLE({}) of {} is {}/{}/{}".format(partial_loss_count, product_id, np.sqrt(partial_rmsle_cc/partial_loss_count), np.sqrt(partial_rmsle_median/partial_loss_count), np.sqrt(partial_rmsle_mean/partial_loss_count)), INFO)
+        if partial_loss_count > 0:
+            log("RMSLE({}) of {} is {}/{}/{}".format(partial_loss_count, product_id, np.sqrt(partial_rmsle_cc/partial_loss_count), np.sqrt(partial_rmsle_median/partial_loss_count), np.sqrt(partial_rmsle_mean/partial_loss_count)), INFO)
 
         rmsle_cc += partial_rmsle_cc
         rmsle_median += partial_rmsle_median
