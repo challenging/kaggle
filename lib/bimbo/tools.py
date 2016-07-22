@@ -10,12 +10,16 @@ import subprocess
 import numpy as np
 import pandas as pd
 
+from sklearn import linear_model
+
 from utils import log, create_folder
 from utils import DEBUG, INFO, WARN
 from bimbo.cc_beanstalk import cc_calculation, get_history, get_median
 from bimbo.constants import get_stats_mongo_collection, get_mongo_connection
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
 from bimbo.constants import TOTAL_WEEK, PYPY, IP_BEANSTALK, MONGODB_DATABASE, MONGODB_BATCH_SIZE, SPLIT_PATH, NON_PREDICTABLE
+
+from bimbo.model import Learning, LearningCost
 
 def purge_duplicated_records(column, batch_size=MONGODB_BATCH_SIZE):
     client = get_mongo_connection()
@@ -143,6 +147,11 @@ def cc_solution(week, filepath_train, filepath_test, filetype, median_solution, 
 
     history, predicted_rows = get_history(filepath_train, filepath_test, shift_week=shift_week)
 
+    nfold = 3
+    dataset_x = np.array([])
+    dataset_y = np.array([])
+    models = [linear_model.LinearRegression(), linear_model.Ridge(alpha=1.0)]
+
     sign_plus, sign_minus = 0, 0
     ts = time.time()
     rmsle_mean, rmsle_cc, rmsle_median, loss_count = 0, 0, 0, 0.00000001
@@ -158,6 +167,13 @@ def cc_solution(week, filepath_train, filepath_test, filetype, median_solution, 
 
             prediction_median = get_median(median_solution[0], median_solution[1], {filetype[0]: filetype[1], COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
             prediction_cc = prediction["prediction_cc"]
+
+            if dataset_x.shape[0] == 0:
+                dataset_x = np.array([[np.e**prediction_cc-1, prediction_median]])
+                dataset_y = np.array([np.e**true_value-1])
+            else:
+                dataset_x = np.concatenate((dataset_x, [[np.e**prediction_cc-1, prediction_median]]), axis=0)
+                dataset_y = np.concatenate((dataset_y, [np.e**true_value-1]), axis=0)
 
             if prediction_cc < 0:
                 prediction_cc = 0
@@ -200,3 +216,10 @@ def cc_solution(week, filepath_train, filepath_test, filetype, median_solution, 
 
     log("Cost {:4f} secends to get the total RMLSE: {:4f}/{:4f}/{:4f}".format(te-ts, np.sqrt(rmsle_cc/loss_count), np.sqrt(rmsle_median/loss_count), np.sqrt(rmsle_mean/loss_count)), INFO)
     log("{} vs. {}".format(sign_plus, sign_minus))
+
+    learning = Learning(dataset_x, dataset_y, models, nfold)
+    for clf in learning.get_models():
+        log("The coef is {}".format(clf.coef_), INFO)
+
+    log(learning.get_results(False))
+    log("The RMSLE is {}".format(LearningCost.rmsle(dataset_y, learning.get_results(False))), INFO)

@@ -77,7 +77,7 @@ def tool(is_testing, column, mode, week, option):
             submission_folder = os.path.join(FTLR_SOLUTION_PATH, COLUMNS[column])
             create_folder("{}/1.txt".format(submission_folder))
 
-            Parallel(n_jobs=6)(delayed(ftlr_solution)(folder, os.path.basename(filepath).replace(".csv", ""), submission_folder) for filepath in glob.iglob(os.path.join(folder, "*.csv")))
+            Parallel(n_jobs=7)(delayed(ftlr_solution)(folder, os.path.basename(filepath).replace(".csv", ""), submission_folder) for filepath in glob.iglob(os.path.join(folder, "*.csv")))
         elif solution == "median":
             output_filepath = os.path.join(MEDIAN_SOLUTION_PATH, "{}.csv.gz".format(column))
             filepath_test = os.path.join(SPLIT_PATH, COLUMNS[column], "test", "*.csv")

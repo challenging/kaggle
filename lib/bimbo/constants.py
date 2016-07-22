@@ -8,7 +8,7 @@ from utils import log, INFO
 
 TOTAL_WEEK = 12
 
-PYPY = "/Users/RungChiChen/Downloads/pypy2-v5.3.1-osx64/bin/pypy"
+PYPY = "/Users/rongqichen/Documents/programs/kaggle/github/bin/pypy2-v5.3.1-osx64/bin/pypy"
 
 COMPETITION_NAME = "bimbo_competition"
 COMPETITION_GROUP_NAME = "{}_stats".format(COMPETITION_NAME)

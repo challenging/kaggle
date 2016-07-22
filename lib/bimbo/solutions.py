@@ -13,7 +13,7 @@ import pandas as pd
 from utils import log, create_folder
 from utils import INFO
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
-from bimbo.constants import MEDIAN_SOLUTION_PATH, FTLR_SOLUTION_PATH, ROUTE_GROUPS, AGENCY_GROUPS, BATCH_JOB
+from bimbo.constants import PYPY, MEDIAN_SOLUTION_PATH, FTLR_SOLUTION_PATH, ROUTE_GROUPS, AGENCY_GROUPS, BATCH_JOB
 from bimbo.constants import get_mongo_connection, get_median
 
 def cache_median(filepath, filetype, week=9, output_folder=MEDIAN_SOLUTION_PATH):
@@ -80,7 +80,7 @@ def median_solution(output_filepath, filepath_test, solution):
     log("Cost {:4f} secends to generate the solution".format(te-ts), INFO)
 
 def ftlr_solution(folder, fileid, submission_folder):
-    cmd = "{} {} \"{}\" {} \"{}\"".format(PYPY, "ftlr.py", folder, fileid, submission_folder)
+    cmd = "{} {} \"{}\" {} \"{}\"".format(PYPY, "../lib/bimbo/ftlr.py", folder, fileid, submission_folder)
 
     log("Start to predict {}/{}, and then exiting code is {}".format(\
         folder, fileid, subprocess.call(cmd, shell=True)), INFO)

@@ -57,8 +57,7 @@ interaction = True     # whether to enable poly2 feature interactions
 
 # D, training/validation
 epoch = 8  # learn training data for N passes
-holdout = 9  # use week holdout validation
-
+holdout = 10  # use week holdout validation
 
 ##############################################################################
 # class, function, generator definitions #####################################
@@ -279,8 +278,7 @@ if __name__ == "__main__":
                 learner.update(x, p, y)
 
         count = max(count, 1)
-        print('Epoch %d finished, validation RMSLE: %f, elapsed time: %s' %
-              (e, sqrt(loss/count), str(datetime.now() - start)))
+        print('Epoch %d finished, validation RMSLE: %f, elapsed time: %s' %(e, sqrt(loss/count), str(datetime.now() - start)))
 
     #########################################################################
     # start testing, and build Kaggle's submission file #####################

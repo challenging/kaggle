@@ -16,7 +16,7 @@ from utils import DEBUG, INFO, WARN
 from bimbo.constants import get_mongo_connection, get_cc_mongo_collection, get_prediction_mongo_collection, get_median
 from bimbo.constants import COMPETITION_CC_NAME, IP_BEANSTALK, PORT_BEANSTALK, TIMEOUT_BEANSTALK
 from bimbo.constants import MONGODB_PREDICTION_COLLECTION, MONGODB_STATS_CC_COLLECTION, MONGODB_PREDICTION_DATABASE, MONGODB_CC_DATABASE
-from bimbo.constants import COLUMN_WEEK, COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMNS, MONGODB_COLUMNS
+from bimbo.constants import COLUMN_ROW, COLUMN_WEEK, COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMNS, MONGODB_COLUMNS
 from bimbo.constants import SPLIT_PATH, NON_PREDICTABLE, TOTAL_WEEK
 
 def adjust_prediction_cc(values, prediction_cc):
@@ -126,6 +126,16 @@ def cc_consumer(column, task=COMPETITION_CC_NAME):
 
                 mongodb_prediction_database, mongodb_prediction_collection = o["mongodb_prediction"]
                 prediction_collection = client[mongodb_prediction_database][mongodb_prediction_collection]
+
+                for client_id, row_ids in predicted_rows.copy().items():
+                    for row_id in row_ids:
+                        c = prediction_collection.count({COLUMN_ROW: row_id})
+                        if c > 0:
+                            predicted_rows.remove(row_id)
+
+                    if len(predicted_rows[client_id]) == 0:
+                        del predicted_rows[client_id]
+                        log("Delete the {} from the predicted_rows".format(client_id), INFO)
 
                 if "version" not in o or o["version"] < 1.1:
                     log("Skip this {} of {} because of the lower version".format(product_id, filetype), INFO)
@@ -258,11 +268,11 @@ def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK
             history[product_id].setdefault(client_id, [0 for _ in range(week[0], week[1])])
 
             # workaround
-            count = collection.count({"row_id": row_id})
-            if count == 0:
-                log("Miss Row ID: {}".format(row_id))
-            else:
-                continue
+            #count = collection.count({"row_id": row_id})
+            #if count == 0:
+            #    log("Miss Row ID: {}".format(row_id))
+            #else:
+            #    continue
 
             predicted_rows.setdefault(product_id, {})
             predicted_rows[product_id].setdefault(client_id, [])
