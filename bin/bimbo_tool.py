@@ -52,16 +52,15 @@ def cc(column, column_value, week, is_output):
     log("Cost {:4f} secends to finish {}".format(te-ts, filepath), INFO)
 
 @click.command()
+@click.option("--n-jobs", default=1, help="number of thread")
 @click.option("--is-testing", is_flag=True, help="testing mode")
 @click.option("--column", default=None, help="agency_id|channel_id|route_id|client_id|product_id")
 @click.option("--mode", required=True, help="purge|restructure")
 @click.option("--week", default=9, help="week number(4-9)")
 @click.option("--is-output", is_flag=True, help="output mode")
 @click.option("--option", required=False, nargs=2, type=click.Tuple([unicode, unicode]), default=(None, None))
-def tool(is_testing, column, mode, week, is_output, option):
+def tool(n_jobs, is_testing, column, mode, week, is_output, option):
     global TRAIN, TEST
-
-    n_jobs = 8
 
     if is_testing:
         TRAIN = TESTING_TRAIN_FILE
@@ -115,7 +114,8 @@ def tool(is_testing, column, mode, week, is_output, option):
                     fileid = os.path.basename(filepath).replace(".csv", "")
                     output_filepath = os.path.join(MEDIAN_SOLUTION_PATH, "test", "week={}".format(week), COLUMNS[column], "submission_{}.csv".format(fileid))
 
-                    median_solution(week, output_filepath, filepath, solution)
+                    if not os.path.exists(output_filepath):
+                        median_solution(week, output_filepath, filepath, solution)
         elif solution == "cc":
             if week < 10:
                 folder = os.path.join(SPLIT_PATH, COLUMNS[column], "train")

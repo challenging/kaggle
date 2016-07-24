@@ -106,8 +106,13 @@ def ftlr_solution(folder, fileid, submission_folder):
 def regression_solution(filetype, week_x, week_y, solutions=["ftlr", "median", "cc"], nfold=3):
     filepath_output = None
     if week_x != week_y:
-       filepath_output = os.path.join(REGRESSION_SOLUTION_PATH, "test", "week={}".format(week_y), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
-       create_folder(filepath_output)
+        filepath_output = os.path.join(REGRESSION_SOLUTION_PATH, "test", "week={}".format(week_y), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
+        create_folder(filepath_output)
+
+        if os.path.exists(filepath_output):
+            return
+        else:
+            log(filetype)
 
     subfolder = "train"
     index = ["Semana","Agencia_ID","Canal_ID","Ruta_SAK","Cliente_ID","Producto_ID"]
@@ -115,57 +120,65 @@ def regression_solution(filetype, week_x, week_y, solutions=["ftlr", "median", "
     solution_columns = []
 
     g = np.vectorize(lambda x: np.log1p(x))
-    rg = np.vectorize(lambda x: np.e**x-1)
+    rg = np.vectorize(lambda x: np.e**max(1, x)-1)
 
     dfs = []
     for solution in solutions + ["real"]:
         filepath = None
-        df = None
+        df = np.array([])
 
         if solution == "ftlr":
             filepath = os.path.join(FTLR_SOLUTION_PATH, subfolder, "week={}".format(week_x), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
-            df = pd.read_csv(filepath, index_col=index)
+            if os.path.exists(filepath) and os.path.getsize(filepath) > 84:
+                log(filepath)
+                df = pd.read_csv(filepath, index_col=index)
 
-            df["FTLR_Demanda_uni_equil"] = g(df["FTLR_Demanda_uni_equil"])
+                df["FTLR_Demanda_uni_equil"] = g(df["FTLR_Demanda_uni_equil"])
 
-            solution_columns.append("FTLR_Demanda_uni_equil")
+                solution_columns.append("FTLR_Demanda_uni_equil")
         elif solution == "median":
             filepath = os.path.join(MEDIAN_SOLUTION_PATH, subfolder, "week={}".format(week_x), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
-            df = pd.read_csv(filepath, index_col=index)
-            #df.drop(["CC_Demanda_uni_equil"], axis=1, inplace=True)
+            if os.path.exists(filepath) and os.path.getsize(filepath) > 84:
+                df = pd.read_csv(filepath, index_col=index)
 
-            df["MEDIAN_Demanda_uni_equil"] = g(df["MEDIAN_Demanda_uni_equil"])
+                df["MEDIAN_Demanda_uni_equil"] = g(df["MEDIAN_Demanda_uni_equil"])
 
-            solution_columns.append("MEDIAN_Demanda_uni_equil")
+                solution_columns.append("MEDIAN_Demanda_uni_equil")
         elif solution == "cc":
             filepath = os.path.join(MEDIAN_SOLUTION_PATH, subfolder, "week={}".format(week_x), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
-            df = pd.read_csv(filepath, index_col=index)
-            #df.drop(["MEDIAN_Demanda_uni_equil"], axis=1, inplace=True)
+            if os.path.exists(filepath) and os.path.getsize(filepath) > 84:
+                df = pd.read_csv(filepath, index_col=index)
 
-            #g_max = np.vectorize(lambda x: max(x, 1))
-            #df["CC_Demanda_uni_equil"] = g_max(df["CC_Demanda_uni_equil"].values)
+                #g_max = np.vectorize(lambda x: max(x, 1))
+                #df["CC_Demanda_uni_equil"] = g_max(df["CC_Demanda_uni_equil"].values)
 
-            df["CC_Demanda_uni_equil"] = g(df["CC_Demanda_uni_equil"])
+                df["CC_Demanda_uni_equil"] = g(df["CC_Demanda_uni_equil"])
 
-            solution_columns.append("CC_Demanda_uni_equil")
+                solution_columns.append("CC_Demanda_uni_equil")
         elif solution == "real":
             filepath = os.path.join(SPLIT_PATH, COLUMNS[filetype[0]], "train", "{}.csv".format(filetype[1]))
-            df = pd.read_csv(filepath)
-            df.drop(["Venta_uni_hoy","Venta_hoy","Dev_uni_proxima","Dev_proxima"], axis=1, inplace=True)
+            if os.path.exists(filepath) and os.path.getsize(filepath) > 84:
+                log(filepath)
+                df = pd.read_csv(filepath)
+                df.drop(["Venta_uni_hoy","Venta_hoy","Dev_uni_proxima","Dev_proxima"], axis=1, inplace=True)
 
-            df = df[df[COLUMN_WEEK] == week_x]
-            df["Demanda_uni_equil"] = g(df["Demanda_uni_equil"])
+                df = df[df[COLUMN_WEEK] == week_x]
+                if df.shape[0] > 0:
+                    df["Demanda_uni_equil"] = g(df["Demanda_uni_equil"])
 
-            df = df.set_index(index)
+                df = df.set_index(index)
         else:
             raise NotImplementedError
 
-        dfs.append(df)
-        log("Read {} completely for {}".format(filepath, solution), INFO)
+        if df.shape[0] > 0:
+            dfs.append(df)
+            log("Read {} completely for {}".format(filepath, solution), INFO)
 
-    training = dfs[0]
-    for result in dfs[1:]:
-        training = training.join(result)
+    training = np.array([])
+    if dfs:
+        training = dfs[0]
+        for result in dfs[1:]:
+            training = training.join(result)
 
     predicted_x = np.array([])
     if week_x == week_y:
@@ -203,31 +216,45 @@ def regression_solution(filetype, week_x, week_y, solutions=["ftlr", "median", "
 
         predicted_x = testing[solution_columns].values
 
-    dataset_x = np.array(training[solution_columns].values)
-    dataset_y = np.array(training["Demanda_uni_equil"].values)
-    models = [linear_model.LinearRegression(), linear_model.Ridge(alpha=1.0)]
+    if training.shape[0] >= nfold:
+        dataset_x = np.array(training[solution_columns].values)
+        dataset_y = np.array(training["Demanda_uni_equil"].values)
+        models = [linear_model.LinearRegression(), linear_model.Ridge(alpha=1.0)]
 
-    learning = Learning(dataset_x, dataset_y, predicted_x, models, nfold)
+        learning = Learning(dataset_x, dataset_y, predicted_x, models, nfold)
 
-    for clf in learning.get_models():
-        log("The coef of {} is {}".format(clf, clf.coef_), INFO)
+        for clf in learning.get_models():
+            log("The coef of {} is {}".format(clf, clf.coef_), INFO)
 
-    for solution in solution_columns:
-        log("The RMSLE of {} is {}".format(solution, (LearningCost.rmsle_2(dataset_y, training[solution].values))), INFO)
+        single_rmsle = []
+        for solution in solution_columns:
+            single_rmsle.append(str(LearningCost.rmsle_2(dataset_y, training[solution].values)))
 
-    log("The RMSLE is {}".format(LearningCost.rmsle_2(dataset_y, learning.get_results(False))), INFO)
+        log("The RMSLE({}) is {}/{}".format(filetype, "/".join(single_rmsle), LearningCost.rmsle_2(dataset_y, learning.get_results(False))), INFO)
 
-    if filepath_output:
-        testing = testing.reset_index(level=["id"])
+        if filepath_output:
+            testing = testing.reset_index(level=["id"])
 
-        log("Start to output the prediction results to {}".format(filepath_output), INFO)
-        with open(filepath_output, "wb") as OUTPUT:
-            OUTPUT.write("id,Demanda_uni_equil\n")
+            log("Start to output the prediction results to {}".format(filepath_output), INFO)
+            with open(filepath_output, "wb") as OUTPUT:
+                OUTPUT.write("id,Demanda_uni_equil\n")
 
-            for row_id, value in zip(testing["id"], learning.predict()):
-                OUTPUT.write("{},{}\n".format(row_id, value))
+                for row_id, value in zip(testing["id"], rg(learning.predict())):
+                    OUTPUT.write("{},{}\n".format(row_id, value))
+        else:
+            log("Skip the step of prediction results output", INFO)
     else:
-        log("Skip the step of prediction results output", INFO)
+        if filepath_output:
+            testing = testing.reset_index(level=["id"])
+
+            log("Start to output the prediction results to {}".format(filepath_output), INFO)
+            with open(filepath_output, "wb") as OUTPUT:
+                OUTPUT.write("id,Demanda_uni_equil\n")
+
+                for row_id, value in zip(testing["id"], rg(np.mean(testing[solution_columns].values, axis=1))):
+                    OUTPUT.write("{},{}\n".format(row_id, value))
+        else:
+            log("Skip the step of prediction results output", INFO)
 
 def ensemble_solution(filepaths, output_filepath):
     frames = []
