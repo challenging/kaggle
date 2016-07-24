@@ -131,7 +131,7 @@ def cc_consumer(column, task=COMPETITION_CC_NAME):
                     for row_id in row_ids:
                         c = prediction_collection.count({COLUMN_ROW: row_id})
                         if c > 0:
-                            predicted_rows.remove(row_id)
+                            predicted_rows[client_id].remove(row_id)
 
                     if len(predicted_rows[client_id]) == 0:
                         del predicted_rows[client_id]
