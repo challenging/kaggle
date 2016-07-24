@@ -243,6 +243,7 @@ def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK
             history[product_id].setdefault(client_id, [0 for _ in range(week[0], week[1])])
             history[product_id][client_id][w-shift_week] = np.log1p(prediction_unit)
 
+    others = {}
     predicted_rows = {}
     with open(filepath_test, "rb") as INPUT:
         header = True
@@ -254,11 +255,10 @@ def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK
 
             if filepath_train == filepath_test:
                 w, agency_id, channel_id, route_id, client_id, product_id, sales_unit, sales_price, return_unit, return_price, prediction_unit = line.strip().split(",")
-                row_id = int(time.time())
+                row_id = "T{}".format(int(time.time()))
             else:
                 row_id, w, agency_id, channel_id, route_id, client_id, product_id = line.strip().split(",")
-
-            row_id = int(row_id)
+                row_id = int(row_id)
 
             w = int(w)
             client_id = int(client_id)
@@ -278,7 +278,11 @@ def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK
             predicted_rows[product_id].setdefault(client_id, [])
             predicted_rows[product_id][client_id].append(row_id)
 
-    return history, predicted_rows
+            key = "{}_{}".format(client_id, product_id)
+            others.setdefault(key, [])
+            others[key].append(",".join([str(w), agency_id, channel_id, route_id, str(client_id), str(product_id)]))
+
+    return history, predicted_rows, others
 
 def producer(week, filetype, solution_type, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
     filepath_train = os.path.join(SPLIT_PATH, COLUMNS[filetype[0]], "train", "{}.csv".format(filetype[1]))
@@ -296,7 +300,7 @@ def producer(week, filetype, solution_type, task=COMPETITION_CC_NAME, ttr=TIMEOU
         mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("{}_{}_product_client_log1p".format(solution_type, filetype[0]))
         client[mongodb_prediction_database][mongodb_prediction_collection].create_index("row_id")
 
-        history, predicted_rows = get_history(filepath_train, filepath_test, collection=client[mongodb_prediction_database][mongodb_prediction_collection])
+        history, predicted_rows, _ = get_history(filepath_train, filepath_test, collection=client[mongodb_prediction_database][mongodb_prediction_collection])
         for product_id, info in predicted_rows.items():
             request = {"version": 1.1,
                        "product_id": product_id,

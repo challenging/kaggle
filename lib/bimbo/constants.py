@@ -17,12 +17,16 @@ COMPETITION_CC_NAME = "{}_cc".format(COMPETITION_NAME)
 NON_PREDICTABLE = -1
 
 WORKSPACE = "/Users/rongqichen/Documents/programs/kaggle/cases/Grupo Bimbo Inventory Demand"
+MEDIAN_SOLUTION_CACHE = os.path.join(WORKSPACE, "median_cache")
 MEDIAN_SOLUTION_PATH = os.path.join(WORKSPACE, "median_solution")
 FTLR_SOLUTION_PATH = os.path.join(WORKSPACE, "ftlr_solution")
+CC_SOLUTION_PATH = os.path.join(WORKSPACE, "cc_solution")
+REGRESSION_SOLUTION_PATH = os.path.join(WORKSPACE, "regression_solution")
 
 DATA_PATH = os.path.join(WORKSPACE, "input")
 SPLIT_PATH = os.path.join(DATA_PATH, "split")
 STATS_PATH = os.path.join(DATA_PATH, "stats")
+FTLR_PATH = os.path.join(os.path.dirname(__file__), "ftlr.py")
 
 TRAIN_FILE = os.path.join(DATA_PATH, "train.csv")
 TEST_FILE = os.path.join(DATA_PATH, "test.csv")
@@ -87,7 +91,7 @@ def load_median_solution(week, filetype, groups):
     solutions = []
 
     for group in groups:
-        filepath = os.path.join(MEDIAN_SOLUTION_PATH, filetype, "week={}".format(week), "{}.json".format("_".join(group)))
+        filepath = os.path.join(MEDIAN_SOLUTION_CACHE, filetype, "week={}".format(week), "{}.json".format("_".join(group)))
 
         log("Start to read median solution from {}".format(filepath), INFO)
         with open(filepath, "rb") as INPUT:

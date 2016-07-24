@@ -139,87 +139,45 @@ def aggregation(filepath, group_columns, output_filepath):
     df = df_train.groupby(group_columns).agg(target)
     df.to_csv(output_filepath)
 
-def cc_solution(week, filepath_train, filepath_test, filetype, median_solution, threshold_value=0):
+def cc_solution(week, filepath_train, filepath_test, filetype, threshold_value=0):
     global TOTAL_WEEK
 
     shift_week = 3
     end_idx = (TOTAL_WEEK-shift_week) - (TOTAL_WEEK-week)
 
-    history, predicted_rows = get_history(filepath_train, filepath_test, shift_week=shift_week)
+    history, predicted_rows, others = get_history(filepath_train, filepath_test, shift_week=shift_week)
 
-    nfold = 3
-    dataset_x = np.array([])
-    dataset_y = np.array([])
-    models = [linear_model.LinearRegression(), linear_model.Ridge(alpha=1.0)]
-
-    sign_plus, sign_minus = 0, 0
     ts = time.time()
-    rmsle_mean, rmsle_cc, rmsle_median, loss_count = 0, 0, 0, 0.00000001
+    rmsle_cc, loss_count = 0, 0.00000001
     for no, (product_id, info) in enumerate(history.items()):
-        partial_rmsle_mean, partial_rmsle_cc, partial_rmsle_median, partial_loss_count = 0, 0, 0, 0
+        partial_rmsle_cc, partial_loss_count = 0, 0
 
         for record, prediction in cc_calculation(week, filetype, product_id, predicted_rows[product_id], info, threshold_value, (no+1, len(history))):
             client_id = record["client_id"]
 
             true_value = history[product_id][client_id][end_idx]
             if true_value == 0 or len(history[product_id]) == 1 or np.sum(history[product_id][client_id][0:end_idx]) == 0:
-                continue
-
-            prediction_median = get_median(median_solution[0], median_solution[1], {filetype[0]: filetype[1], COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
-            prediction_cc = prediction["prediction_cc"]
-
-            if dataset_x.shape[0] == 0:
-                dataset_x = np.array([[np.e**prediction_cc-1, prediction_median]])
-                dataset_y = np.array([np.e**true_value-1])
-            else:
-                dataset_x = np.concatenate((dataset_x, [[np.e**prediction_cc-1, prediction_median]]), axis=0)
-                dataset_y = np.concatenate((dataset_y, [np.e**true_value-1]), axis=0)
-
-            if prediction_cc < 0:
                 prediction_cc = 0
-            #else:
-            #    prediction_cc = prediction_cc*0.71+1.5
-            #prediction_cc = prediction_cc*0.9
+            else:
+                prediction_cc = prediction["prediction_cc"]
 
-            prediction_mean = prediction_median*0.7+(np.e**prediction_cc-1)*0.3
+                loss_cc = (prediction_cc-true_value)**2
 
-            '''
-            loss_cc = (np.log1p(prediction_cc)-np.log1p(true_value))**2
-            loss_median = (np.log1p(prediction_median)-np.log1p(true_value))**2
-            loss_mean = (np.log1p(prediction_mean)-np.log1p(true_value))**2
-            '''
-            loss_cc = (prediction_cc-true_value)**2
-            loss_median = (np.log1p(prediction_median)-true_value)**2
-            loss_mean = (np.log1p(prediction_mean)-true_value)**2
+                log("Predict {} - {} - {}, {}".format(product_id, client_id, history[product_id][client_id], np.e**prediction_cc-1), DEBUG)
 
-            if prediction_mean > true_value:
-                sign_plus += loss_cc
-            elif prediction_mean < true_value:
-                sign_minus += loss_cc
+                partial_rmsle_cc += loss_cc
+                partial_loss_count += 1
 
-            log("Predict {} - {} - {}, {}/{}/{} {}".format(product_id, client_id, history[product_id][client_id], np.e**prediction_cc-1, prediction_median, prediction_mean, np.sum(history[product_id][client_id][0:end_idx])), DEBUG)
-
-            partial_rmsle_cc += loss_cc
-            partial_rmsle_median += loss_median
-            partial_rmsle_mean += loss_mean
-            partial_loss_count += 1
+            for row in others["{}_{}".format(client_id, product_id)]:
+                if row.startswith("{},".format(week)):
+                    yield "{},{}".format(row, np.e**prediction_cc-1)
 
         if partial_loss_count > 0:
-            log("RMSLE({}) of {} is {}/{}/{}".format(partial_loss_count, product_id, np.sqrt(partial_rmsle_cc/partial_loss_count), np.sqrt(partial_rmsle_median/partial_loss_count), np.sqrt(partial_rmsle_mean/partial_loss_count)), INFO)
+            log("RMSLE({}) of {} is {}".format(partial_loss_count, product_id, np.sqrt(partial_rmsle_cc/partial_loss_count)), INFO)
 
         rmsle_cc += partial_rmsle_cc
-        rmsle_median += partial_rmsle_median
-        rmsle_mean += partial_rmsle_mean
         loss_count += partial_loss_count
 
     te = time.time()
 
-    log("Cost {:4f} secends to get the total RMLSE: {:4f}/{:4f}/{:4f}".format(te-ts, np.sqrt(rmsle_cc/loss_count), np.sqrt(rmsle_median/loss_count), np.sqrt(rmsle_mean/loss_count)), INFO)
-    log("{} vs. {}".format(sign_plus, sign_minus))
-
-    learning = Learning(dataset_x, dataset_y, models, nfold)
-    for clf in learning.get_models():
-        log("The coef is {}".format(clf.coef_), INFO)
-
-    log(learning.get_results(False))
-    log("The RMSLE is {}".format(LearningCost.rmsle(dataset_y, learning.get_results(False))), INFO)
+    log("Cost {:4f} secends to get the total RMLSE: {:4f}".format(te-ts, np.sqrt(rmsle_cc/loss_count)), INFO)

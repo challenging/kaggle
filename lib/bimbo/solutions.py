@@ -2,7 +2,6 @@
 
 import os
 import glob
-import gzip
 import time
 import json
 import subprocess
@@ -10,11 +9,14 @@ import subprocess
 import numpy as np
 import pandas as pd
 
+from sklearn import linear_model
+
 from utils import log, create_folder
-from utils import INFO
+from utils import INFO, ERROR
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
-from bimbo.constants import PYPY, MEDIAN_SOLUTION_PATH, FTLR_SOLUTION_PATH, ROUTE_GROUPS, AGENCY_GROUPS, BATCH_JOB
+from bimbo.constants import PYPY, SPLIT_PATH, FTLR_PATH, MEDIAN_SOLUTION_PATH, FTLR_SOLUTION_PATH, REGRESSION_SOLUTION_PATH, ROUTE_GROUPS, AGENCY_GROUPS, BATCH_JOB
 from bimbo.constants import get_mongo_connection, get_median
+from bimbo.model import Learning, LearningCost
 
 def cache_median(filepath, filetype, week=9, output_folder=MEDIAN_SOLUTION_PATH):
     df = pd.read_csv(filepath)
@@ -53,17 +55,34 @@ def cache_median(filepath, filetype, week=9, output_folder=MEDIAN_SOLUTION_PATH)
 
             log("Write median solution to {}".format(output_filepath), INFO)
 
-def median_solution(output_filepath, filepath_test, solution):
+def median_solution(week, output_filepath, filepath, solution):
     log("Store the solution in {}".format(output_filepath), INFO)
     create_folder(output_filepath)
 
     ts = time.time()
-    with gzip.open(output_filepath, "wb") as OUTPUT:
-        OUTPUT.write("id,Demanda_uni_equil\n")
+    with open(output_filepath, "wb") as OUTPUT:
+        log("Read {}".format(filepath), INFO)
+        header = True
 
-        for filepath in glob.iglob(filepath_test):
-            log("Read {}".format(filepath), INFO)
-            header = True
+        if week < 10:
+            OUTPUT.write("Semana,Agencia_ID,Canal_ID,Ruta_SAK,Cliente_ID,Producto_ID,MEDIAN_Demanda_uni_equil\n")
+
+            with open(filepath) as INPUT:
+                for line in INPUT:
+                    if header:
+                        header = False
+                    else:
+                        w, agency_id, channel_id, route_id, client_id, product_id, _, _, _, _, _ = line.strip().split(",")
+
+                        w = int(w)
+                        if w == week:
+                            prediction_median = get_median(solution[0], solution[1], {COLUMN_AGENCY: agency_id, COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
+
+                            OUTPUT.write("{}\n".format(",".join([str(w), agency_id, channel_id, route_id, client_id, product_id, str(prediction_median)])))
+                        else:
+                            pass
+        else:
+            OUTPUT.write("id,Demanda_uni_equil\n")
 
             with open(filepath, "rb") as INPUT:
                 for line in INPUT:
@@ -71,8 +90,7 @@ def median_solution(output_filepath, filepath_test, solution):
                         header = False
                     else:
                         row_id, w, agency_id, channel_id, route_id, client_id, product_id = line.strip().split(",")
-
-                        prediction_median = get_median(solution[0], solution[1], {COLUMN_ROUTE: route_id, COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
+                        prediction_median = get_median(solution[0], solution[1], {COLUMN_AGENCY: agency_id, COLUMN_PRODUCT: product_id, COLUMN_CLIENT: client_id})
 
                         OUTPUT.write("{},{}\n".format(row_id, prediction_median))
 
@@ -80,10 +98,136 @@ def median_solution(output_filepath, filepath_test, solution):
     log("Cost {:4f} secends to generate the solution".format(te-ts), INFO)
 
 def ftlr_solution(folder, fileid, submission_folder):
-    cmd = "{} {} \"{}\" {} \"{}\"".format(PYPY, "../lib/bimbo/ftlr.py", folder, fileid, submission_folder)
+    cmd = "{} {} \"{}\" {} \"{}\"".format(PYPY, FTLR_PATH, folder, fileid, submission_folder)
 
     log("Start to predict {}/{}, and then exiting code is {}".format(\
         folder, fileid, subprocess.call(cmd, shell=True)), INFO)
+
+def regression_solution(filetype, week_x, week_y, solutions=["ftlr", "median", "cc"], nfold=3):
+    filepath_output = None
+    if week_x != week_y:
+       filepath_output = os.path.join(REGRESSION_SOLUTION_PATH, "test", "week={}".format(week_y), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
+       create_folder(filepath_output)
+
+    subfolder = "train"
+    index = ["Semana","Agencia_ID","Canal_ID","Ruta_SAK","Cliente_ID","Producto_ID"]
+
+    solution_columns = []
+
+    g = np.vectorize(lambda x: np.log1p(x))
+    rg = np.vectorize(lambda x: np.e**x-1)
+
+    dfs = []
+    for solution in solutions + ["real"]:
+        filepath = None
+        df = None
+
+        if solution == "ftlr":
+            filepath = os.path.join(FTLR_SOLUTION_PATH, subfolder, "week={}".format(week_x), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
+            df = pd.read_csv(filepath, index_col=index)
+
+            df["FTLR_Demanda_uni_equil"] = g(df["FTLR_Demanda_uni_equil"])
+
+            solution_columns.append("FTLR_Demanda_uni_equil")
+        elif solution == "median":
+            filepath = os.path.join(MEDIAN_SOLUTION_PATH, subfolder, "week={}".format(week_x), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
+            df = pd.read_csv(filepath, index_col=index)
+            #df.drop(["CC_Demanda_uni_equil"], axis=1, inplace=True)
+
+            df["MEDIAN_Demanda_uni_equil"] = g(df["MEDIAN_Demanda_uni_equil"])
+
+            solution_columns.append("MEDIAN_Demanda_uni_equil")
+        elif solution == "cc":
+            filepath = os.path.join(MEDIAN_SOLUTION_PATH, subfolder, "week={}".format(week_x), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
+            df = pd.read_csv(filepath, index_col=index)
+            #df.drop(["MEDIAN_Demanda_uni_equil"], axis=1, inplace=True)
+
+            #g_max = np.vectorize(lambda x: max(x, 1))
+            #df["CC_Demanda_uni_equil"] = g_max(df["CC_Demanda_uni_equil"].values)
+
+            df["CC_Demanda_uni_equil"] = g(df["CC_Demanda_uni_equil"])
+
+            solution_columns.append("CC_Demanda_uni_equil")
+        elif solution == "real":
+            filepath = os.path.join(SPLIT_PATH, COLUMNS[filetype[0]], "train", "{}.csv".format(filetype[1]))
+            df = pd.read_csv(filepath)
+            df.drop(["Venta_uni_hoy","Venta_hoy","Dev_uni_proxima","Dev_proxima"], axis=1, inplace=True)
+
+            df = df[df[COLUMN_WEEK] == week_x]
+            df["Demanda_uni_equil"] = g(df["Demanda_uni_equil"])
+
+            df = df.set_index(index)
+        else:
+            raise NotImplementedError
+
+        dfs.append(df)
+        log("Read {} completely for {}".format(filepath, solution), INFO)
+
+    training = dfs[0]
+    for result in dfs[1:]:
+        training = training.join(result)
+
+    predicted_x = np.array([])
+    if week_x == week_y:
+        predicted_x = training[solution_columns].values
+    else:
+        subfolder = "test"
+        index = ["id"]
+
+        dfs = []
+        for solution in solutions:
+            if solution == "ftlr":
+                filepath = os.path.join(FTLR_SOLUTION_PATH, subfolder, "week={}".format(week_y), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
+                df = pd.read_csv(filepath, index_col=index)
+                df["Demanda_uni_equil"] = g(df["Demanda_uni_equil"])
+                df.rename(columns={"Demanda_uni_equil": "FTLR_Demanda_uni_equil"}, inplace=True)
+            elif solution == "median":
+                filepath = os.path.join(MEDIAN_SOLUTION_PATH, subfolder, "week={}".format(week_y), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
+                df = pd.read_csv(filepath, index_col=index)
+                df["Demanda_uni_equil"] = g(df["Demanda_uni_equil"])
+                df.rename(columns={"Demanda_uni_equil": "MEDIAN_Demanda_uni_equil"}, inplace=True)
+            elif solution == "cc":
+                filepath = os.path.join(MEDIAN_SOLUTION_PATH, subfolder, "week={}".format(week_y), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
+                df = pd.read_csv(filepath, index_col=index)
+                df["Demanda_uni_equil"] = g(df["Demanda_uni_equil"])
+                df.rename(columns={"Demanda_uni_equil": "CC_Demanda_uni_equil"}, inplace=True)
+            else:
+                log("The solution is {}".format(solution), ERROR)
+                raise NotImplementedError
+
+            dfs.append(df)
+
+        testing = dfs[0]
+        for result in dfs[1:]:
+            testing = testing.join(result)
+
+        predicted_x = testing[solution_columns].values
+
+    dataset_x = np.array(training[solution_columns].values)
+    dataset_y = np.array(training["Demanda_uni_equil"].values)
+    models = [linear_model.LinearRegression(), linear_model.Ridge(alpha=1.0)]
+
+    learning = Learning(dataset_x, dataset_y, predicted_x, models, nfold)
+
+    for clf in learning.get_models():
+        log("The coef of {} is {}".format(clf, clf.coef_), INFO)
+
+    for solution in solution_columns:
+        log("The RMSLE of {} is {}".format(solution, (LearningCost.rmsle_2(dataset_y, training[solution].values))), INFO)
+
+    log("The RMSLE is {}".format(LearningCost.rmsle_2(dataset_y, learning.get_results(False))), INFO)
+
+    if filepath_output:
+        testing = testing.reset_index(level=["id"])
+
+        log("Start to output the prediction results to {}".format(filepath_output), INFO)
+        with open(filepath_output, "wb") as OUTPUT:
+            OUTPUT.write("id,Demanda_uni_equil\n")
+
+            for row_id, value in zip(testing["id"], learning.predict()):
+                OUTPUT.write("{},{}\n".format(row_id, value))
+    else:
+        log("Skip the step of prediction results output", INFO)
 
 def ensemble_solution(filepaths, output_filepath):
     frames = []

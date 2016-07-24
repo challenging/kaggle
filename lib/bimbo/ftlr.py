@@ -57,7 +57,7 @@ interaction = True     # whether to enable poly2 feature interactions
 
 # D, training/validation
 epoch = 8  # learn training data for N passes
-holdout = 10  # use week holdout validation
+holdout = 8  # use week holdout validation
 
 ##############################################################################
 # class, function, generator definitions #####################################
@@ -212,6 +212,8 @@ def data(path, D):
     '''
 
     for t, row in enumerate(DictReader(open(path))):
+        ori_row = row.copy()
+
         ID = 0
         week = 0
         y = 0.
@@ -235,7 +237,7 @@ def data(path, D):
                 index = abs(hash(key + '_' + value)) % D
                 x.append(index)
 
-        yield t, week, ID, x, y
+        yield t, week, ID, x, y, ori_row
 
 
 ##############################################################################
@@ -248,11 +250,18 @@ if __name__ == "__main__":
     # initialize ourselves a learner
     learner = ftrl_proximal(alpha, beta, L1, L2, D, interaction)
 
+    later_submission = []
     # start training
     for e in range(epoch):
         loss = 0.
         count = 0
-        for t, week, ID, x, y in data(train, D):  # data is a generator
+        for t, week, ID, x, y, ori_row in data(train, D):  # data is a generator
+            if week > holdout:
+                if e == 0:
+                    later_submission.append((t, week, ID, x, y, ori_row))
+
+                continue
+
             #   t: just a instance counter
             #   week: you know what this is
             #   ID: id provided in original data
@@ -284,12 +293,28 @@ if __name__ == "__main__":
     # start testing, and build Kaggle's submission file #####################
     #########################################################################
 
+    with open(submission, "wb") as outfile:
+        #outfile.write('id,Demanda_uni_equil\n')
+        outfile.write("Semana,Agencia_ID,Canal_ID,Ruta_SAK,Cliente_ID,Producto_ID,FTLR_Demanda_uni_equil\n")
+        for t, date, ID, x, y, ori_row in later_submission:
+            p = learner.predict(x)
+            outfile.write('%s,%s,%s,%s,%s,%s,%.8f\n' % (ori_row["Semana"],
+                                                        ori_row["Agencia_ID"],
+                                                        ori_row["Canal_ID"],
+                                                        ori_row["Ruta_SAK"],
+                                                        ori_row["Cliente_ID"],
+                                                        ori_row["Producto_ID"],
+                                                        expm1(max(0, p))))
+    print('Finished')
+
+    '''
     with open(submission, 'w') as outfile:
         outfile.write('id,Demanda_uni_equil\n')
-        for t, date, ID, x, y in data(test, D):
+        for t, date, ID, x, y, _ in data(test, D):
             p = learner.predict(x)
-            outfile.write('%s,%.3f\n' % (ID,
+            outfile.write('%s,%.8f\n' % (ID,
                                          expm1(max(0, p))))
             if((t % 100000) == 0):
                 print(t)
     print('Finished')
+    '''
