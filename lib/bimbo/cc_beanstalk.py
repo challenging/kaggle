@@ -257,7 +257,7 @@ def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK
 
             if filepath_train == filepath_test:
                 w, agency_id, channel_id, route_id, client_id, product_id, sales_unit, sales_price, return_unit, return_price, prediction_unit = line.strip().split(",")
-                row_id = "T{}".format(int(time.time()))
+                row_id = "_".join(w, agency_id, channel_id, route_id, client_id, product_id)
             else:
                 row_id, w, agency_id, channel_id, route_id, client_id, product_id = line.strip().split(",")
                 row_id = int(row_id)
@@ -270,11 +270,13 @@ def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK
             history[product_id].setdefault(client_id, [0 for _ in range(week[0], week[1])])
 
             # workaround
+            '''
             count = collection.count({"row_id": row_id})
             if count == 0:
                 log("Miss Row ID: {}".format(row_id))
             else:
                 continue
+            '''
 
             predicted_rows.setdefault(product_id, {})
             predicted_rows[product_id].setdefault(client_id, [])
@@ -289,6 +291,8 @@ def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK
 def producer(week, filetype, solution_type, task=COMPETITION_CC_NAME, ttr=TIMEOUT_BEANSTALK):
     filepath_train = os.path.join(SPLIT_PATH, COLUMNS[filetype[0]], "train", "{}.csv".format(filetype[1]))
     filepath_test = os.path.join(SPLIT_PATH, COLUMNS[filetype[0]], "test", "{}.csv".format(filetype[1]))
+    if week < 10:
+        filepath_test = filepath_train
 
     if os.path.exists(filepath_test):
         talk = beanstalkc.Connection(host=IP_BEANSTALK, port=PORT_BEANSTALK)
@@ -299,9 +303,10 @@ def producer(week, filetype, solution_type, task=COMPETITION_CC_NAME, ttr=TIMEOU
         mongodb_cc_database, mongodb_cc_collection = MONGODB_CC_DATABASE, get_cc_mongo_collection(MONGODB_COLUMNS[COLUMN_PRODUCT])
         client[mongodb_cc_database][mongodb_cc_collection].create_index([("groupby", pymongo.ASCENDING), (filetype[0], pymongo.ASCENDING), ("client_id", pymongo.ASCENDING), ("product_id", pymongo.ASCENDING)])
 
-        mongodb_prediction_database, mongodb_prediction_collection = MONGODB_PREDICTION_DATABASE, get_prediction_mongo_collection("{}_{}_product_client_log1p".format(solution_type, filetype[0]))
+        mongodb_prediction_database, mongodb_prediction_collection = "{}_{}".format(MONGODB_PREDICTION_DATABASE, week), get_prediction_mongo_collection("{}_{}_product_client_log1p".format(solution_type, filetype[0]))
         client[mongodb_prediction_database][mongodb_prediction_collection].create_index("row_id")
 
+        count = 0
         history, predicted_rows, _ = get_history(filepath_train, filepath_test, collection=client[mongodb_prediction_database][mongodb_prediction_collection])
         for product_id, info in predicted_rows.items():
             request = {"version": 1.1,
@@ -315,6 +320,10 @@ def producer(week, filetype, solution_type, task=COMPETITION_CC_NAME, ttr=TIMEOU
 
             talk.put(zlib.compress(json.dumps(request)), ttr=TIMEOUT_BEANSTALK)
             log("Put request(product_id={} from {}) into the {}".format(product_id, os.path.basename(filepath_train), task), INFO)
+
+            count += 1
+            if count % 10000 == 0:
+                time.sleep(60)
 
         client.close()
         talk.close()

@@ -15,7 +15,7 @@ from utils import log, create_folder
 from utils import INFO, ERROR
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
 from bimbo.constants import PYPY, SPLIT_PATH, FTLR_PATH, MEDIAN_SOLUTION_PATH, FTLR_SOLUTION_PATH, REGRESSION_SOLUTION_PATH, ROUTE_GROUPS, AGENCY_GROUPS, BATCH_JOB
-from bimbo.constants import get_mongo_connection, get_median
+from bimbo.constants import get_mongo_connection, get_prediction_mongo_collection, get_median
 from bimbo.model import Learning, LearningCost
 
 def cache_median(filepath, filetype, week=9, output_folder=MEDIAN_SOLUTION_PATH):
@@ -54,6 +54,28 @@ def cache_median(filepath, filetype, week=9, output_folder=MEDIAN_SOLUTION_PATH)
             json.dump(solution, OUTPUT)
 
             log("Write median solution to {}".format(output_filepath), INFO)
+
+def cc_solution(week, solution_type, column, filepath_input, filepath_output):
+    client = get_mongo_connection()
+    collection = client["{}_{}".format(MONGODB_DATABASE, week)][get_prediction_mongo_collection(column)]
+
+    with open(filepath_input, "rb") as INPUT:
+        header = True
+
+        if week < 10:
+            for line in INPUT:
+                if header:
+                    header = False
+                else:
+                    pass
+        else:
+            for line in INPUT:
+                if header:
+                    header = False
+                else:
+                    pass
+
+    client.close()
 
 def median_solution(week, output_filepath, filepath, solution):
     log("Store the solution in {}".format(output_filepath), INFO)

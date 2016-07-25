@@ -15,15 +15,15 @@ from sklearn import linear_model
 from utils import log, create_folder
 from utils import DEBUG, INFO, WARN
 from bimbo.cc_beanstalk import cc_calculation, get_history, get_median
-from bimbo.constants import get_stats_mongo_collection, get_mongo_connection
+from bimbo.constants import get_stats_mongo_collection, get_mongo_connection, get_prediction_mongo_collection
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
-from bimbo.constants import TOTAL_WEEK, PYPY, IP_BEANSTALK, MONGODB_DATABASE, MONGODB_BATCH_SIZE, SPLIT_PATH, NON_PREDICTABLE
+from bimbo.constants import TOTAL_WEEK, PYPY, IP_BEANSTALK, MONGODB_DATABASE, MONGODB_PREDICTION_DATABASE, MONGODB_BATCH_SIZE, SPLIT_PATH, NON_PREDICTABLE
 
 from bimbo.model import Learning, LearningCost
 
-def purge_duplicated_records(column, batch_size=MONGODB_BATCH_SIZE):
+def purge_duplicated_records(week, solution_type, column, batch_size=MONGODB_BATCH_SIZE):
     client = get_mongo_connection()
-    collection = client[MONGODB_DATABASE][get_stats_mongo_collection(column)]
+    collection = client["{}_{}".format(MONGODB_DATABASE, week)][get_prediction_mongo_collection(column)]
 
     count = 0
     pre_row_id, pre_object_id = None, None

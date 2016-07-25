@@ -67,7 +67,9 @@ def tool(n_jobs, is_testing, column, mode, week, is_output, option):
         TEST = TESTING_TEST_FILE
 
     if mode == "purge":
-        purge_duplicated_records(column)
+        solution_type, column = option
+
+        purge_duplicated_records(week, solution_type, column)
     elif mode == "restructure":
         for filetype in ["train", "test"]:
             hierarchical_folder_structure(column, filetype)
