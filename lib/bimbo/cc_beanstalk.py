@@ -257,7 +257,7 @@ def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK
 
             if filepath_train == filepath_test:
                 w, agency_id, channel_id, route_id, client_id, product_id, sales_unit, sales_price, return_unit, return_price, prediction_unit = line.strip().split(",")
-                row_id = "_".join(w, agency_id, channel_id, route_id, client_id, product_id)
+                row_id = "_".join([w, agency_id, channel_id, route_id, client_id, product_id])
             else:
                 row_id, w, agency_id, channel_id, route_id, client_id, product_id = line.strip().split(",")
                 row_id = int(row_id)
@@ -318,7 +318,9 @@ def producer(week, filetype, solution_type, task=COMPETITION_CC_NAME, ttr=TIMEOU
                        "mongodb_cc": (mongodb_cc_database, mongodb_cc_collection),
                        "mongodb_prediction": (mongodb_prediction_database, mongodb_prediction_collection)}
 
-            talk.put(zlib.compress(json.dumps(request)), ttr=TIMEOUT_BEANSTALK)
+            log(request)
+
+            #talk.put(zlib.compress(json.dumps(request)), ttr=TIMEOUT_BEANSTALK)
             log("Put request(product_id={} from {}) into the {}".format(product_id, os.path.basename(filepath_train), task), INFO)
 
             count += 1
