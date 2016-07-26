@@ -2,7 +2,6 @@
 
 import os
 import json
-import pymongo
 
 from utils import log, INFO
 
@@ -58,7 +57,7 @@ ROUTE_GROUPS = [[COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT],
 
 BATCH_JOB = 5000
 
-IP_BEANSTALK, PORT_BEANSTALK = "rongqide-Mac-mini.local", 11300
+IP_BEANSTALK, PORT_BEANSTALK = "127.0.0.1", 11300#"rongqide-Mac-mini.local", 11300
 #IP_BEANSTALK = "rongqis-iMac.local"
 TIMEOUT_BEANSTALK=3600*3
 TASK_BEANSTALK = "bimbo_competition"
@@ -85,6 +84,8 @@ def get_prediction_mongo_collection(name):
     return "{}_{}".format(MONGODB_PREDICTION_COLLECTION, name).lower()
 
 def get_mongo_connection():
+    import pymongo
+
     return pymongo.MongoClient(MONGODB_URL)
 
 def load_median_solution(week, filetype, groups):

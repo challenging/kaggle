@@ -14,7 +14,7 @@ from sklearn import linear_model
 
 from utils import log, create_folder
 from utils import DEBUG, INFO, WARN
-from bimbo.cc_beanstalk import cc_calculation, get_history, get_median
+from bimbo.cc_beanstalk import cc_calculation, get_history
 from bimbo.constants import get_stats_mongo_collection, get_mongo_connection, get_prediction_mongo_collection
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
 from bimbo.constants import TOTAL_WEEK, PYPY, IP_BEANSTALK, MONGODB_DATABASE, MONGODB_PREDICTION_DATABASE, MONGODB_BATCH_SIZE, SPLIT_PATH, NON_PREDICTABLE

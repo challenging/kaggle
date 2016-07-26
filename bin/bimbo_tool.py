@@ -15,7 +15,7 @@ from utils import log, create_folder
 from utils import DEBUG, INFO, WARN
 from bimbo.constants import load_median_solution
 from bimbo.constants import MONGODB_COLUMNS, COLUMNS, COLUMN_ROUTE, COLUMN_AGENCY, MONGODB_PREDICTION_DATABASE
-from bimbo.constants import SPLIT_PATH, STATS_PATH, TRAIN_FILE, TEST_FILE, TESTING_TRAIN_FILE, TESTING_TEST_FILE, FTLR_SOLUTION_PATH, MEDIAN_SOLUTION_CACHE, MEDIAN_SOLUTION_PATH, CC_SOLUTION_PATH
+from bimbo.constants import SPLIT_PATH, STATS_PATH, FTLR_SOLUTION_PATH, MEDIAN_SOLUTION_CACHE, MEDIAN_SOLUTION_PATH, CC_SOLUTION_PATH
 from bimbo.constants import ROUTE_GROUPS, AGENCY_GROUPS
 from bimbo.constants import TRAIN_FILE, TEST_FILE, TESTING_TRAIN_FILE, TESTING_TEST_FILE
 from bimbo.solutions import ensemble_solution, median_solution, ftlr_solution, regression_solution, cache_median

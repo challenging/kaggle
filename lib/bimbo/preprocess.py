@@ -12,10 +12,13 @@ import beanstalkc
 import threading
 import Queue
 
+import numpy as np
 import pandas as pd
 
 from utils import create_folder, log, INFO, WARN
-from bimbo.constants import COLUMNS, COMPETITION_GROUP_NAME, IP_BEANSTALK, PORT_BEANSTALK, TIMEOUT_BEANSTALK
+from bimbo.constants import load_median_solution, get_median
+from bimbo.constants import ROUTE_GROUPS, AGENCY_GROUPS, COLUMNS, COLUMN_WEEK, COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT
+from bimbo.constants import COMPETITION_GROUP_NAME, IP_BEANSTALK, PORT_BEANSTALK, TIMEOUT_BEANSTALK
 
 WORKSPACE = "/Users/rongqichen/Documents/programs/kaggle/cases/Grupo Bimbo Inventory Demand/input"
 TRAIN_FILE = os.path.join(WORKSPACE, "train.csv")
@@ -31,8 +34,23 @@ class SplitThread(threading.Thread):
             setattr(self, key, value)
 
     @staticmethod
-    def matching(df, column, value):
-        return df[df[column] == value]
+    def matching(df, column, value, median_route_solution, median_agency_solution):
+        df = df[df[column] == value]
+
+        fr = lambda x: get_median(median_route_solution[0], median_route_solution[1], {COLUMN_ROUTE: x[0], COLUMN_PRODUCT: x[1], COLUMN_CLIENT: x[2]})
+        fa = lambda x: get_median(median_agency_solution[0], median_agency_solution[1], {COLUMN_AGENCY: x[0], COLUMN_PRODUCT: x[1], COLUMN_CLIENT: x[2]})
+
+        ts = time.time()
+        df["median_route_solution"] = np.apply_along_axis(fr, 1, df[[COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT]])
+        te = time.time()
+        log("Cost {:4} secends to apply median ROUTE solution".format(te-ts), INFO)
+
+        ts = time.time()
+        df["median_agency_solution"] = np.apply_along_axis(fa, 1, df[[COLUMN_AGENCY, COLUMN_PRODUCT, COLUMN_CLIENT]])
+        te = time.time()
+        log("Cost {:4f} secends tp apply median AGENCY solution".format(te-ts), INFO)
+
+        return df
 
     def run(self):
         while True:
@@ -52,11 +70,11 @@ class SplitThread(threading.Thread):
                     elif filetype == "test":
                         df = self.df_test
                     else:
-                        raise NotImplementError
+                        raise NotImplementedError
                 else:
-                    raise NotImplementError
+                    raise NotImplementedError
 
-                self.matching(df, column, value).to_csv(output_filepath, index=False)
+                self.matching(df, column, value, self.median_route_solution, self.median_agency_solution).to_csv(output_filepath, index=False)
 
             self.queue.task_done()
 
@@ -88,7 +106,7 @@ def producer(columns, ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETITION_GRO
                     output_filepaths.append(output_filepath)
                     values.append(unique_value)
 
-                    if len(values) > 128:
+                    if len(values) > 2**7-1:
                         request = {"filetype": filetype,
                                    "output_filepath": output_filepaths,
                                    "column": column,
@@ -110,8 +128,17 @@ def producer(columns, ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETITION_GRO
 
 def consumer(ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETITION_GROUP_NAME, n_jobs=1):
     global WORKSPACE, TRAIN_FILE, TEST_FILE
+
+    df_train = None
     df_train = pd.read_csv(TRAIN_FILE)
+    log("Load {} completely".format(TRAIN_FILE))
+
     df_test = pd.read_csv(TEST_FILE)
+    log("Load {} completely".format(TEST_FILE))
+
+    week = 10
+    median_route_solution = (load_median_solution(week-1, "route_id", ROUTE_GROUPS), ROUTE_GROUPS)
+    median_agency_solution = (load_median_solution(week-1, "agency_id", AGENCY_GROUPS), AGENCY_GROUPS)
 
     talk = beanstalkc.Connection(host=ip, port=port)
     talk.watch(task)
@@ -120,7 +147,7 @@ def consumer(ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETITION_GROUP_NAME, 
 
     queue = Queue.Queue()
     for n in range(0, n_jobs):
-       thread = SplitThread(kwargs={"df_train": df_train, "df_test": df_test, "queue": queue})
+       thread = SplitThread(kwargs={"df_train": df_train, "df_test": df_test, "median_route_solution": median_route_solution, "median_agency_solution": median_agency_solution,"queue": queue})
        thread.setDaemon(True)
        thread.start()
 
@@ -139,6 +166,7 @@ def consumer(ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETITION_GROUP_NAME, 
 
             queue.join()
 
+            '''
             if hostname != ip:
                 p = subprocess.Popen(["scp", "{}/*.csv".format(output_folder), "RungChiChen@{}:{}".format(IP_BEANSTALK, output_folder)])
                 pid, sts = os.waitpid(p.pid, 0)
@@ -151,6 +179,7 @@ def consumer(ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETITION_GROUP_NAME, 
 
                             os.remove(filepath)
                             log("Remove {}".format(filepath), INFO)
+            '''
 
             job.delete()
 
