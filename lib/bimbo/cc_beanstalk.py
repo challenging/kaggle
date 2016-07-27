@@ -36,13 +36,12 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
     for client_id in predicted_rows.keys():
         values = history[client_id]
 
-        record = {"groupby": MONGODB_COLUMNS[filetype[0]], MONGODB_COLUMNS[filetype[0]]: int(filetype[1]), "product_id": product_id, "client_id": int(client_id), "history": values, "cc": []}
         prediction = {"row_id": predicted_rows[client_id],
                       "history": values,
                       "prediction_cc": NON_PREDICTABLE}
 
         if np.sum(values[0:end_idx]) == 0:
-            yield record, prediction
+            yield client_id, prediction
 
             continue
 
@@ -77,7 +76,6 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
 
             prediction_cc = values[end_idx-1] + (num_sum/num_count)
 
-            record["cc"] = matrix
             prediction["prediction_cc"] = prediction_cc
         else:
             log("Found only {} in {}({})".format(client_id, product_id, len(history)), WARN)
@@ -87,7 +85,7 @@ def cc_calculation(week, filetype, product_id, predicted_rows, history, threshol
         log("{} {}/{} >>> {} - {} - {} - {:4f}".format(\
             "{}/{}".format(progress_prefix[0], progress_prefix[1]) if progress_prefix else "", count, len(predicted_rows), product_id, client_id, history[client_id], prediction["prediction_cc"]), DEBUG)
 
-        yield record, prediction
+        yield client_id, prediction
 
 def median_calculation(week, filetype, product_id, predicted_rows, median_solution, progress_prefix=None):
     global TOTAL_WEEK
@@ -127,34 +125,16 @@ def cc_consumer(column, task=COMPETITION_CC_NAME):
                 mongodb_prediction_database, mongodb_prediction_collection = o["mongodb_prediction"]
                 prediction_collection = client[mongodb_prediction_database][mongodb_prediction_collection]
 
-                '''
-                for client_id, row_ids in predicted_rows.copy().items():
-                    for row_id in row_ids:
-                        c = prediction_collection.count({COLUMN_ROW: row_id})
-                        if c > 0:
-                            predicted_rows[client_id].remove(row_id)
-
-                    if len(predicted_rows[client_id]) == 0:
-                        del predicted_rows[client_id]
-                        log("Delete the {} from the predicted_rows".format(client_id), INFO)
-                '''
-
                 if "version" not in o or o["version"] < 1.1:
                     log("Skip this {} of {} because of the lower version".format(product_id, filetype), INFO)
                 else:
                     timestamp_start = time.time()
 
-                    records, predictions = [], []
+                    predictions = []
                     log("There are {}/{} predicted_rows/history in {} of {}".format(len(predicted_rows), len(history), product_id, filetype), INFO)
-                    for cc, prediction in cc_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, history):
-                        #records.append(cc)
-
+                    for client_id, prediction in cc_calculation(week, (COLUMNS[filetype[0]], filetype[1]), product_id, predicted_rows, history):
                         for row_id in prediction["row_id"]:
                             predictions.append({"row_id": row_id, "history": prediction["history"], "prediction": prediction["prediction_cc"]})
-
-                    # The storage is not enought to store matrix of CC
-                    #if records:
-                    #    cc_collection.insert_many(records)
 
                     if predictions:
                         prediction_collection.insert_many(predictions)
@@ -223,7 +203,7 @@ def median_consumer(median_solution, task=COMPETITION_CC_NAME):
     talk.close()
     client.close()
 
-def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK], collection=None):
+def get_history(week, filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK], collection=None):
     history = {}
 
     with open(filepath_train, "rb") as INPUT:
@@ -234,7 +214,7 @@ def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK
                 header = False
                 continue
 
-            w, agency_id, channel_id, route_id, client_id, product_id, sales_unit, sales_price, return_unit, return_price, prediction_unit = line.strip().split(",")
+            w, agency_id, channel_id, route_id, client_id, product_id, sales_unit, sales_price, return_unit, return_price, prediction_unit = line.strip().split(",")[:11]
 
             w = int(w)
             client_id = int(client_id)
@@ -256,10 +236,13 @@ def get_history(filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK
                 continue
 
             if filepath_train == filepath_test:
-                w, agency_id, channel_id, route_id, client_id, product_id, sales_unit, sales_price, return_unit, return_price, prediction_unit = line.strip().split(",")
+                w, agency_id, channel_id, route_id, client_id, product_id, sales_unit, sales_price, return_unit, return_price, prediction_unit = line.strip().split(",")[:11]
                 row_id = "_".join([w, agency_id, channel_id, route_id, client_id, product_id])
+
+                if w != str(week):
+                    continue
             else:
-                row_id, w, agency_id, channel_id, route_id, client_id, product_id = line.strip().split(",")
+                row_id, w, agency_id, channel_id, route_id, client_id, product_id = line.strip().split(",")[:7]
                 row_id = int(row_id)
 
             w = int(w)
@@ -307,7 +290,7 @@ def producer(week, filetype, solution_type, task=COMPETITION_CC_NAME, ttr=TIMEOU
         client[mongodb_prediction_database][mongodb_prediction_collection].create_index("row_id")
 
         count = 0
-        history, predicted_rows, _ = get_history(filepath_train, filepath_test, collection=client[mongodb_prediction_database][mongodb_prediction_collection])
+        history, predicted_rows, _ = get_history(week, filepath_train, filepath_test, collection=client[mongodb_prediction_database][mongodb_prediction_collection])
         for product_id, info in predicted_rows.items():
             request = {"version": 1.1,
                        "product_id": product_id,
@@ -318,10 +301,8 @@ def producer(week, filetype, solution_type, task=COMPETITION_CC_NAME, ttr=TIMEOU
                        "mongodb_cc": (mongodb_cc_database, mongodb_cc_collection),
                        "mongodb_prediction": (mongodb_prediction_database, mongodb_prediction_collection)}
 
-            log(request)
-
-            #talk.put(zlib.compress(json.dumps(request)), ttr=TIMEOUT_BEANSTALK)
-            log("Put request(product_id={} from {}) into the {}".format(product_id, os.path.basename(filepath_train), task), INFO)
+            talk.put(zlib.compress(json.dumps(request)), ttr=TIMEOUT_BEANSTALK)
+            log("Put request(product_id={}, predicted_rows={} from {}) into the {}".format(product_id, len(predicted_rows), os.path.basename(filepath_train), task), INFO)
 
             count += 1
             if count % 10000 == 0:

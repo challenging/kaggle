@@ -145,16 +145,14 @@ def cc_solution(week, filepath_train, filepath_test, filetype, threshold_value=0
     shift_week = 3
     end_idx = (TOTAL_WEEK-shift_week) - (TOTAL_WEEK-week)
 
-    history, predicted_rows, others = get_history(filepath_train, filepath_test, shift_week=shift_week)
+    history, predicted_rows, others = get_history(week, filepath_train, filepath_test, shift_week=shift_week)
 
     ts = time.time()
     rmsle_cc, loss_count = 0, 0.00000001
     for no, (product_id, info) in enumerate(history.items()):
         partial_rmsle_cc, partial_loss_count = 0, 0
 
-        for record, prediction in cc_calculation(week, filetype, product_id, predicted_rows[product_id], info, threshold_value, (no+1, len(history))):
-            client_id = record["client_id"]
-
+        for client_id, prediction in cc_calculation(week, filetype, product_id, predicted_rows[product_id], info, threshold_value, (no+1, len(history))):
             true_value = history[product_id][client_id][end_idx]
             if true_value == 0 or len(history[product_id]) == 1 or np.sum(history[product_id][client_id][0:end_idx]) == 0:
                 prediction_cc = 0

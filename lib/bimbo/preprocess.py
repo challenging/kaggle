@@ -40,15 +40,8 @@ class SplitThread(threading.Thread):
         fr = lambda x: get_median(median_route_solution[0], median_route_solution[1], {COLUMN_ROUTE: x[0], COLUMN_PRODUCT: x[1], COLUMN_CLIENT: x[2]})
         fa = lambda x: get_median(median_agency_solution[0], median_agency_solution[1], {COLUMN_AGENCY: x[0], COLUMN_PRODUCT: x[1], COLUMN_CLIENT: x[2]})
 
-        ts = time.time()
         df["median_route_solution"] = np.apply_along_axis(fr, 1, df[[COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT]])
-        te = time.time()
-        log("Cost {:4} secends to apply median ROUTE solution".format(te-ts), INFO)
-
-        ts = time.time()
         df["median_agency_solution"] = np.apply_along_axis(fa, 1, df[[COLUMN_AGENCY, COLUMN_PRODUCT, COLUMN_CLIENT]])
-        te = time.time()
-        log("Cost {:4f} secends tp apply median AGENCY solution".format(te-ts), INFO)
 
         return df
 
