@@ -140,7 +140,7 @@ def cc_consumer(column, task=COMPETITION_CC_NAME):
                         prediction_collection.insert_many(predictions)
 
                     timestamp_end = time.time()
-                    log("Cost {:4f} secends to insert {}/{} records into mongodb".format(timestamp_end-timestamp_start, len(records), len(predictions)), INFO)
+                    log("Cost {:4f} secends to insert {} records into mongodb".format(timestamp_end-timestamp_start, len(predictions)), INFO)
 
                 job.delete()
         except beanstalkc.BeanstalkcException as e:
