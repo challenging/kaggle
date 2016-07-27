@@ -84,14 +84,20 @@ def tool(n_jobs, is_testing, column, mode, week, is_output, option):
     elif mode == "cache":
         cache_median(TRAIN, column, week)
     elif mode == "solution":
-        solution, column = option
+        solution, column_name = option
 
         if solution == "ftlr":
-            folder = os.path.join(SPLIT_PATH, COLUMNS[column], "test")
-            submission_folder = os.path.join(FTLR_SOLUTION_PATH, "train" if week < 10 else "test", "week={}".format(week), COLUMNS[column])
+            folder = os.path.join(SPLIT_PATH, COLUMNS[column_name], "test")
+            submission_folder = os.path.join(FTLR_SOLUTION_PATH, "train" if week < 10 else "test", "week={}".format(week), COLUMNS[column_name])
             create_folder("{}/1.txt".format(submission_folder))
 
-            Parallel(n_jobs=n_jobs)(delayed(ftlr_solution)(folder, os.path.basename(filepath).replace(".csv", ""), submission_folder) for filepath in glob.iglob(os.path.join(folder, "*.csv")))
+            columns = [COLUMNS[c] for c in column.split(",")]
+            #columns.extend(["median_route_solution", "median_agency_solution"])
+
+            #columns.remove(COLUMNS[column_name])
+            log("Use {} to be the attributes".format(columns), INFO)
+
+            Parallel(n_jobs=n_jobs)(delayed(ftlr_solution)(folder, os.path.basename(filepath).replace(".csv", ""), submission_folder, week, ",".join(columns)) for filepath in glob.iglob(os.path.join(folder, "*.csv")))
         elif solution == "median":
             groups = None
             if MONGODB_COLUMNS[COLUMN_ROUTE] == column:

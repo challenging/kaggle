@@ -119,8 +119,8 @@ def median_solution(week, output_filepath, filepath, solution):
     te = time.time()
     log("Cost {:4f} secends to generate the solution".format(te-ts), INFO)
 
-def ftlr_solution(folder, fileid, submission_folder):
-    cmd = "{} {} \"{}\" {} \"{}\"".format(PYPY, FTLR_PATH, folder, fileid, submission_folder)
+def ftlr_solution(folder, fileid, submission_folder, week, columns):
+    cmd = "{} {} \"{}\" {} \"{}\" {} \"{}\"".format(PYPY, FTLR_PATH, folder, fileid, submission_folder, week, columns)
 
     log("Start to predict {}/{}, and then exiting code is {}".format(\
         folder, fileid, subprocess.call(cmd, shell=True)), INFO)
