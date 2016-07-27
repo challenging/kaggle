@@ -4,9 +4,6 @@ import os
 import sys
 import json
 import time
-import click
-import socket
-import subprocess
 import beanstalkc
 
 import threading
@@ -18,11 +15,7 @@ import pandas as pd
 from utils import create_folder, log, INFO, WARN
 from bimbo.constants import load_median_solution, get_median
 from bimbo.constants import ROUTE_GROUPS, AGENCY_GROUPS, COLUMNS, COLUMN_WEEK, COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT
-from bimbo.constants import COMPETITION_GROUP_NAME, IP_BEANSTALK, PORT_BEANSTALK, TIMEOUT_BEANSTALK
-
-WORKSPACE = "/Users/rongqichen/Documents/programs/kaggle/cases/Grupo Bimbo Inventory Demand/input"
-TRAIN_FILE = os.path.join(WORKSPACE, "train.csv")
-TEST_FILE = os.path.join(WORKSPACE, "test.csv")
+from bimbo.constants import SPLIT_PATH, TRAIN_FILE, TEST_FILE, COMPETITION_GROUP_NAME, IP_BEANSTALK, PORT_BEANSTALK, TIMEOUT_BEANSTALK
 
 class SplitThread(threading.Thread):
     def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
@@ -75,8 +68,6 @@ class SplitThread(threading.Thread):
             log("Cost {:4f} secends to store {}={} in {}, the remaining queue size is {}".format(timestamp_end-timestamp_start, column, value, output_filepath, self.queue.qsize()), INFO)
 
 def producer(columns, ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETITION_GROUP_NAME):
-    global WORKSPACE, TRAIN_FILE, TEST_FILE
-
     talk = beanstalkc.Connection(host=ip, port=port)
     talk.watch(task)
 
@@ -87,7 +78,7 @@ def producer(columns, ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETITION_GRO
         for column in columns.split(","):
             column = COLUMNS[column]
 
-            output_folder = os.path.join(WORKSPACE, "split", column, os.path.basename(filepath).replace(".csv", ""))
+            output_folder = os.path.join(SPLIT_PATH, column, os.path.basename(filepath).replace(".csv", ""))
 
             output_filepaths, values = [], []
             for unique_value in df[column].unique():
@@ -120,8 +111,6 @@ def producer(columns, ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETITION_GRO
     talk.close()
 
 def consumer(ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETITION_GROUP_NAME, n_jobs=1):
-    global WORKSPACE, TRAIN_FILE, TEST_FILE
-
     df_train = None
     df_train = pd.read_csv(TRAIN_FILE)
     log("Load {} completely".format(TRAIN_FILE))
@@ -136,9 +125,6 @@ def consumer(ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETITION_GROUP_NAME, 
     talk = beanstalkc.Connection(host=ip, port=port)
     talk.watch(task)
 
-    hostname = socket.gethostname()
-
-    queue = Queue.Queue()
     for n in range(0, n_jobs):
        thread = SplitThread(kwargs={"df_train": df_train, "df_test": df_test, "median_route_solution": median_route_solution, "median_agency_solution": median_agency_solution,"queue": queue})
        thread.setDaemon(True)
@@ -159,64 +145,7 @@ def consumer(ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETITION_GROUP_NAME, 
 
             queue.join()
 
-            '''
-            if hostname != ip:
-                p = subprocess.Popen(["scp", "{}/*.csv".format(output_folder), "RungChiChen@{}:{}".format(IP_BEANSTALK, output_folder)])
-                pid, sts = os.waitpid(p.pid, 0)
-                log("Transfer {} successfully({})".format(output_filepath, sts), INFO)
-
-                if sts == 0:
-                    for f in os.listdir(output_folder):
-                        if f.endswith(".csv"):
-                            filepath = os.path.join(output_folder, f)
-
-                            os.remove(filepath)
-                            log("Remove {}".format(filepath), INFO)
-            '''
-
             job.delete()
 
     queue.join()
     talk.close()
-
-@click.command()
-@click.option("--mode", default=None, help="producer mode | consumer mode when enable beanstalk")
-@click.option("--columns", default=None, help="column name for split")
-@click.option("--n-jobs", default=1, help="number of thread")
-def preprocess(mode, columns, n_jobs):
-    global WORKSPACE, TRAIN_FILE, TEST_FILE
-
-    if mode:
-        if mode.lower() == "producer":
-            producer(columns)
-        else:
-            consumer(n_jobs=n_jobs)
-    else:
-        queue = Queue.Queue()
-        for filepath in [TRAIN_FILE, TEST_FILE]:
-            df = pd.read_csv(filepath)
-
-            for column in columns.split(","):
-                column = COLUMNS[column]
-
-                output_folder = os.path.join(WORKSPACE, "split", column, os.path.basename(filepath).replace(".csv", ""))
-                create_folder(os.path.join(output_folder, "1.txt"))
-
-                for n in range(0, n_jobs):
-                    thread = SplitThread(kwargs={"df": df, "queue": queue})
-                    thread.setDaemon(True)
-                    thread.start()
-
-                for unique_value in df[column].unique():
-                    output_filepath = os.path.join(output_folder, "{}.csv".format(unique_value))
-
-                    if os.path.exists(output_filepath):
-                        log("Found {} so skipping it".format(output_filepath), INFO)
-                    else:
-                        queue.put((output_filepath, None, column, unique_value, None))
-                        log("Put {} into the queue".format(output_filepath), INFO)
-
-                queue.join()
-
-if __name__ == "__main__":
-    preprocess()
