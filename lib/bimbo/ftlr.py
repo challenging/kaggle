@@ -16,6 +16,8 @@ from datetime import datetime
 folder = sys.argv[1]
 fileid = sys.argv[2]
 submission_folder = sys.argv[3]
+holdout = int(sys.argv[4])  # use week holdout validation
+key_pool = sys.argv[5].split(",")
 
 # A, paths
 train = os.path.join(folder.replace("test", "train"), "{}.csv".format(fileid))               # path to training file
@@ -52,12 +54,11 @@ L1 = 0.     # L1 regularization, larger value means more regularized
 L2 = 1.     # L2 regularization, larger value means more regularized
 
 # C, feature/hash trick
-D = 2 ** 23             # number of weights to use
+D = 2 ** 26             # number of weights to use
 interaction = True     # whether to enable poly2 feature interactions
 
 # D, training/validation
 epoch = 8  # learn training data for N passes
-holdout = 8  # use week holdout validation
 
 ##############################################################################
 # class, function, generator definitions #####################################
@@ -229,9 +230,10 @@ def data(path, D):
         # build x
         x = []
         for key in row:
-            if(key == 'Canal_ID' or key == 'Ruta_SAK' or
-               key == 'Cliente_ID' or key == 'Producto_ID' or
-               key == 'Agencia_ID'):
+            #if(key == 'Canal_ID' or key == 'Ruta_SAK' or
+            #   key == 'Cliente_ID' or key == 'Producto_ID' or
+            #   key == 'Agencia_ID'):
+            if key in key_pool:
                 value = row[key]
                 # one-hot encode everything with hash trick
                 index = abs(hash(key + '_' + value)) % D
@@ -292,7 +294,7 @@ if __name__ == "__main__":
     #########################################################################
     # start testing, and build Kaggle's submission file #####################
     #########################################################################
-
+    '''
     with open(submission, "wb") as outfile:
         #outfile.write('id,Demanda_uni_equil\n')
         outfile.write("Semana,Agencia_ID,Canal_ID,Ruta_SAK,Cliente_ID,Producto_ID,FTLR_Demanda_uni_equil\n")
@@ -306,8 +308,8 @@ if __name__ == "__main__":
                                                         ori_row["Producto_ID"],
                                                         expm1(max(0, p))))
     print('Finished')
-
     '''
+
     with open(submission, 'w') as outfile:
         outfile.write('id,Demanda_uni_equil\n')
         for t, date, ID, x, y, _ in data(test, D):
@@ -317,4 +319,3 @@ if __name__ == "__main__":
             if((t % 100000) == 0):
                 print(t)
     print('Finished')
-    '''

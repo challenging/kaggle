@@ -92,9 +92,8 @@ def tool(n_jobs, is_testing, column, mode, week, is_output, option):
             create_folder("{}/1.txt".format(submission_folder))
 
             columns = [COLUMNS[c] for c in column.split(",")]
-            #columns.extend(["median_route_solution", "median_agency_solution"])
+            columns.extend(["median_route_solution", "median_agency_solution"])
 
-            #columns.remove(COLUMNS[column_name])
             log("Use {} to be the attributes".format(columns), INFO)
 
             Parallel(n_jobs=n_jobs)(delayed(ftlr_solution)(folder, os.path.basename(filepath).replace(".csv", ""), submission_folder, week, ",".join(columns)) for filepath in glob.iglob(os.path.join(folder, "*.csv")))
