@@ -203,7 +203,7 @@ def median_consumer(median_solution, task=COMPETITION_CC_NAME):
     talk.close()
     client.close()
 
-def get_history(week, filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK], collection=None):
+def get_history(target_week, filepath_train, filepath_test, shift_week=3, week=[3, TOTAL_WEEK], collection=None):
     history = {}
 
     with open(filepath_train, "rb") as INPUT:
@@ -239,7 +239,7 @@ def get_history(week, filepath_train, filepath_test, shift_week=3, week=[3, TOTA
                 w, agency_id, channel_id, route_id, client_id, product_id, sales_unit, sales_price, return_unit, return_price, prediction_unit = line.strip().split(",")[:11]
                 row_id = "_".join([w, agency_id, channel_id, route_id, client_id, product_id])
 
-                if w != str(week):
+                if w != str(target_week):
                     continue
             else:
                 row_id, w, agency_id, channel_id, route_id, client_id, product_id = line.strip().split(",")[:7]
