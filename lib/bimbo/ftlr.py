@@ -54,7 +54,7 @@ L1 = 0.     # L1 regularization, larger value means more regularized
 L2 = 1.     # L2 regularization, larger value means more regularized
 
 # C, feature/hash trick
-D = 2 ** 26             # number of weights to use
+D = 2 ** 23             # number of weights to use
 interaction = True     # whether to enable poly2 feature interactions
 
 # D, training/validation
@@ -229,15 +229,11 @@ def data(path, D):
             del row['Semana']
         # build x
         x = []
-        for key in row:
-            #if(key == 'Canal_ID' or key == 'Ruta_SAK' or
-            #   key == 'Cliente_ID' or key == 'Producto_ID' or
-            #   key == 'Agencia_ID'):
-            if key in key_pool:
-                value = row[key]
-                # one-hot encode everything with hash trick
-                index = abs(hash(key + '_' + value)) % D
-                x.append(index)
+        for key in key_pool:
+            value = row[key]
+            # one-hot encode everything with hash trick
+            index = abs(hash(key + '_' + value)) % D
+            x.append(index)
 
         yield t, week, ID, x, y, ori_row
 
@@ -294,6 +290,7 @@ if __name__ == "__main__":
     #########################################################################
     # start testing, and build Kaggle's submission file #####################
     #########################################################################
+
     '''
     with open(submission, "wb") as outfile:
         #outfile.write('id,Demanda_uni_equil\n')

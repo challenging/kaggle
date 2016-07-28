@@ -12,6 +12,7 @@ PYPY = "/Users/rongqichen/Documents/programs/kaggle/github/bin/pypy2-v5.3.1-osx6
 COMPETITION_NAME = "bimbo_competition"
 COMPETITION_GROUP_NAME = "{}_stats".format(COMPETITION_NAME)
 COMPETITION_CC_NAME = "{}_cc".format(COMPETITION_NAME)
+COMPETITION_FEATURE_ENGINEER_NAME = "{}_feature_engineer".format(COMPETITION_NAME)
 
 NON_PREDICTABLE = -1
 

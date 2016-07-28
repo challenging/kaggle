@@ -92,7 +92,8 @@ def tool(n_jobs, is_testing, column, mode, week, is_output, option):
             create_folder("{}/1.txt".format(submission_folder))
 
             columns = [COLUMNS[c] for c in column.split(",")]
-            columns.extend(["median_route_solution", "median_agency_solution"])
+            #columns.extend(["median_route_solution", "median_agency_solution"])
+            #columns.remove(COLUMNS[column_name])
 
             log("Use {} to be the attributes".format(columns), INFO)
 
@@ -104,7 +105,7 @@ def tool(n_jobs, is_testing, column, mode, week, is_output, option):
             elif MONGODB_COLUMNS[COLUMN_AGENCY] == column:
                 groups = AGENCY_GROUPS
             else:
-                raise NotImplementError
+                raise NotImplementedError
 
             solution = (load_median_solution(week-1, column, groups), groups)
 
