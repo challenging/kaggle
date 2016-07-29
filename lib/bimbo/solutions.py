@@ -12,7 +12,7 @@ import pandas as pd
 from sklearn import linear_model
 
 from utils import log, create_folder
-from utils import INFO, ERROR
+from utils import DEBUG, INFO, ERROR
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
 from bimbo.constants import PYPY, SPLIT_PATH, FTLR_PATH, MEDIAN_SOLUTION_PATH, FTLR_SOLUTION_PATH, REGRESSION_SOLUTION_PATH, ROUTE_GROUPS, AGENCY_GROUPS, BATCH_JOB
 from bimbo.constants import get_mongo_connection, get_prediction_mongo_collection, get_median
@@ -122,8 +122,7 @@ def median_solution(week, output_filepath, filepath, solution):
 def ftlr_solution(folder, fileid, submission_folder, week, columns):
     cmd = "{} {} \"{}\" {} \"{}\" {} \"{}\"".format(PYPY, FTLR_PATH, folder, fileid, submission_folder, week, columns)
 
-    log("Start to predict {}/{}, and then exiting code is {}".format(\
-        folder, fileid, subprocess.call(cmd, shell=True)), INFO)
+    log("Start to predict {}, and then exiting code is {}".format(fileid, subprocess.call(cmd, shell=True)), DEBUG)
 
 def regression_solution(filetype, week_x, week_y, solutions=["ftlr", "median", "cc"], nfold=3):
     filepath_output = None

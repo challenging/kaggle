@@ -85,13 +85,16 @@ def tool(n_jobs, is_testing, column, mode, week, is_output, option):
         cache_median(TRAIN, column, week)
     elif mode == "solution":
         solution, column_name = option
+        cs = "lag1_client_product,lag1_median_channel,lag1_median_column,lag2_client_product,lag2_median_channel,lag2_median_column,lag3_client_product,lag3_median_channel,lag3_median_column,return_1,return_2,return_3,trend_1,trend_2"
+        cs = "return_1,return_2"
 
         if solution == "ftlr":
-            folder = os.path.join(SPLIT_PATH, COLUMNS[column_name], "test")
+            folder = os.path.join("{}.category".format(SPLIT_PATH), COLUMNS[column_name], "test")
             submission_folder = os.path.join(FTLR_SOLUTION_PATH, "train" if week < 10 else "test", "week={}".format(week), COLUMNS[column_name])
             create_folder("{}/1.txt".format(submission_folder))
 
             columns = [COLUMNS[c] for c in column.split(",")]
+            columns.extend(cs.split(","))
             #columns.extend(["median_route_solution", "median_agency_solution"])
             #columns.remove(COLUMNS[column_name])
 
