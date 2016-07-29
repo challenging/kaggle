@@ -15,6 +15,7 @@ from utils import log, create_folder
 from utils import DEBUG, INFO, ERROR
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
 from bimbo.constants import PYPY, SPLIT_PATH, FTLR_PATH, MEDIAN_SOLUTION_PATH, FTLR_SOLUTION_PATH, REGRESSION_SOLUTION_PATH, ROUTE_GROUPS, AGENCY_GROUPS, BATCH_JOB
+from bimbo.constants import MONGODB_PREDICTION_DATABASE, MONGODB_BATCH_SIZE
 from bimbo.constants import get_mongo_connection, get_prediction_mongo_collection, get_median
 from bimbo.model import Learning, LearningCost
 
@@ -55,27 +56,57 @@ def cache_median(filepath, filetype, week=9, output_folder=MEDIAN_SOLUTION_PATH)
 
             log("Write median solution to {}".format(output_filepath), INFO)
 
-def cc_solution(week, solution_type, column, filepath_input, filepath_output):
-    client = get_mongo_connection()
-    collection = client["{}_{}".format(MONGODB_DATABASE, week)][get_prediction_mongo_collection(column)]
+def cc_solution(week, solution_type, column, filepath_input, filepath_output, batch_size=MONGODB_BATCH_SIZE):
+    mongo_client = get_mongo_connection()
+    collection = mongo_client["{}_{}".format(MONGODB_PREDICTION_DATABASE, week)][get_prediction_mongo_collection("{}_{}_product_client_log1p".format(solution_type, column))]
+    log(get_prediction_mongo_collection("{}_{}_product_client_log1p".format(solution_type, column)))
 
-    with open(filepath_input, "rb") as INPUT:
+    with open(filepath_output, "wb") as OUTPUT:
+        ids = set()
         header = True
 
         if week < 10:
-            for line in INPUT:
-                if header:
-                    header = False
-                else:
-                    pass
-        else:
-            for line in INPUT:
-                if header:
-                    header = False
-                else:
-                    pass
+            with open(filepath_input, "rb") as INPUT:
+                header = True
 
-    client.close()
+                for line in INPUT:
+                    if header:
+                        header = False
+                    else:
+                        w, agency, channel, route, client, product, _, _, _, _, unit = line.strip().split(",")
+                        if w == str(week):
+                            ids.add("_".join([w, agency, channel, route, client, product]))
+            if ids:
+                ids = list(ids)
+
+                log("Start to query {}/{} records for {}".format(len(ids), collection.count({"row_id": {"$in": ids}}), os.path.basename(filepath_input)), INFO)
+
+                OUTPUT.write("Semana,Agencia_ID,Canal_ID,Ruta_SAK,Cliente_ID,Producto_ID,MEDIAN_Demanda_uni_equil\n")
+                for record in collection.find({"row_id": {"$in": ids}}).batch_size(batch_size):
+                    OUTPUT.write("{},{}\n".format(record["row_id"].replace("_", ","), record["prediction"]))
+            else:
+                log("Empty ids for {}".format(os.path.basename(filepath_input)), WARN)
+        else:
+            with open(filepath_input, "rb") as INPUT:
+                header = True
+
+                for line in INPUT:
+                    if header:
+                        header = False
+                    else:
+                        row_id = line.strip().split(",")[0]
+                        ids.add(int(row_id))
+
+            if ids:
+                ids = list(ids)
+
+                log("Start to query {}/{} records for {}".format(len(ids), collection.count({"row_id": {"$in": ids}}), os.path.basename(filepath_input)), INFO)
+                OUTPUT.write("id,Demanda_uni_equil\n")
+
+                for record in collection.find({"row_id": {"$in": ids}}).batch_size(batch_size):
+                    OUTPUT.write("{},{}\n".format(record["row_id"], record["prediction"]))
+
+    mongo_client.close()
 
 def median_solution(week, output_filepath, filepath, solution):
     log("Store the solution in {}".format(output_filepath), INFO)
