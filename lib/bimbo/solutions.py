@@ -12,7 +12,7 @@ import pandas as pd
 from sklearn import linear_model
 
 from utils import log, create_folder
-from utils import DEBUG, INFO, ERROR
+from utils import DEBUG, INFO, WARN, ERROR
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
 from bimbo.constants import PYPY, SPLIT_PATH, FTLR_PATH, MEDIAN_SOLUTION_PATH, FTLR_SOLUTION_PATH, REGRESSION_SOLUTION_PATH, ROUTE_GROUPS, AGENCY_GROUPS, BATCH_JOB
 from bimbo.constants import MONGODB_PREDICTION_DATABASE, MONGODB_BATCH_SIZE
@@ -292,7 +292,7 @@ def regression_solution(filetype, week_x, week_y, solutions=["ftlr", "median", "
                 OUTPUT.write("id,Demanda_uni_equil\n")
 
                 for row_id, value in zip(testing["id"], rg(learning.predict())):
-                    OUTPUT.write("{},{}\n".format(row_id, value))
+                    OUTPUT.write("{},{}\n".format(row_id, max(1, value)))
         else:
             log("Skip the step of prediction results output", INFO)
     else:
@@ -304,7 +304,7 @@ def regression_solution(filetype, week_x, week_y, solutions=["ftlr", "median", "
                 OUTPUT.write("id,Demanda_uni_equil\n")
 
                 for row_id, value in zip(testing["id"], rg(np.mean(testing[solution_columns].values, axis=1))):
-                    OUTPUT.write("{},{}\n".format(row_id, value))
+                    OUTPUT.write("{},{}\n".format(row_id, max(1, value)))
         else:
             log("Skip the step of prediction results output", INFO)
 

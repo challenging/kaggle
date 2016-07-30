@@ -242,7 +242,6 @@ def data(path, D):
 # start training #############################################################
 ##############################################################################
 if __name__ == "__main__":
-    print('Use PYPY!!!!')
     start = datetime.now()
 
     # initialize ourselves a learner
@@ -267,8 +266,8 @@ if __name__ == "__main__":
             #   y: log(actual demand + 1)
             # step 1, get prediction from learner
             p = learner.predict(x)
-            if((t % 100000) == 0):
-                print(t)
+            #if((t % 100000) == 0):
+            #    print(t)
 
             if ((holdout != 0) and (week >= holdout)):
                 # step 2-1, calculate validation loss
@@ -285,13 +284,12 @@ if __name__ == "__main__":
                 learner.update(x, p, y)
 
         count = max(count, 1)
-        print('Epoch %d finished, validation RMSLE: %f, elapsed time: %s' %(e, sqrt(loss/count), str(datetime.now() - start)))
+    print('Epoch %d finished, validation RMSLE: %f, elapsed time: %s for %s' %(e, sqrt(loss/count), str(datetime.now() - start), os.path.basename(train)))
 
     #########################################################################
     # start testing, and build Kaggle's submission file #####################
     #########################################################################
 
-    '''
     with open(submission, "wb") as outfile:
         #outfile.write('id,Demanda_uni_equil\n')
         outfile.write("Semana,Agencia_ID,Canal_ID,Ruta_SAK,Cliente_ID,Producto_ID,FTLR_Demanda_uni_equil\n")
@@ -303,16 +301,12 @@ if __name__ == "__main__":
                                                         ori_row["Ruta_SAK"],
                                                         ori_row["Cliente_ID"],
                                                         ori_row["Producto_ID"],
-                                                        expm1(max(0, p))))
-    print('Finished')
-    '''
+                                                        max(1, expm1(max(0, p)))))
 
+    '''
     with open(submission, 'w') as outfile:
         outfile.write('id,Demanda_uni_equil\n')
         for t, date, ID, x, y, _ in data(test, D):
             p = learner.predict(x)
-            outfile.write('%s,%.8f\n' % (ID,
-                                         expm1(max(0, p))))
-            if((t % 100000) == 0):
-                print(t)
-    print('Finished')
+            outfile.write('%s,%.8f\n' % (ID, max(1, expm1(max(0, p)))))
+    '''
