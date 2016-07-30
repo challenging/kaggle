@@ -14,7 +14,7 @@ from sklearn import linear_model
 from utils import log, create_folder
 from utils import DEBUG, INFO, WARN, ERROR
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
-from bimbo.constants import PYPY, SPLIT_PATH, FTLR_PATH, MEDIAN_SOLUTION_PATH, FTLR_SOLUTION_PATH, REGRESSION_SOLUTION_PATH, ROUTE_GROUPS, AGENCY_GROUPS, BATCH_JOB
+from bimbo.constants import PYPY, SPLIT_PATH, FTLR_PATH, CC_SOLUTION_PATH, MEDIAN_SOLUTION_PATH, FTLR_SOLUTION_PATH, REGRESSION_SOLUTION_PATH, ROUTE_GROUPS, AGENCY_GROUPS, BATCH_JOB
 from bimbo.constants import MONGODB_PREDICTION_DATABASE, MONGODB_BATCH_SIZE
 from bimbo.constants import get_mongo_connection, get_prediction_mongo_collection, get_median
 from bimbo.model import Learning, LearningCost
@@ -59,52 +59,54 @@ def cache_median(filepath, filetype, week=9, output_folder=MEDIAN_SOLUTION_PATH)
 def cc_solution(week, solution_type, column, filepath_input, filepath_output, batch_size=MONGODB_BATCH_SIZE):
     mongo_client = get_mongo_connection()
     collection = mongo_client["{}_{}".format(MONGODB_PREDICTION_DATABASE, week)][get_prediction_mongo_collection("{}_{}_product_client_log1p".format(solution_type, column))]
-    log(get_prediction_mongo_collection("{}_{}_product_client_log1p".format(solution_type, column)))
 
-    with open(filepath_output, "wb") as OUTPUT:
-        ids = set()
-        header = True
+    if os.path.exists(filepath_output) and os.path.getsize(filepath_output) > 84:
+        log("Found {}".format(filepath_output), INFO)
+    else:
+        with open(filepath_output, "wb") as OUTPUT:
+            ids = set()
+            header = True
 
-        if week < 10:
-            with open(filepath_input, "rb") as INPUT:
-                header = True
+            if week < 10:
+                with open(filepath_input, "rb") as INPUT:
+                    header = True
 
-                for line in INPUT:
-                    if header:
-                        header = False
-                    else:
-                        w, agency, channel, route, client, product, _, _, _, _, unit = line.strip().split(",")
-                        if w == str(week):
-                            ids.add("_".join([w, agency, channel, route, client, product]))
-            if ids:
-                ids = list(ids)
+                    for line in INPUT:
+                        if header:
+                            header = False
+                        else:
+                            w, agency, channel, route, client, product, _, _, _, _, unit = line.strip().split(",")
+                            if w == str(week):
+                                ids.add("_".join([w, agency, channel, route, client, product]))
+                if ids:
+                    ids = list(ids)
 
-                log("Start to query {}/{} records for {}".format(len(ids), collection.count({"row_id": {"$in": ids}}), os.path.basename(filepath_input)), INFO)
+                    log("Start to query {}/{} records for {}".format(len(ids), collection.count({"row_id": {"$in": ids}}), os.path.basename(filepath_input)), INFO)
 
-                OUTPUT.write("Semana,Agencia_ID,Canal_ID,Ruta_SAK,Cliente_ID,Producto_ID,MEDIAN_Demanda_uni_equil\n")
-                for record in collection.find({"row_id": {"$in": ids}}).batch_size(batch_size):
-                    OUTPUT.write("{},{}\n".format(record["row_id"].replace("_", ","), record["prediction"]))
+                    OUTPUT.write("Semana,Agencia_ID,Canal_ID,Ruta_SAK,Cliente_ID,Producto_ID,CC_Demanda_uni_equil\n")
+                    for record in collection.find({"row_id": {"$in": ids}}).batch_size(batch_size):
+                        OUTPUT.write("{},{}\n".format(record["row_id"].replace("_", ","), record["prediction"]))
+                else:
+                    log("Empty ids for {}".format(os.path.basename(filepath_input)), WARN)
             else:
-                log("Empty ids for {}".format(os.path.basename(filepath_input)), WARN)
-        else:
-            with open(filepath_input, "rb") as INPUT:
-                header = True
+                with open(filepath_input, "rb") as INPUT:
+                    header = True
 
-                for line in INPUT:
-                    if header:
-                        header = False
-                    else:
-                        row_id = line.strip().split(",")[0]
-                        ids.add(int(row_id))
+                    for line in INPUT:
+                        if header:
+                            header = False
+                        else:
+                            row_id = line.strip().split(",")[0]
+                            ids.add(int(row_id))
 
-            if ids:
-                ids = list(ids)
+                if ids:
+                    ids = list(ids)
 
-                log("Start to query {}/{} records for {}".format(len(ids), collection.count({"row_id": {"$in": ids}}), os.path.basename(filepath_input)), INFO)
-                OUTPUT.write("id,Demanda_uni_equil\n")
+                    log("Start to query {}/{} records for {}".format(len(ids), collection.count({"row_id": {"$in": ids}}), os.path.basename(filepath_input)), INFO)
+                    OUTPUT.write("id,Demanda_uni_equil\n")
 
-                for record in collection.find({"row_id": {"$in": ids}}).batch_size(batch_size):
-                    OUTPUT.write("{},{}\n".format(record["row_id"], record["prediction"]))
+                    for record in collection.find({"row_id": {"$in": ids}}).batch_size(batch_size):
+                        OUTPUT.write("{},{}\n".format(record["row_id"], record["prediction"]))
 
     mongo_client.close()
 
@@ -161,17 +163,15 @@ def regression_solution(filetype, week_x, week_y, solutions=["ftlr", "median", "
         filepath_output = os.path.join(REGRESSION_SOLUTION_PATH, "test", "week={}".format(week_y), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
         create_folder(filepath_output)
 
-        if os.path.exists(filepath_output):
-            return
-        else:
-            log(filetype)
+    if os.path.exists(filepath_output):
+        return
 
     subfolder = "train"
     index = ["Semana","Agencia_ID","Canal_ID","Ruta_SAK","Cliente_ID","Producto_ID"]
 
     solution_columns = []
 
-    g = np.vectorize(lambda x: np.log1p(x))
+    g = np.vectorize(lambda x: np.log1p(x if x > -1 else 0))
     rg = np.vectorize(lambda x: np.e**max(1, x)-1)
 
     dfs = []
@@ -197,12 +197,9 @@ def regression_solution(filetype, week_x, week_y, solutions=["ftlr", "median", "
 
                 solution_columns.append("MEDIAN_Demanda_uni_equil")
         elif solution == "cc":
-            filepath = os.path.join(MEDIAN_SOLUTION_PATH, subfolder, "week={}".format(week_x), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
+            filepath = os.path.join(CC_SOLUTION_PATH, subfolder, "week={}".format(week_x), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
             if os.path.exists(filepath) and os.path.getsize(filepath) > 84:
                 df = pd.read_csv(filepath, index_col=index)
-
-                #g_max = np.vectorize(lambda x: max(x, 1))
-                #df["CC_Demanda_uni_equil"] = g_max(df["CC_Demanda_uni_equil"].values)
 
                 df["CC_Demanda_uni_equil"] = g(df["CC_Demanda_uni_equil"])
 
@@ -210,7 +207,6 @@ def regression_solution(filetype, week_x, week_y, solutions=["ftlr", "median", "
         elif solution == "real":
             filepath = os.path.join(SPLIT_PATH, COLUMNS[filetype[0]], "train", "{}.csv".format(filetype[1]))
             if os.path.exists(filepath) and os.path.getsize(filepath) > 84:
-                log(filepath)
                 df = pd.read_csv(filepath)
                 df.drop(["Venta_uni_hoy","Venta_hoy","Dev_uni_proxima","Dev_proxima"], axis=1, inplace=True)
 
@@ -252,8 +248,9 @@ def regression_solution(filetype, week_x, week_y, solutions=["ftlr", "median", "
                 df["Demanda_uni_equil"] = g(df["Demanda_uni_equil"])
                 df.rename(columns={"Demanda_uni_equil": "MEDIAN_Demanda_uni_equil"}, inplace=True)
             elif solution == "cc":
-                filepath = os.path.join(MEDIAN_SOLUTION_PATH, subfolder, "week={}".format(week_y), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
+                filepath = os.path.join(CC_SOLUTION_PATH, subfolder, "week={}".format(week_y), COLUMNS[filetype[0]], "submission_{}.csv".format(filetype[1]))
                 df = pd.read_csv(filepath, index_col=index)
+
                 df["Demanda_uni_equil"] = g(df["Demanda_uni_equil"])
                 df.rename(columns={"Demanda_uni_equil": "CC_Demanda_uni_equil"}, inplace=True)
             else:

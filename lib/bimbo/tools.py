@@ -17,7 +17,7 @@ from utils import DEBUG, INFO, WARN
 from bimbo.cc_beanstalk import cc_calculation, get_history
 from bimbo.constants import get_stats_mongo_collection, get_mongo_connection, get_prediction_mongo_collection
 from bimbo.constants import COLUMN_AGENCY, COLUMN_CHANNEL, COLUMN_ROUTE, COLUMN_PRODUCT, COLUMN_CLIENT, COLUMN_PREDICTION, COLUMN_WEEK, COLUMN_ROW, MONGODB_COLUMNS, COLUMNS
-from bimbo.constants import TOTAL_WEEK, PYPY, IP_BEANSTALK, MONGODB_DATABASE, MONGODB_PREDICTION_DATABASE, MONGODB_BATCH_SIZE, SPLIT_PATH, NON_PREDICTABLE
+from bimbo.constants import TOTAL_WEEK, PYPY, IP_BEANSTALK, MONGODB_DATABASE, MONGODB_PREDICTION_DATABASE, MONGODB_BATCH_SIZE, TEST_FILE, SPLIT_PATH, NON_PREDICTABLE
 
 from bimbo.model import Learning, LearningCost
 
@@ -41,12 +41,12 @@ def purge_duplicated_records(week, solution_type, column, batch_size=MONGODB_BAT
 
     client.close()
 
-def repair_missing_records(column, batch_size=MONGODB_BATCH_SIZE):
+def repair_missing_records(week, solution_type, column, batch_size=MONGODB_BATCH_SIZE):
     client = get_mongo_connection()
-    collection = client[MONGODB_DATABASE][get_stats_mongo_collection(column)]
+    collection = client[MONGODB_PREDICTION_DATABASE + "_{}".format(week)][get_prediction_mongo_collection("{}_{}_product_client_log1p".format(solution_type, column))]
 
     row_ids = set()
-    for record in collection.find({}, {"_id": 1, COLUMN_ROW: 1}).sort([(COLUMN_ROW, pymongo.ASCENDING)]).batch_size(batch_size):
+    for record in collection.find({}, {"_id": 1, COLUMN_ROW: 1}).batch_size(batch_size):
         row_id = record[COLUMN_ROW]
         row_ids.add(row_id)
 
@@ -58,32 +58,25 @@ def repair_missing_records(column, batch_size=MONGODB_BATCH_SIZE):
         for line in INPUT:
             if header:
                 header = False
-                continue
+            else:
+                row_id, week_num, agency_id, channel_id, route_id, client_id, product_id = line.strip().split(",")
+                row_id = int(row_id)
+                week_num = int(week_num)
+                agency_id = int(agency_id)
+                channel_id = int(channel_id)
+                route_id = int(route_id)
+                client_id = int(client_id)
+                product_id = int(product_id)
 
-            row_id, week_num, agency_id, channel_id, route_id, client_id, product_id = line.strip().split(",")
-            row_id = int(row_id)
-            week_num = int(week_num)
-            agency_id = int(agency_id)
-            channel_id = int(channel_id)
-            route_id = int(route_id)
-            client_id = int(client_id)
-            product_id = int(product_id)
+                if row_id not in row_ids:
+                    record = {
+                        "row_id": row_id,
+                        "prediction": -1,
+                        "history": []
+                     }
 
-            if row_id not in row_ids:
-                record = {
-                    "row_id": row_id,
-                    "fixed_column": column,
-                    "week_num": week_num,
-                    "matching_count": 0,
-                    MONGODB_COLUMNS[COLUMN_AGENCY]: agency_id,
-                    MONGODB_COLUMNS[COLUMN_CHANNEL]: channel_id,
-                    MONGODB_COLUMNS[COLUMN_ROUTE]: route_id,
-                    MONGODB_COLUMNS[COLUMN_CLIENT]: client_id,
-                    MONGODB_COLUMNS[COLUMN_PRODUCT]: product_id,
-                 }
-
-                log(record, INFO)
-                records.append(record)
+                    log(record, INFO)
+                    records.append(record)
 
     collection.insert_many(records)
     log("Add {} records into the {}".format(len(records), get_stats_mongo_collection(column)), INFO)

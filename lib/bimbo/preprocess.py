@@ -157,7 +157,6 @@ def feature_engineer_producer(column, is_category, ip=IP_BEANSTALK, port=PORT_BE
     talk.watch(task)
 
     files = os.path.join(SPLIT_PATH, COLUMNS[column], "test", "*.csv")
-    log(files)
     for filepath_testing in glob.iglob(files):
         request = {"filepath": filepath_testing,
                    "column": column,
@@ -238,7 +237,7 @@ def feature_engineer_consumer(ip=IP_BEANSTALK, port=PORT_BEANSTALK, task=COMPETI
                 with open(filepath_output, "wb") as OUTPUT:
                     OUTPUT.write("Semana,Agencia_ID,Canal_ID,Ruta_SAK,Cliente_ID,Producto_ID,Demanda_uni_equil,lag1_client_product,lag1_median_channel,lag1_median_column,lag2_client_product,lag2_median_channel,lag2_median_column,lag3_client_product,lag3_median_channel,lag3_median_column,return_1,return_2,return_3,trend_1,trend_2\n")
 
-                    for week in range(6, 9):
+                    for week in range(6, 10):
                         lag_latest = {"client": {},
                                       "median_channel": {},
                                       "median_column": {}}

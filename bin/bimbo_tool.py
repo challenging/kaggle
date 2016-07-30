@@ -46,7 +46,9 @@ def tool(n_jobs, is_testing, column, mode, week, option):
         for filetype in ["train", "test"]:
             hierarchical_folder_structure(column, filetype)
     elif mode == "repair":
-        repair_missing_records(column)
+        solution_type, column = option
+
+        repair_missing_records(week, solution_type, column)
     elif mode == "aggregation":
         columns = [COLUMNS[c] for c in column.split(",")]
         output_filepath = os.path.join(STATS_PATH, "{}.csv".format("_".join(columns)))
@@ -105,7 +107,7 @@ def tool(n_jobs, is_testing, column, mode, week, option):
                 cc_solution_folder = os.path.join(CC_SOLUTION_PATH, "train", "week={}".format(week), COLUMNS[column_name])
                 create_folder("{}/1.txt".format(cc_solution_folder))
 
-                f = lambda x: os.path.join(cc_solution_folder, os.path.basename(x))
+                f = lambda x: os.path.join(cc_solution_folder, "submission_" + os.path.basename(x))
 
                 for filepath in glob.iglob(os.path.join(folder, "*.csv")):
                     log(filepath)
@@ -117,7 +119,7 @@ def tool(n_jobs, is_testing, column, mode, week, option):
                 cc_solution_folder = os.path.join(CC_SOLUTION_PATH, "test", "week={}".format(week), COLUMNS[column_name])
                 create_folder("{}/1.txt".format(cc_solution_folder))
 
-                f = lambda x: os.path.join(cc_solution_folder, os.path.basename(x))
+                f = lambda x: os.path.join(cc_solution_folder, "submission_" + os.path.basename(x))
 
                 Parallel(n_jobs=n_jobs)(delayed(cc_solution)(week, "cc", column_name, filepath, f(filepath)) for filepath in glob.iglob(os.path.join(folder, "*.csv")))
         elif solution == "regression":

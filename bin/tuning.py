@@ -1,9 +1,5 @@
 #!/usr/bin/env python
 
-import os
-import sys
-import pprint
-
 import click
 import numpy as np
 import pandas as pd
@@ -12,7 +8,7 @@ import feature_engineering
 
 from utils import create_folder, log, INFO, WARN, ERROR
 from load import load_data, data_transform_2, load_interaction_information, save_cache, load_cache
-from parameter_tuning import XGBoostingTuning, RandomForestTuning, ExtraTreeTuning, tuning
+from parameter_tuning import tuning
 from feature_engineering import pca
 from configuration import ModelConfParser
 
