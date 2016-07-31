@@ -15,7 +15,7 @@ from sklearn.svm import SVC
 from sklearn.linear_model import SGDClassifier
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.grid_search import GridSearchCV   #Perforing grid search
-from sklearn.metrics import roc_auc_score, log_loss, make_scorer
+from sklearn.metrics import log_loss, mean_squared_error, make_scorer
 from sklearn.feature_selection import SelectFromModel
 from sklearn.neighbors import KNeighborsClassifier
 
@@ -25,6 +25,15 @@ from utils import create_folder, log, INFO, WARN, ERROR
 from load import load_data, data_transform_2, load_cache, save_cache, load_interaction_information, load_feature_importance, save_kaggle_submission
 
 BASEPATH = os.path.dirname(os.path.abspath(__file__))
+
+def rmsle(y_true, y_pred):
+    loss_sum = 0
+    loss_count = 0
+    for t, p in zip(y_true.values, y_pred):
+        loss_sum += (np.log1p(t[0]) - np.log1p(p))**2
+        loss_count += 1
+
+    return np.sqrt(loss_sum/loss_count)
 
 class ParameterTuning(object):
     def __init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs, is_saving=True):
@@ -37,11 +46,12 @@ class ParameterTuning(object):
         self.n_estimator = n_estimator
         self.cost = None
 
-        print cost
         if cost == "log_loss":
             self.cost = cost
         elif cost == "roc_auc":
             self.cost = cost
+        elif cost == "rmsle":
+            self.cost = make_scorer(rmsle, greater_is_better=False)
         else:
             if cost == "mapk":
                 self.cost = make_scorer(mapk)
@@ -159,7 +169,7 @@ class ParameterTuning(object):
         best_cost, best_params, scores = -np.inf, -np.inf, None
         (training_x, _), training_y = self.get_dataset(), self.train_y
 
-        n_features = len(training_x[0])
+        n_features = training_x.shape[1]
 
         if phase in self.done:
             log("The {} is done so we skip it".format(phase))
@@ -244,7 +254,7 @@ class ParameterTuning(object):
         return a, b, c, model
 
     def process(self):
-        raise NotImplementError
+        raise NotImplementedError
 
     def submit(self, model, filepath, mode="training", n_top=10):
         create_folder(filepath)
@@ -259,22 +269,25 @@ class ParameterTuning(object):
             elif self.method == "regressor":
                 predicted_proba = model.predict(training_dataset)
             else:
-                raise NotImplementError
+                raise NotImplementedError
 
             estimator = model
             if hasattr(model, "best_estimator_"):
                 estimator = model.best_estimator_
 
-            pool = [dict(zip(model.best_estimator_.classes_, probas)) for probas in predicted_proba]
-            for idx, pair in enumerate(pool):
-                class_names = []
+            if self.method == "classifier":
+                pool = [dict(zip(model.best_estimator_.classes_, probas)) for probas in predicted_proba]
+                for idx, pair in enumerate(pool):
+                    class_names = []
 
-                for class_name, class_proba in sorted(pair.items(), key=(lambda (k, v): v), reverse=True)[:n_top]:
-                    class_names.append(class_name)
+                    for class_name, class_proba in sorted(pair.items(), key=(lambda (k, v): v), reverse=True)[:n_top]:
+                        class_names.append(class_name)
 
-                pool[idx] = " ".join(class_names)
+                    pool[idx] = " ".join(class_names)
 
-            results = {"Target": self.train_y, "Predicted_Proba": pool}
+                results = {"Target": self.train_y, "Predicted_Proba": pool}
+            elif self.method == "regressor":
+                results = {"ID": self.test_id, "Target": predicted_proba}
         else:
             if self.method == "classifier":
                 if self.objective.find("binary") > -1:
@@ -284,24 +297,27 @@ class ParameterTuning(object):
             elif self.method == "regressor":
                 predicted_proba = model.predict(testing_dataset)
             else:
-                raise NotImplementError
+                raise NotImplementedError
 
             estimator = model
             if hasattr(model, "best_estimator_"):
                 estimator = model.best_estimator_
 
-            pool = [dict(zip(estimator.classes_, probas)) for probas in predicted_proba]
-            for idx, pair in enumerate(pool):
-                class_names = []
+            if self.method == "classifier":
+                pool = [dict(zip(estimator.classes_, probas)) for probas in predicted_proba]
+                for idx, pair in enumerate(pool):
+                    class_names = []
 
-                for class_name, class_proba in sorted(pair.items(), key=(lambda (k, v): v), reverse=True)[:n_top]:
-                    class_names.append(class_name)
+                    for class_name, class_proba in sorted(pair.items(), key=(lambda (k, v): v), reverse=True)[:n_top]:
+                        class_names.append(class_name)
 
-                pool[idx] = " ".join(class_names)
+                    pool[idx] = " ".join(class_names)
 
-            results = {"ID": self.test_id, "Target": pool}
+                results = {"ID": self.test_id, "Target": pool}
+            elif self.method == "regressor":
+                results = {"ID": self.test_id, "Target": predicted_proba}
 
-        if not os.path.exists(filepath):
+        if self.is_saving and not os.path.exists(filepath):
             log("Compile a submission results for kaggle in {}".format(filepath), INFO)
             save_kaggle_submission(results, filepath)
 
@@ -423,10 +439,10 @@ class ExtraTreeTuning(RandomForestTuning):
 
 class XGBoostingTuning(ParameterTuning):
     def __init__(self, methodology, target, data_id, method, n_estimator=200, cost="log_loss", objective="binary:logistic", cv=10, n_jobs=-1, is_saving=True):
-        ParameterTuning.__init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs)
+        ParameterTuning.__init__(self, methodology, target, data_id, method, n_estimator, cost, objective, cv, n_jobs, is_saving=is_saving)
 
         self.default_learning_rate, self.learning_rate = 0.1, None
-        self.default_max_depth, self.max_depth = 5, None
+        self.default_max_depth, self.max_depth = 10, None
         self.default_min_child_weight, self.min_child_weight = 1, None
 
         self.default_gamma, self.gamma = 0, None
@@ -478,7 +494,7 @@ class XGBoostingTuning(ParameterTuning):
     def process(self):
         self.phase("phase1", {})
 
-        param2 = {'max_depth':range(7, 14, 2), 'min_child_weight':range(1, 4, 2)}
+        param2 = {'max_depth':range(8, 20, 2), 'min_child_weight':range(1, 4, 2)}
         self.phase("phase2", param2, True)
 
         param3 = {'gamma':[i/10.0 for i in range(0, 3)]}
@@ -570,7 +586,7 @@ class BernoulliTuning(ParameterTuning):
             return BernoulliNB(alpha=alpha, class_prior=None, fit_prior=True)
 
         elif self.method == "regressor":
-            raise NotImplementError
+            raise NotImplementedError
 
     def process(self):
         self.phase("phase1", {})

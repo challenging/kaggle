@@ -54,7 +54,7 @@ L1 = 0.     # L1 regularization, larger value means more regularized
 L2 = 1.     # L2 regularization, larger value means more regularized
 
 # C, feature/hash trick
-D = 2 ** 23             # number of weights to use
+D = 2 ** 24             # number of weights to use
 interaction = True     # whether to enable poly2 feature interactions
 
 # D, training/validation
@@ -116,11 +116,17 @@ class ftrl_proximal(object):
                 for j in range(i+1, L):
                     yield abs(hash(str(x[i]) + '_' + str(x[j]))) % D
                     for k in range(j+1, L):
-                        yield abs(hash(str(x[i]) + '_' + str(x[j]) +
-                                  '_' + str(x[k]))) % D
+                        yield abs(hash(str(x[i]) + '_' + str(x[j]) + '_' + str(x[k]))) % D
                         for l in range(k+1, L):
-                            yield abs(hash(str(x[i]) + '_' + str(x[j]) +
-                                      '_' + str(x[k]) + '_' + str(x[l]))) % D
+                            yield abs(hash(str(x[i]) + '_' + str(x[j]) + '_' + str(x[k]) + '_' + str(x[l]))) % D
+                            for m in range(l+1, L):
+                                yield abs(hash(str(x[i]) + '_' + str(x[j]) + '_' + str(x[k]) + '_' + str(x[l]) + "_" + str(x[m]))) % D
+                                #for n in range(m+1, L):
+                                #    yield abs(hash(str(x[i]) + '_' + str(x[j]) + '_' + str(x[k]) + '_' + str(x[l]) + "_" + str(x[m]) + "_" + str(x[n]))) % D
+                                #    for o in range(n+1, L):
+                                #        yield abs(hash(str(x[i]) + '_' + str(x[j]) + '_' + str(x[k]) + '_' + str(x[l]) + "_" + str(x[m]) + "_" + str(x[n]) + "_" + str(x[o]))) % D
+                                #        for p in range(o+1, L):
+                                #            yield abs(hash(str(x[i]) + '_' + str(x[j]) + '_' + str(x[k]) + '_' + str(x[l]) + "_" + str(x[m]) + "_" + str(x[n]) + "_" + str(x[o]) + "_" + str(x[p]))) % D
 
     def predict(self, x):
         ''' Get demand estimation on x
@@ -284,29 +290,28 @@ if __name__ == "__main__":
                 learner.update(x, p, y)
 
         count = max(count, 1)
-    print('Epoch %d finished, validation RMSLE: %f, elapsed time: %s for %s' %(e, sqrt(loss/count), str(datetime.now() - start), os.path.basename(train)))
+    print('Epoch %d finished, validation RMSLE: %f, elapsed time: %s for %s(%d)' %(e, sqrt(loss/count), str(datetime.now() - start), os.path.basename(train), count))
 
     #########################################################################
     # start testing, and build Kaggle's submission file #####################
     #########################################################################
 
-    with open(submission, "wb") as outfile:
-        #outfile.write('id,Demanda_uni_equil\n')
-        outfile.write("Semana,Agencia_ID,Canal_ID,Ruta_SAK,Cliente_ID,Producto_ID,FTLR_Demanda_uni_equil\n")
-        for t, date, ID, x, y, ori_row in later_submission:
-            p = learner.predict(x)
-            outfile.write('%s,%s,%s,%s,%s,%s,%.8f\n' % (ori_row["Semana"],
-                                                        ori_row["Agencia_ID"],
-                                                        ori_row["Canal_ID"],
-                                                        ori_row["Ruta_SAK"],
-                                                        ori_row["Cliente_ID"],
-                                                        ori_row["Producto_ID"],
-                                                        max(1, expm1(max(0, p)))))
-
-    '''
-    with open(submission, 'w') as outfile:
-        outfile.write('id,Demanda_uni_equil\n')
-        for t, date, ID, x, y, _ in data(test, D):
-            p = learner.predict(x)
-            outfile.write('%s,%.8f\n' % (ID, max(1, expm1(max(0, p)))))
-    '''
+    if holdout < 10:
+        with open(submission, "wb") as outfile:
+            #outfile.write('id,Demanda_uni_equil\n')
+            outfile.write("Semana,Agencia_ID,Canal_ID,Ruta_SAK,Cliente_ID,Producto_ID,FTLR_Demanda_uni_equil\n")
+            for t, date, ID, x, y, ori_row in later_submission:
+                p = learner.predict(x)
+                outfile.write('%s,%s,%s,%s,%s,%s,%.8f\n' % (ori_row["Semana"],
+                                                            ori_row["Agencia_ID"],
+                                                            ori_row["Canal_ID"],
+                                                            ori_row["Ruta_SAK"],
+                                                            ori_row["Cliente_ID"],
+                                                            ori_row["Producto_ID"],
+                                                            max(1, expm1(max(0, p)))))
+    else:
+        with open(submission, 'wb') as outfile:
+            outfile.write('id,Demanda_uni_equil\n')
+            for t, date, ID, x, y, _ in data(test, D):
+                p = learner.predict(x)
+                outfile.write('%s,%.8f\n' % (ID, max(1, expm1(max(0, p)))))

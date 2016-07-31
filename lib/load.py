@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 from bz2 import BZ2File
-from bsddb3 import db
+#from bsddb3 import db
 from utils import log, DEBUG, INFO, WARN, create_folder
 from sklearn.preprocessing import PolynomialFeatures
 
